@@ -1,0 +1,55 @@
+{
+  "user_id": "u_minji_001",
+  "session_id": "s_20260522_001",
+  "timestamp": "2026-05-22T14:32:00+09:00",
+
+  "investor_profile": {
+    "risk_tolerance": 0.45,
+    "time_horizon_months": 48,
+    "liquidity_need_ratio": 0.25,
+    "target_return_annual": 0.10,
+    "investment_experience_years": 0.8
+  },
+
+  "psychological_state": {
+    "fomo_index": 0.72,
+    "panic_sell_tendency": 0.65,
+    "herding_score": 0.58,
+    "self_confidence": 0.30,
+    "current_market_anxiety": 0.55,
+    "overheating_caution": 0.60
+  },
+
+  "free_text_signal": {
+    "raw_text": "남들 다 버는데 나만 뒤처지는 것 같아서 조급해요. 그래도 마이너스 나면 잠을 못 자요.",
+    "extracted_signals": {
+      "fomo_index": 0.80,
+      "panic_sell_tendency": 0.75
+    },
+    "conflict_with_survey": false
+  },
+
+  "confidence_per_field": {
+    "risk_tolerance": 0.92,
+    "time_horizon_months": 0.95,
+    "liquidity_need_ratio": 0.88,
+    "fomo_index": 0.78,
+    "panic_sell_tendency": 0.70,
+    "herding_score": 0.85,
+    "self_confidence": 0.60,
+    "overheating_caution": 0.55
+  },
+
+  "context": {
+    "target_ticker": "TBD",
+    "investment_amount_krw": 500000,
+    "action_intent": "buy_consideration",
+    "market_regime_hint": "high_volatility"
+  },
+
+  "meta": {
+    "schema_version": "0.2.0-draft",
+    "source": "yellow_block",
+    "confidence": 0.81
+  }
+}
