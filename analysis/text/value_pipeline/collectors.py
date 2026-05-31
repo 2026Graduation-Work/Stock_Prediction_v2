@@ -14,7 +14,6 @@ import json
 import re
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Optional
 
 from .config import SETTINGS
 
@@ -199,7 +198,7 @@ def _crawl_naver_board(ticker: str, date: str, max_pages: int = 50) -> list[dict
 # ── 재무제표 + 시세 ─────────────────────────────────────────────
 def collect_financials(ticker: str, date: str) -> tuple[dict, str]:
     """표준화 재무 dict와 출처('dart'/'sample') 반환. 시세는 가능하면 FDR로 덮어쓴다."""
-    data: Optional[dict] = None
+    data: dict | None = None
     source = "sample"
     if SETTINGS.has_dart:
         try:
@@ -208,7 +207,11 @@ def collect_financials(ticker: str, date: str) -> tuple[dict, str]:
         except Exception:
             data = None
     if not data:
-        data = _load_sample(f"{ticker}_financials.json") or _load_sample("default_financials.json") or {}
+        data = (
+            _load_sample(f"{ticker}_financials.json")
+            or _load_sample("default_financials.json")
+            or {}
+        )
         data = dict(data)  # 복사
         source = "sample"
 
@@ -219,7 +222,7 @@ def collect_financials(ticker: str, date: str) -> tuple[dict, str]:
     return data, source
 
 
-def _fetch_price(ticker: str, date: str) -> Optional[float]:
+def _fetch_price(ticker: str, date: str) -> float | None:
     """date 이전 마지막 종가 (FinanceDataReader, 키 불필요)."""
     try:
         import FinanceDataReader as fdr

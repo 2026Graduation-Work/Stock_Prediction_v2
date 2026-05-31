@@ -76,6 +76,6 @@ def aggregate(scores: list[float], weights: list[float] | None = None) -> tuple[
     if weights is None:
         weights = [1.0] * len(scores)
     wsum = sum(weights) or 1.0
-    mean = sum(s * w for s, w in zip(scores, weights)) / wsum
-    var = sum(w * (s - mean) ** 2 for s, w in zip(scores, weights)) / wsum
+    mean = sum(s * w for s, w in zip(scores, weights, strict=False)) / wsum
+    var = sum(w * (s - mean) ** 2 for s, w in zip(scores, weights, strict=False)) / wsum
     return round(mean, 4), round(math.sqrt(var), 4)

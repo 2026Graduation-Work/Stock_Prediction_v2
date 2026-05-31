@@ -24,8 +24,12 @@ from .sentiment import aggregate, score_texts
 
 # ── LLM 보조 출력 스키마 ────────────────────────────────────────
 class _NewsExtract(BaseModel):
-    key_events: list[str] = Field(default_factory=list, description="그날의 핵심 이벤트 3~6개, 간결한 한국어 명사구")
-    impact_score: int = Field(5, ge=1, le=10, description="이 뉴스들이 주가에 줄 영향력(부정이어도 클 수 있음)")
+    key_events: list[str] = Field(
+        default_factory=list, description="그날의 핵심 이벤트 3~6개, 간결한 한국어 명사구"
+    )
+    impact_score: int = Field(
+        5, ge=1, le=10, description="이 뉴스들이 주가에 줄 영향력(부정이어도 클 수 있음)"
+    )
 
 
 class _Reason(BaseModel):
@@ -47,7 +51,8 @@ def news_agent(state: dict) -> dict:
     if texts:
         headlines = "\n".join(f"- {t}" for t in texts[:25])
         extract = structured(
-            f"다음은 '{state.get('company_name') or state.get('ticker')}' 관련 최신 뉴스 헤드라인이다.\n"
+            f"다음은 '{state.get('company_name') or state.get('ticker')}' "
+            f"관련 최신 뉴스 헤드라인이다.\n"
             f"{headlines}\n\n핵심 이벤트와 주가 영향력 점수(1~10)를 산출하라.",
             _NewsExtract,
         )
@@ -55,7 +60,7 @@ def news_agent(state: dict) -> dict:
     if extract is not None:
         key_events, impact = extract.key_events[:6], extract.impact_score
     else:  # 규칙 기반 폴백: 감성 절댓값이 큰 헤드라인을 핵심 이벤트로
-        ranked = sorted(zip(texts, scores), key=lambda x: abs(x[1]), reverse=True)
+        ranked = sorted(zip(texts, scores, strict=False), key=lambda x: abs(x[1]), reverse=True)
         key_events = [t for t, _ in ranked[:5] if t]
         impact = int(_clip(3 + min(4, len(texts) // 3) + round(abs(mean) * 3), 1, 10))
 
@@ -148,7 +153,12 @@ def synthesis_agent(state: dict) -> dict:
 
     # 신뢰도: 데이터 품질 + 시그널 마진 - 뉴스 의견분산 (LLM 자기보고 대신 직접 산출)
     real_sources = sum(
-        1 for s in (state.get("news_source"), state.get("social_source"), state.get("financial_source"))
+        1
+        for s in (
+            state.get("news_source"),
+            state.get("social_source"),
+            state.get("financial_source"),
+        )
         if s and s != "sample"
     )
     quality = 0.45 + 0.1 * real_sources                       # 0.45~0.75
@@ -160,7 +170,8 @@ def synthesis_agent(state: dict) -> dict:
     reason_obj = structured(
         f"종목 {state.get('ticker')} 가치투자 분석 결과:\n"
         f"- 밸류에이션 {valuation}/10, 재무건전성 {health}/10\n"
-        f"- 뉴스감성 {news_sent:+.2f}(영향력 {impact}/10), 소셜감성 {social_sent:+.2f}, 다이버전스 {divergence:+.2f}\n"
+        f"- 뉴스감성 {news_sent:+.2f}(영향력 {impact}/10), "
+        f"소셜감성 {social_sent:+.2f}, 다이버전스 {divergence:+.2f}\n"
         f"- 종합점수 {composite:.2f}/10 → 시그널 {signal}\n"
         f"핵심이벤트: {', '.join(news.get('key_events', [])[:4])}\n"
         f"위 수치와 일관되게 가치투자 판단 근거를 2~3문장으로 써라.",
@@ -175,7 +186,8 @@ def synthesis_agent(state: dict) -> dict:
         )
         reasoning = (
             f"밸류에이션 {valuation}/10·재무건전성 {health}/10에 뉴스감성 {news_sent:+.2f}"
-            f"(영향력 {impact}/10)를 반영한 종합점수 {composite:.1f}/10으로 '{signal}' 판단.{div_note}"
+            f"(영향력 {impact}/10)를 반영한 종합점수 {composite:.1f}/10으로 "
+            f"'{signal}' 판단.{div_note}"
         )
 
     out = ValueSignal(

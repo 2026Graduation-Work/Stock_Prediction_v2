@@ -13,10 +13,8 @@ LLM이 점수를 '추측'하게 두지 않고, 표준화된 재무 dict에서 �
 """
 from __future__ import annotations
 
-from typing import Optional
 
-
-def _num(f: dict, key: str) -> Optional[float]:
+def _num(f: dict, key: str) -> float | None:
     v = f.get(key)
     try:
         return float(v) if v is not None else None
@@ -24,20 +22,20 @@ def _num(f: dict, key: str) -> Optional[float]:
         return None
 
 
-def _div(a: Optional[float], b: Optional[float]) -> Optional[float]:
+def _div(a: float | None, b: float | None) -> float | None:
     if a is None or b is None or b == 0:
         return None
     return a / b
 
 
-def _growth(cur: Optional[float], prev: Optional[float]) -> Optional[float]:
+def _growth(cur: float | None, prev: float | None) -> float | None:
     # 전년 적자/0 기준은 성장률 왜곡 → 결측 처리
     if cur is None or prev is None or prev <= 0:
         return None
     return (cur - prev) / prev
 
 
-def _altman_z(f: dict, mktcap: Optional[float]) -> Optional[float]:
+def _altman_z(f: dict, mktcap: float | None) -> float | None:
     """Altman Z-Score (제조·상장 기준). >2.99 안전, <1.81 부실 위험."""
     ta = _num(f, "total_assets")
     tl = _num(f, "total_liabilities")
@@ -105,7 +103,12 @@ def compute_metrics(f: dict) -> dict:
 
 
 # ── 점수화 헬퍼 ────────────────────────────────────────────────
-def _band(value: Optional[float], thresholds: list[float], scores: list[float], higher_better: bool = True) -> Optional[float]:
+def _band(
+    value: float | None,
+    thresholds: list[float],
+    scores: list[float],
+    higher_better: bool = True,
+) -> float | None:
     """임계값(내림차순)에 따라 0~10 점수 부여. value 결측이면 None.
 
     higher_better=True  : value가 thresholds[i] 이상이면 scores[i]
@@ -113,7 +116,7 @@ def _band(value: Optional[float], thresholds: list[float], scores: list[float], 
     """
     if value is None:
         return None
-    for t, s in zip(thresholds, scores):
+    for t, s in zip(thresholds, scores, strict=False):
         if (value >= t) if higher_better else (value <= t):
             return s
     return scores[-1]
@@ -136,7 +139,9 @@ def health_score(m: dict) -> float:
     return round(sum(vals) / len(vals), 2) if vals else 5.0
 
 
-def valuation_score(m: dict, sector_per: Optional[float] = None, sector_pbr: Optional[float] = None) -> float:
+def valuation_score(
+    m: dict, sector_per: float | None = None, sector_pbr: float | None = None
+) -> float:
     """저평가 정도 0~10. 동종업계 평균 대비 할인율 기반 (높을수록 저평가=매력적)."""
     parts = []
     per, pbr = m.get("per"), m.get("pbr")

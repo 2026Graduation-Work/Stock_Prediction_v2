@@ -9,7 +9,7 @@ LLM이 담당하는 부분(보조): 핵심 이벤트 추출, 자연어 근거, �
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Optional, TypeVar
+from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -35,7 +35,7 @@ def get_llm():
         return None
 
 
-def structured(prompt: str, schema: type[T]) -> Optional[T]:
+def structured(prompt: str, schema: type[T]) -> T | None:
     """프롬프트 → 구조화(schema) 결과. LLM 미사용/실패 시 None."""
     llm = get_llm()
     if llm is None:
