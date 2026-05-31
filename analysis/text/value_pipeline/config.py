@@ -24,12 +24,16 @@ class Settings:
     gemini_api_key: str | None = field(default_factory=lambda: os.getenv("GEMINI_API_KEY"))
     dart_api_key: str | None = field(default_factory=lambda: os.getenv("DART_API_KEY"))
     naver_client_id: str | None = field(default_factory=lambda: os.getenv("NAVER_CLIENT_ID"))
-    naver_client_secret: str | None = field(default_factory=lambda: os.getenv("NAVER_CLIENT_SECRET"))
+    naver_client_secret: str | None = field(
+        default_factory=lambda: os.getenv("NAVER_CLIENT_SECRET")
+    )
 
     # Gemini 무료 티어 권장 모델 (1M 컨텍스트, JSON 모드, 한국어 우수)
     gemini_model: str = field(default_factory=lambda: os.getenv("GEMINI_MODEL", "gemini-2.5-flash"))
     # 한국어 금융 감성 특화 모델 (HuggingFace, 무료)
-    finbert_model: str = field(default_factory=lambda: os.getenv("FINBERT_MODEL", "snunlp/KR-FinBert-SC"))
+    finbert_model: str = field(
+        default_factory=lambda: os.getenv("FINBERT_MODEL", "snunlp/KR-FinBert-SC")
+    )
     use_finbert: bool = field(default_factory=lambda: os.getenv("USE_FINBERT", "1") != "0")
 
     news_lookback_days: int = 3

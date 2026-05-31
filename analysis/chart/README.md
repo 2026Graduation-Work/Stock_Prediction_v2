@@ -1,4 +1,4 @@
-# 🟢 Green Block — CV (차트/기술적 분석)
+# 🟢 Analysis · Chart — 차트/기술적 분석
 
 담당: 진세
 
@@ -14,7 +14,7 @@
   - 추세 (Trend): 이동평균선, MACD 등
   - 모멘텀 (Momentum): RSI, 스토캐스틱 등
   - 변동성 (Volatility): 볼린저밴드, ATR 등
-- yellow 블록의 사용자 컨텍스트 JSON
+- profiling 블록의 사용자 컨텍스트 JSON
 
 ## 모델 후보
 

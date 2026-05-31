@@ -1,0 +1,48 @@
+name: Python CI
+
+# Python 영역(profiling / analysis / schema) 변경 시 lint + test 자동 실행.
+# JS/TS(platform/web) CI는 프론트엔드 scaffold 후 별도 워크플로(web-ci.yml)로 추가한다.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "profiling/**"
+      - "analysis/**"
+      - "schema/**"
+      - "ruff.toml"
+      - ".github/workflows/python-ci.yml"
+  pull_request:
+    paths:
+      - "profiling/**"
+      - "analysis/**"
+      - "schema/**"
+      - "ruff.toml"
+      - ".github/workflows/python-ci.yml"
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: |
+            profiling/survey/requirements.txt
+            profiling/survey/requirements-dev.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r profiling/survey/requirements-dev.txt
+
+      - name: Lint (ruff)
+        run: ruff check .
+
+      - name: Run tests (pytest)
+        run: pytest profiling/survey -v

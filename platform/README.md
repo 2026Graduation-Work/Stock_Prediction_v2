@@ -1,10 +1,10 @@
-# 🔵 Blue Block — 대시보드 / API / 인프라
+# 🔵 Platform Block — 대시보드 / API / 인프라
 
 담당: 성우
 
 ## 역할
 
-yellow + green 블록의 결과를 통합하여 사용자에게 보여주는
+profiling + analysis 블록의 결과를 통합하여 사용자에게 보여주는
 웹 대시보드를 구현하고, API와 인프라를 담당한다.
 
 ## 범위

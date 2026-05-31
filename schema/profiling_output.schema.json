@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/2026Graduation-Work/Stock-Prediction/schema/yellow_output.schema.json",
-  "title": "Yellow Block Output Schema",
-  "description": "노란색 블록(설문/사용자 프로파일링)이 초록색 블록으로 넘기는 표준 인터페이스. v0.2 (회의 ② 검토용)",
+  "$id": "https://github.com/2026Graduation-Work/Stock_Prediction_v2/schema/profiling_output.schema.json",
+  "title": "Profiling Block Output Schema",
+  "description": "profiling 블록(설문/사용자 프로파일링)이 analysis 블록으로 넘기는 표준 인터페이스. v0.2 (회의 ② 검토용)",
   "version": "0.2.0-draft",
   "type": "object",
   "required": ["user_id", "session_id", "timestamp", "investor_profile", "psychological_state", "context", "meta"],
@@ -137,7 +137,7 @@
         },
         "source": {
           "type": "string",
-          "const": "yellow_block"
+          "const": "profiling_block"
         },
         "confidence": {
           "type": "number", "minimum": 0, "maximum": 1,

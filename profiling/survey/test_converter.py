@@ -4,7 +4,7 @@ pytest 테스트 — survey_to_schema() 검증
 테스트 항목:
   1. 김민지 페르소나 → 스키마 구조 일치 (example.json 키셋 비교)
   2. 모든 0~1 제약 필드가 [0, 1] 범위 안에 있는지
-  3. jsonschema 라이브러리로 yellow_output.schema.json 검증
+  3. jsonschema 라이브러리로 profiling_output.schema.json 검증
 """
 
 from __future__ import annotations
@@ -14,15 +14,14 @@ from pathlib import Path
 
 import jsonschema
 import pytest
-
 from converter import survey_to_schema
 
 # ---------------------------------------------------------------------------
 # 경로
 # ---------------------------------------------------------------------------
 _REPO_ROOT = Path(__file__).parent.parent.parent
-_SCHEMA_PATH = _REPO_ROOT / "schema" / "yellow_output.schema.json"
-_EXAMPLE_PATH = _REPO_ROOT / "schema" / "yellow_output.example.json"
+_SCHEMA_PATH = _REPO_ROOT / "schema" / "profiling_output.schema.json"
+_EXAMPLE_PATH = _REPO_ROOT / "schema" / "profiling_output.example.json"
 
 
 # ---------------------------------------------------------------------------
@@ -156,7 +155,7 @@ class TestJsonSchema:
         assert minji_output["context"]["action_intent"] in allowed
 
     def test_source_const(self, minji_output: dict):
-        assert minji_output["meta"]["source"] == "yellow_block"
+        assert minji_output["meta"]["source"] == "profiling_block"
 
     def test_target_ticker_is_tbd(self, minji_output: dict):
         assert minji_output["context"]["target_ticker"] == "TBD"

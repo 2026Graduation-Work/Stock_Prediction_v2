@@ -21,6 +21,9 @@ out/
 # production build
 build/
 
+# turbo
+.turbo/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -41,6 +44,7 @@ venv/
 .venv/
 *.egg-info/
 .pytest_cache/
+.ruff_cache/
 .ipynb_checkpoints/
 
 # ---------- 환경 변수 ----------

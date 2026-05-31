@@ -7,7 +7,7 @@
 """
 from __future__ import annotations
 
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -24,12 +24,12 @@ class FinancialMetrics(BaseModel):
     값이 없으면 None(결측).
     """
 
-    per: Optional[float] = None              # 밸류에이션 대표: 주가수익비율
-    pbr: Optional[float] = None              # 밸류에이션 보조: 주가순자산비율
-    roe: Optional[float] = None              # 수익성 대표: 자기자본이익률
-    revenue_growth: Optional[float] = None   # 성장성 대표: 매출 증가율(전년 대비)
-    debt_ratio: Optional[float] = None       # 안정성 대표: 부채총계/자본총계 (배)
-    altman_z: Optional[float] = None         # 부도 위험 종합: Altman Z-Score
+    per: float | None = None              # 밸류에이션 대표: 주가수익비율
+    pbr: float | None = None              # 밸류에이션 보조: 주가순자산비율
+    roe: float | None = None              # 수익성 대표: 자기자본이익률
+    revenue_growth: float | None = None   # 성장성 대표: 매출 증가율(전년 대비)
+    debt_ratio: float | None = None       # 안정성 대표: 부채총계/자본총계 (배)
+    altman_z: float | None = None         # 부도 위험 종합: Altman Z-Score
 
 
 class NewsAnalysis(BaseModel):
