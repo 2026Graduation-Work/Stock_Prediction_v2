@@ -1,4 +1,4 @@
-# 🟢 Green Block — LLM (뉴스/재무제표/SNS)
+# 🟢 Analysis · Text — 뉴스/재무제표/SNS
 
 담당: 서환
 
@@ -12,7 +12,7 @@
 - 뉴스 본문 — 뉴스 API 크롤링 (한국어)
 - 재무제표 — DART OpenAPI
 - SNS 심리 — Reddit API
-- yellow 블록의 사용자 컨텍스트 JSON
+- profiling 블록의 사용자 컨텍스트 JSON
 
 ## 핵심 원칙: 할루시네이션 = 즉사
 

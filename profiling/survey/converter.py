@@ -1,5 +1,5 @@
 """
-설문 답변 → yellow_output.schema.json 형식 변환기
+설문 답변 → profiling_output.schema.json 형식 변환기
 
 사용법:
     from converter import survey_to_schema
@@ -20,9 +20,9 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
-from questions import Q1_MAP, Q2_MAP, Q3_MAP, Q4_MAP, Q4_BASE, Q5_MAP
+from questions import Q1_MAP, Q2_MAP, Q3_MAP, Q4_BASE, Q4_MAP, Q5_MAP
 
 # ---------------------------------------------------------------------------
 # 상수
@@ -45,7 +45,7 @@ _TARGET_TICKER = "TBD"
 
 def survey_to_schema(answers: dict) -> dict:
     """
-    설문 답변 dict를 yellow_output.schema.json 형식 dict로 변환한다.
+    설문 답변 dict를 profiling_output.schema.json 형식 dict로 변환한다.
 
     Parameters
     ----------
@@ -57,7 +57,7 @@ def survey_to_schema(answers: dict) -> dict:
     Returns
     -------
     dict
-        yellow_output.schema.json v0.2.0-draft 규격 JSON (dict)
+        profiling_output.schema.json v0.2.0-draft 규격 JSON (dict)
     """
     # ------------------------------------------------------------------
     # 1. investor_profile 계산
@@ -173,7 +173,7 @@ def survey_to_schema(answers: dict) -> dict:
         },
         "meta": {
             "schema_version": _SCHEMA_VERSION,
-            "source": "yellow_block",
+            "source": "profiling_block",
             "confidence": _FIXED_CONFIDENCE,
         },
     }

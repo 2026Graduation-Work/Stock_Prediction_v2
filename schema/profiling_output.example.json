@@ -49,7 +49,7 @@
 
   "meta": {
     "schema_version": "0.2.0-draft",
-    "source": "yellow_block",
+    "source": "profiling_block",
     "confidence": 0.81
   }
 }
