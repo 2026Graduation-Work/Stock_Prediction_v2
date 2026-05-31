@@ -1,1 +1,25 @@
+# WSL
 *:Zone.Identifier
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# Node / Next.js (platform/web 도입 후 사용)
+node_modules/
+.next/
+.vercel/
+.turbo/
+*.tsbuildinfo
+
+# 환경변수 / 시크릿
+.env
+.env.*
+!.env.example
+
+# OS / 에디터
+.DS_Store

@@ -1,0 +1,9 @@
+# Python 린터/포매터 (https://docs.astral.sh/ruff/)
+# CI에서는 `ruff check` 만 실행 (자동 수정은 로컬에서 `ruff check --fix`).
+
+target-version = "py311"
+line-length = 100
+
+[lint]
+# E/W: pycodestyle, F: pyflakes, I: isort, UP: pyupgrade, B: flake8-bugbear
+select = ["E", "W", "F", "I", "UP", "B"]
