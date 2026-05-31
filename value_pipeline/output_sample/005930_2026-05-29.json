@@ -1,0 +1,41 @@
+{
+  "ticker": "005930",
+  "date": "2026-05-29",
+  "company_name": "삼성전자",
+  "news_sentiment": -0.0281,
+  "news_impact_score": 7,
+  "news_sentiment_std": 0.4528,
+  "key_events": [
+    "삼성전자 파업 사태 발생",
+    "외국인 배당금 역송금 및 주식 매도 압력",
+    "EU 반도체 비상권한 법안 추진에 따른 삼성전자 영향 우려",
+    "삼성전자, AI 반도체 핵심 HBM 시장 주도",
+    "젠슨 황 엔비디아 CEO 방한 및 삼성전자 AI 협력 논의"
+  ],
+  "social_buzz": 319,
+  "social_sentiment": -0.0001,
+  "sentiment_divergence": -0.028,
+  "financial_health_score": 9.25,
+  "valuation_score": 4.0,
+  "financial_metrics": {
+    "per": 41.50979529020023,
+    "pbr": 4.3007970569888885,
+    "roe": 0.10360920902937422,
+    "revenue_growth": 0.10880093313642895,
+    "debt_ratio": 0.2993712690499687,
+    "altman_z": 10.753928275452127
+  },
+  "value_investment_signal": "HOLD",
+  "confidence": 0.725,
+  "reasoning": "삼성전자는 견고한 재무건전성과 AI 반도체 핵심인 HBM 시장 주도라는 긍정적 요인을 보유하고 있습니다. 그러나 파업 사태, 외국인 매도 압력, EU 반도체 법안 추진 등 단기적인 불확실성과 낮은 밸류에이션 점수가 복합적으로 작용하고 있습니다. 따라서 장기적 성장 잠재력에도 불구하고 현재는 관망하며 보유 포지션을 유지하는 것이 합리적입니다.",
+  "data_quality": {
+    "composite_score": 6.072,
+    "news_source": "naver_api",
+    "social_source": "naver",
+    "financial_source": "dart",
+    "sentiment_backend": "kr-finbert",
+    "llm_used": true,
+    "article_count": 10,
+    "post_count": 319
+  }
+}
