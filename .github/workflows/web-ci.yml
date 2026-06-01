@@ -1,0 +1,48 @@
+name: Web CI
+
+# 프론트엔드(platform/web) 변경 시 lint + build 자동 실행.
+# Python CI(python-ci.yml)와 경로 필터로 분리되어 상호 간섭하지 않는다.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "platform/**"
+      - ".github/workflows/web-ci.yml"
+  pull_request:
+    paths:
+      - "platform/**"
+      - ".github/workflows/web-ci.yml"
+
+jobs:
+  lint-and-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        # 버전은 platform/web/package.json 의 packageManager 필드에서 읽는다.
+        # (action은 working-directory 기본값을 따르지 않아 경로를 명시한다.)
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: platform/web/package.json
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: platform/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint (eslint)
+        run: pnpm lint
+
+      - name: Build (next build)
+        run: pnpm build
