@@ -1,11 +1,12 @@
+import argparse
 import os
 import time
-import argparse
-import pandas as pd
+from datetime import datetime
+
 import FinanceDataReader as fdr
+import pandas as pd
 from pykrx import stock as krx
 from tqdm import tqdm
-from datetime import datetime
 
 # 데이터 저장 경로 설정
 DATA_DIR = "./data/raw"
@@ -23,7 +24,7 @@ def get_all_tickers() -> pd.DataFrame:
 
     # 1. 활성 상장 종목 (KOSPI & KOSDAQ)
     try:
-        kospi  = fdr.StockListing("KOSPI")
+        kospi = fdr.StockListing("KOSPI")
         kosdaq = fdr.StockListing("KOSDAQ")
         active = pd.concat([kospi, kosdaq], ignore_index=True)
         active = active[["Code", "Name"]].drop_duplicates()
@@ -36,7 +37,9 @@ def get_all_tickers() -> pd.DataFrame:
     # 2. 상장폐지 종목 (KRX-DELISTING)
     try:
         raw_delisted = fdr.StockListing("KRX-DELISTING")
-        delisted = raw_delisted.rename(columns={"Symbol": "Code"})[["Code", "Name"]].drop_duplicates()
+        delisted = raw_delisted.rename(columns={"Symbol": "Code"})[
+            ["Code", "Name"]
+        ].drop_duplicates()
         delisted["IsDelisted"] = True
         print(f"  [상폐] KRX-DELISTING 총 {len(delisted)}개")
     except Exception as e:
@@ -60,7 +63,7 @@ def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFram
     등락률(Change)은 % 단위를 유지합니다.
     """
     start_yyyymmdd = start_date.replace("-", "")
-    end_yyyymmdd   = end_date.replace("-", "")
+    end_yyyymmdd = end_date.replace("-", "")
 
     df = krx.get_market_ohlcv_by_date(
         start_yyyymmdd,
@@ -71,14 +74,16 @@ def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFram
     if df.empty:
         return df
 
-    df = df.rename(columns={
-        "시가": "Open",
-        "고가": "High",
-        "저가": "Low",
-        "종가": "Close",
-        "거래량": "Volume",
-        "등락률": "Change",
-    })
+    df = df.rename(
+        columns={
+            "시가": "Open",
+            "고가": "High",
+            "저가": "Low",
+            "종가": "Close",
+            "거래량": "Volume",
+            "등락률": "Change",
+        }
+    )
     df.index.name = "Date"
     # 등락률의 NaN 값 보정
     if "Change" in df.columns:
@@ -95,14 +100,14 @@ def _fetch_ohlcv_fdr(code: str, start_date: str, end_date: str) -> pd.DataFrame:
         df = fdr.DataReader(code, start_date, end_date)
         if df.empty:
             return df
-        
+
         # 필요한 컬럼만 추출 및 리네임
         df = df[["Open", "High", "Low", "Close", "Volume", "Change"]]
         # 등락률 단위를 %로 변환 (FDR은 0.0132 형태, pykrx는 1.32 형태)
         df["Change"] = df["Change"].fillna(0.0) * 100.0
         df.index.name = "Date"
         return df
-    except Exception as e:
+    except Exception:
         # print(f"  [FDR Fetch Error] {code}: {e}")
         return pd.DataFrame()
 
@@ -113,81 +118,88 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
     이 함수는 개별 종목 API 호출 없이 단 한번에 오늘 시세를 전 종목에 업데이트합니다.
     """
     print("\n⚡ [FDR 벌크 업데이트] 최신 영업일 시세 일괄 수집 진행...")
-    
+
     try:
         kospi = fdr.StockListing("KOSPI")
         kosdaq = fdr.StockListing("KOSDAQ")
         combined_fdr = pd.concat([kospi, kosdaq], ignore_index=True)
-        
-        combined_fdr = combined_fdr.rename(columns={
-            "Code": "Code",
-            "Open": "Open",
-            "High": "High",
-            "Low": "Low",
-            "Close": "Close",
-            "Volume": "Volume",
-            "ChagesRatio": "Change"
-        })
-        
-        combined_fdr = combined_fdr[combined_fdr['Volume'] > 0]
-        combined_fdr['Code'] = combined_fdr['Code'].str.zfill(6)
-        
+
+        combined_fdr = combined_fdr.rename(
+            columns={
+                "Code": "Code",
+                "Open": "Open",
+                "High": "High",
+                "Low": "Low",
+                "Close": "Close",
+                "Volume": "Volume",
+                "ChagesRatio": "Change",
+            }
+        )
+
+        combined_fdr = combined_fdr[combined_fdr["Volume"] > 0]
+        combined_fdr["Code"] = combined_fdr["Code"].str.zfill(6)
+
         # 실제 최신 거래 영업일 날짜 알아내기 (삼성전자 최신 날짜 기준)
         sample_df = krx.get_market_ohlcv_by_date(
             (datetime.now() - pd.Timedelta(days=5)).strftime("%Y%m%d"),
             datetime.now().strftime("%Y%m%d"),
-            "005930"
+            "005930",
         )
         if not sample_df.empty:
             actual_date = sample_df.index.max()
         else:
             actual_date = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
-            
+
         actual_date_str = actual_date.strftime("%Y-%m-%d")
         print(f"  📅 수집된 실제 영업일 기준일: {actual_date_str}")
-        
-        ticker_to_name = dict(zip(all_stocks['Code'], all_stocks['Name']))
-        ticker_to_delisted = dict(zip(all_stocks['Code'], all_stocks['IsDelisted']))
-        
+
+        ticker_to_name = dict(zip(all_stocks["Code"], all_stocks["Name"]))
+        ticker_to_delisted = dict(zip(all_stocks["Code"], all_stocks["IsDelisted"]))
+
         updated_tickers = set()
-        
+
         for _, row in combined_fdr.iterrows():
-            code = row['Code']
+            code = row["Code"]
             file_path = os.path.join(DATA_DIR, f"{code}.parquet")
-            
+
             name = ticker_to_name.get(code, "")
             is_delisted = ticker_to_delisted.get(code, False)
-            
+
             # FDR StockListing의 ChangesRatio는 이미 퍼센트(%) 단위이므로 나누지 않고 그대로 사용!
             change_val = float(row["Change"]) if not pd.isna(row["Change"]) else 0.0
-            
-            new_row = pd.DataFrame([{
-                "Date": actual_date,
-                "Open": float(row["Open"]),
-                "High": float(row["High"]),
-                "Low": float(row["Low"]),
-                "Close": float(row["Close"]),
-                "Volume": float(row["Volume"]),
-                "Change": change_val,
-                "Code": code,
-                "Name": name,
-                "IsDelisted": is_delisted
-            }])
-            
+
+            new_row = pd.DataFrame(
+                [
+                    {
+                        "Date": actual_date,
+                        "Open": float(row["Open"]),
+                        "High": float(row["High"]),
+                        "Low": float(row["Low"]),
+                        "Close": float(row["Close"]),
+                        "Volume": float(row["Volume"]),
+                        "Change": change_val,
+                        "Code": code,
+                        "Name": name,
+                        "IsDelisted": is_delisted,
+                    }
+                ]
+            )
+
             if os.path.exists(file_path):
                 try:
                     existing = pd.read_parquet(file_path)
                     existing["Date"] = pd.to_datetime(existing["Date"])
-                    
+
                     if actual_date in existing["Date"].values:
                         updated_tickers.add(code)
                         continue
-                        
+
                     merged = pd.concat([existing, new_row], ignore_index=True)
-                    merged = (merged
-                              .drop_duplicates(subset=["Date"], keep="last")
-                              .sort_values(by="Date")
-                              .reset_index(drop=True))
+                    merged = (
+                        merged.drop_duplicates(subset=["Date"], keep="last")
+                        .sort_values(by="Date")
+                        .reset_index(drop=True)
+                    )
                     merged.to_parquet(file_path, index=False)
                     updated_tickers.add(code)
                 except Exception:
@@ -196,7 +208,7 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
             else:
                 new_row.to_parquet(file_path, index=False)
                 updated_tickers.add(code)
-                
+
         print(f"  ✅ FDR 벌크 반영 성공: {len(updated_tickers)}개 활성 종목 최신 시세 주입 완료.")
         return updated_tickers
     except Exception as e:
@@ -223,53 +235,54 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
     속도와 안정성을 위해 FDR DataReader를 기본으로 사용하고 pykrx를 백업으로 사용합니다.
     """
     all_stocks = get_all_tickers()
-    today_str  = datetime.now().strftime("%Y-%m-%d")
+    today_str = datetime.now().strftime("%Y-%m-%d")
 
     # 한국 실제 영업일 기준 캘린더 생성 (삼성전자 기준)
     samsung_path = os.path.join(DATA_DIR, "005930.parquet")
     if os.path.exists(samsung_path):
         samsung_df = pd.read_parquet(samsung_path)
         samsung_df["Date"] = pd.to_datetime(samsung_df["Date"])
-        actual_business_days = set(samsung_df[samsung_df["Date"] >= pd.to_datetime(start_date)]["Date"].dt.date)
+        actual_business_days = set(
+            samsung_df[samsung_df["Date"] >= pd.to_datetime(start_date)]["Date"].dt.date
+        )
     else:
-        actual_business_days = set(pd.date_range(start=start_date, end=today_str, freq='B').date)
+        actual_business_days = set(pd.date_range(start=start_date, end=today_str, freq="B").date)
 
     print(f"\n[*] OHLCV 전체 이력 수집/보정 가동 | 시작일: {start_date} | 종료일: {today_str}")
     failed = []
 
-    ticker_to_name = dict(zip(all_stocks['Code'], all_stocks['Name']))
-    ticker_to_delisted = dict(zip(all_stocks['Code'], all_stocks['IsDelisted']))
+    dict(zip(all_stocks["Code"], all_stocks["Name"], strict=False))
 
     for _, row in tqdm(all_stocks.iterrows(), total=len(all_stocks), desc="전체 수집 및 갭 복구"):
-        code        = row["Code"]
-        name        = row["Name"]
+        code = row["Code"]
+        name = row["Name"]
         is_delisted = row["IsDelisted"]
-        
+
         if is_delisted:
             continue
-            
-        file_path   = os.path.join(DATA_DIR, f"{code}.parquet")
+
+        file_path = os.path.join(DATA_DIR, f"{code}.parquet")
 
         try:
             existing_df = None
             needs_download = True
             fetch_start_str = start_date
-            
+
             if os.path.exists(file_path):
                 existing_df = pd.read_parquet(file_path)
                 if not existing_df.empty:
                     existing_df["Date"] = pd.to_datetime(existing_df["Date"])
-                    
+
                     # 1. 중간 누락(Gap) 탐지
                     first_date = existing_df["Date"].min()
                     check_start = max(first_date, pd.to_datetime(start_date))
                     check_days = {d for d in actual_business_days if d >= check_start.date()}
                     existing_dates = set(existing_df["Date"].dt.date)
                     missing_days = check_days - existing_dates
-                    
+
                     last_date = existing_df["Date"].max()
                     fetch_start_str = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                    
+
                     # 2. 업데이트 및 보정 필요성 판단
                     if not is_delisted and (fetch_start_str <= today_str or missing_days):
                         needs_download = True
@@ -279,7 +292,7 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
                         if repair_only:
                             continue
                         needs_download = False
-            
+
             if not needs_download:
                 continue
 
@@ -298,17 +311,18 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
                     continue
 
             df = df.reset_index()
-            df["Code"]       = code
-            df["Name"]       = name
+            df["Code"] = code
+            df["Name"] = name
             df["IsDelisted"] = is_delisted
 
             if existing_df is not None:
                 combined_df = pd.concat([existing_df, df], ignore_index=True)
                 combined_df["Date"] = pd.to_datetime(combined_df["Date"])
-                combined_df = (combined_df
-                               .drop_duplicates(subset=["Date"], keep="last")
-                               .sort_values(by="Date")
-                               .reset_index(drop=True))
+                combined_df = (
+                    combined_df.drop_duplicates(subset=["Date"], keep="last")
+                    .sort_values(by="Date")
+                    .reset_index(drop=True)
+                )
             else:
                 combined_df = df
 
@@ -336,10 +350,10 @@ if __name__ == "__main__":
 사용 예시:
   # [최초 구축 / 전체 갭 복구] 특정 날짜부터 전체 수집 및 중간 갭 완벽 복구
   python price_collector.py --mode full --start-date 2020-01-01
-  
+
   # [매일 자동화] 최신일 시세 일괄 동기화 (10초 소요)
   python price_collector.py --mode update
-        """
+        """,
     )
     parser.add_argument(
         "--mode",
