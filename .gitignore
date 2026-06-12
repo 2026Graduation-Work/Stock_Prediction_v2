@@ -67,3 +67,21 @@ venv/
 # ---------- AI 코딩 도구 ----------
 # Claude Code
 .claude/
+
+# ---------- 데이터 및 로컬 설정 (Data & Config) ----------
+**/data/
+*.csv
+*.parquet
+**/config.yaml
+
+# 기본 Baseline 실험의 모델/캐시/결과는 Git에 올려서 공유 (추적 허용)
+!**/experiments/cache/*_predictions.parquet
+!**/experiments/cache/models/*_model.txt
+!**/experiments/results/exp_001_base_lgbm/
+
+# 차트 분석 블록의 샘플 데이터 및 배포 모델 추적 허용 (협업용 가이드)
+!**/analysis/chart/data/
+!**/analysis/chart/data/raw/005930.parquet
+!**/analysis/chart/data/processed/005930.parquet
+!**/analysis/chart/data/ticker_metadata.csv
+!**/analysis/chart/core/models/
