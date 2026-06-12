@@ -78,6 +78,7 @@ venv/
 !**/experiments/cache/*_predictions.parquet
 !**/experiments/cache/models/*_model.txt
 !**/experiments/results/exp_001_base_lgbm/
+**/experiments/results/exp_001_base_lgbm/*.html
 
 # 차트 분석 블록의 샘플 데이터 및 배포 모델 추적 허용 (협업용 가이드)
 !**/analysis/chart/data/raw/005930.parquet
