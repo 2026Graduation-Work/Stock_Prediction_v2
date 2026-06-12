@@ -69,9 +69,13 @@ def compute_custom_krx_composite(index: pd.DatetimeIndex) -> pd.Series:
 def calculate_soft_exits(entry_series, open_series, close_series, sigma_series, halt_series, holding_days, down_mult):
     """ Soft Stop 및 보유 기간 만기 청산 로직 (거래정지일 완벽 지원) """
     n = len(entry_series)
-    soft_exits = pd.Series(False, index=entry_series.index)
-    if halt_series is None:
-        halt_series = pd.Series(0, index=entry_series.index)
+    soft_exits = np.zeros(n, dtype=bool)
+    
+    entry_arr = entry_series.values
+    open_arr = open_series.values
+    close_arr = close_series.values
+    sigma_arr = sigma_series.values
+    halt_arr = halt_series.values if halt_series is not None else np.zeros(n, dtype=int)
 
     in_position = False
     entry_price = 0.0
@@ -79,7 +83,7 @@ def calculate_soft_exits(entry_series, open_series, close_series, sigma_series, 
     trading_days_held = 0
 
     for i in range(n):
-        is_halt = bool(halt_series.iloc[i])
+        is_halt = bool(halt_arr[i])
         if in_position:
             if is_halt:
                 continue
@@ -87,26 +91,26 @@ def calculate_soft_exits(entry_series, open_series, close_series, sigma_series, 
             trading_days_held += 1
             
             soft_stop_line = entry_price * (1.0 - down_mult * entry_sigma)
-            if close_series.iloc[i] < soft_stop_line:
+            if close_arr[i] < soft_stop_line:
                 if i + 1 < n:
-                    soft_exits.iloc[i + 1] = True
+                    soft_exits[i + 1] = True
                 in_position = False
                 trading_days_held = 0
                 continue
                 
             if trading_days_held >= holding_days:
-                soft_exits.iloc[i] = True
+                soft_exits[i] = True
                 in_position = False
                 trading_days_held = 0
                 continue
 
-        if entry_series.iloc[i] and not in_position and not is_halt:
+        if entry_arr[i] and not in_position and not is_halt:
             in_position = True
-            entry_price = open_series.iloc[i]
-            entry_sigma = sigma_series.iloc[i]
+            entry_price = open_arr[i]
+            entry_sigma = sigma_arr[i]
             trading_days_held = 0
 
-    return soft_exits
+    return pd.Series(soft_exits, index=entry_series.index)
 
 
 class VectorBTEngine:
@@ -185,8 +189,8 @@ class VectorBTEngine:
             trades_df = pf.trades.records_readable
             trades_df.to_csv(os.path.join(result_dir, "trades.csv"), index=False)
             
-            daily_returns = pf.returns()
-            ew_benchmark = pf.benchmark_returns()
+            daily_returns = pf.returns
+            ew_benchmark = pf.benchmark_returns
             custom_krx_benchmark = compute_custom_krx_composite(open_price.index)
                 
             returns_df = pd.DataFrame({

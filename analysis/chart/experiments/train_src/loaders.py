@@ -127,10 +127,11 @@ def load_parquet_data(data_dir: str, start_date: str = None, end_date: str = Non
         try:
             if columns_only is not None:
                 import pyarrow.parquet as pq
-                file_schema_names = pq.read_schema(f).names
+                pf = pq.ParquetFile(f)
+                file_schema_names = pf.schema.names
                 required_cols = ['Date', 'Code', 'Close', 'High', 'Low', 'Open', 'Volume', 'Trading_Halt', 'Sigma']
                 cols_to_load = list(set(columns_only + required_cols) & set(file_schema_names))
-                temp_df = pd.read_parquet(f, columns=cols_to_load)
+                temp_df = pf.read(columns=cols_to_load).to_pandas()
             else:
                 temp_df = pd.read_parquet(f)
                 
@@ -160,7 +161,7 @@ def load_parquet_data(data_dir: str, start_date: str = None, end_date: str = Non
                     sl = label_params.get('sl', 2.0)
                     y_label_series = apply_fixed_barrier_labeling(temp_df, horizon, tp, sl)
                     
-                temp_df['Y_Label'] = y_label_series.map({-1: 0, 0: 1, 1: 2})
+                temp_df['Y_Label'] = y_label_series + 1
                 temp_df = temp_df.dropna(subset=['Y_Label'])
                 temp_df['Y_Label'] = temp_df['Y_Label'].astype(int)
                 
