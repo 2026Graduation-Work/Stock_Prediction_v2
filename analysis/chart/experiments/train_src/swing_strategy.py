@@ -54,9 +54,8 @@ class SwingStrategy:
         entries = raw_entries.shift(1).fillna(False)
         weights = weights.shift(1).fillna(0.0)
 
-        # T+1일이 거래정지일이면 진입 차단 (shift 후에도 방어해야 함)
-        halt_next = trading_halt.shift(1).fillna(0)
-        entries = entries & (halt_next == 0)
+        # T+1일(매수 집행일)이 거래정지일이면 진입 차단
+        entries = entries & (trading_halt == 0)
 
         # 7. 강제 리밸런싱 및 수수료 폭탄 방지
         # VectorBT는 빈칸이 아니면 매일 비중을 조절하려 하므로, 매수 진입일 외에는 NaN으로 둠

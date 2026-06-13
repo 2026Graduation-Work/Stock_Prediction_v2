@@ -215,8 +215,8 @@ class VectorBTEngine:
             html_path = os.path.join(result_dir, "equity_curve.html")
             pf.plot().write_html(html_path)
             print(f"✅ 인터랙티브 수익률 차트 저장 완료: {html_path}")
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"⚠️ 인터랙티브 수익률 차트 저장 실패: {e}")
 
         try:
             import quantstats as qs

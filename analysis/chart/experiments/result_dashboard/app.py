@@ -238,8 +238,9 @@ def main():
 
             with open(config_path, encoding="utf-8") as f:
                 config = yaml.safe_load(f)
-        except Exception:
-            pass
+        except Exception as e:
+            st.warning(f"설정 파일을 불러오는 중 문제가 발생했습니다: {config_path} ({e})")
+            config = {}
 
     if config:
         st.write("")  # 간격 띄우기
@@ -476,8 +477,8 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
                     meta_df = pd.read_csv(metadata_path, dtype={"Code": str})
                     ticker_map = dict(zip(meta_df["Code"], meta_df["Name"]))
                     delisted_map = dict(zip(meta_df["Code"], meta_df["IsDelisted"]))
-                except Exception:
-                    pass
+                except Exception as e:
+                    st.warning(f"종목 메타데이터 로드에 실패했습니다: {e}")
 
             # 1. KOSPI & KOSDAQ 시장 구분 정보 실시간 로드 및 캐싱
             @st.cache_data(ttl=3600)
@@ -490,8 +491,8 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
                     kosdaq_df = fdr.StockListing("KOSDAQ")
                     kospi_set = set(kospi_df["Code"].astype(str).str.zfill(6).tolist())
                     kosdaq_set = set(kosdaq_df["Code"].astype(str).str.zfill(6).tolist())
-                except Exception:
-                    pass
+                except Exception as e:
+                    st.warning(f"시장 구분 정보 로드 실패(기본값 사용): {e}")
                 return kospi_set, kosdaq_set
 
             kospi_set, kosdaq_set = load_market_info()
@@ -507,7 +508,7 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
                         return parsed[0]
                     else:
                         return str(parsed)
-                except:
+                except (ValueError, SyntaxError):
                     return (
                         col_str.replace("'", "")
                         .replace('"', "")
@@ -587,7 +588,7 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
                         else:
                             # fallback: 주말 감안한 영업일 추정
                             days_held = int((exit_t - entry_t).days * 5 / 7)
-                    except:
+                    except Exception:
                         days_held = 0
 
                     ret_pct = row["Return"] * 100

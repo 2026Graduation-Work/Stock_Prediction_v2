@@ -175,7 +175,6 @@ def main(config_path):
     if os.path.exists(predictions_cache_path):
         print("\n⚡ [CACHE HIT] 기존 설정 기반 예측 캐시를 찾았습니다!")
         print(f"   -> 캐시 파일: {os.path.basename(predictions_cache_path)}")
-        final_predictions = pd.read_parquet(predictions_cache_path)
     else:
         all_predictions = []
 
