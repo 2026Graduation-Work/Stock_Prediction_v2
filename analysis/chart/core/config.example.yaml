@@ -1,0 +1,98 @@
+experiment_name: "exp_001_base_lgbm"
+
+# =========================================================
+# 1. 데이터 설정 (Data Configuration)
+# 적용 모듈: core/config.py, experiments/run_experiment.py
+# =========================================================
+data:
+  tickers: ""               # 비워둘 경우 전체 종목(KOSPI/KOSDAQ)을 대상으로 수집/전처리합니다.
+  start_date: "2016-01-01"  # 전체 훈련/테스트를 포괄하는 데이터 시작일
+  end_date: "2026-12-31"    # 전체 훈련/테스트를 포괄하는 데이터 종료일
+  
+  # 데이터 분할 전략 (single: 단일 고정, sliding: 슬라이딩, expanding: 확장)
+  split_strategy: "sliding"  
+  embargo_days: 7           # 정보 누수(Look-ahead bias)를 막기 위한 훈련/테스트 사이의 공백(일)
+  
+  # 1) single: 기존 단일 고정형 셋업
+  splits:
+    - train_start: "2016-01-01"
+      train_end: "2023-12-31"
+      test_start: "2024-01-07"
+      test_end: "2026-12-31"
+
+  # 2) sliding: 3년 학습 -> 1년 테스트 슬라이딩 윈도우 셋업 (주기적 재학습 모사)
+  sliding:
+    train_window_years: 3
+    test_window_years: 1
+    start_year: 2016
+    end_year: 2027
+
+  # 3) expanding: 점진적으로 학습 데이터가 불어나는 누적 확장형 셋업
+  expanding:
+    initial_train_years: 5
+    test_window_years: 1
+    start_year: 2016
+    end_year: 2027
+
+# =========================================================
+# 2. 피처 엔지니어링 (Feature Engineering)
+# =========================================================
+features:
+  technical: true           # 차트 기술적 분석 피처(Alpha158 등) 활성화 여부
+  fundamental: false        # 기본적 분석(DART 재무제표) 제외 (다른 팀원 담당)
+
+# =========================================================
+# 3. 라벨(정답지) 엔지니어링 (Label Configuration)
+# 설명: 모델이 예측해야 할 목표 Y값(주가 상승/하락 배리어)을 설정합니다.
+# =========================================================
+labels:
+  type: "dynamic_sigma"  # "dynamic_sigma" (변동성 기반 동적) 또는 "fixed" (고정 % 기반)
+  horizon: 5             # 예측할 미래 기간 (예: 5영업일)
+  up_mult: 1.5           # 상방 배리어 변동성(Sigma) 승수 (익절선)
+  down_mult: 1.2         # 하방 배리어 변동성(Sigma) 승수 (손절선)
+
+# =========================================================
+# 4. 모델 설정 (Model Configuration)
+# 설명: LightGBM 트리 모델의 하이퍼파라미터를 세밀하게 조정합니다.
+# =========================================================
+model:
+  type: "LGBM"
+  params:
+    # [앙상블 및 학습 속도]
+    n_estimators: 1000       # 생성할 트리의 최대 개수 (Underfitting 방지)
+    learning_rate: 0.01      # 학습률
+    
+    # [트리의 형태 및 복잡도 규제 (★과적합 방지의 핵심★)]
+    max_depth: 5             # 트리의 최대 깊이. 금융 데이터는 4~6을 넘어가면 노이즈를 암기함.
+    num_leaves: 20           # 리프(끝 노드)의 최대 수
+    min_child_samples: 2000  # 리프 노드에 할당되어야 할 최소 데이터 수 (강한 규제 적용)
+    
+    # [데이터 및 피처 샘플링 (일반화 성능 향상)]
+    colsample_bytree: 0.7    # Feature Fraction: 매 트리마다 피처의 70%만 랜덤 샘플링
+    subsample: 0.8           # Bagging Fraction: 매 트리마다 데이터의 80%만 랜덤 샘플링
+    subsample_freq: 1
+    class_weight: "balanced" # 불균형 데이터에 가중치 보정 적용
+    random_state: 42
+    n_jobs: -1
+
+# =========================================================
+# 5. 트레이딩 전략 (Trading Strategy)
+# 설명: 모델의 예측 확률(Prob)을 실제 매매 시그널(Weight)로 변환합니다.
+# =========================================================
+strategy:
+  type: "swing"
+  prob_threshold: 0.65   # 최소 진입 확률 커트라인 (이 확률 미만이면 진입 포기)
+  top_n: 5               # 매일 확률이 높은 상위 5개 종목에 분산 투자
+
+# =========================================================
+# 6. 백테스트 엔진 (Backtest Configuration)
+# 설명: VectorBT 기반의 퀀트 시뮬레이션 환경을 설정합니다.
+# =========================================================
+backtest:
+  initial_cash: 10000000 # 초기 자본금 (1천만 원)
+  fee: 0.00105            # 거래 수수료 + 증권거래세 (약 0.105%)
+  
+  # 엑싯(청산) 배리어 가중치 설정 (변동성 Sigma 기반 승수)
+  up_mult: 1.8           # 장중 익절 배리어 가중치 (TP)
+  down_mult: 1.2         # 종가 기준 Soft Stop 배리어 가중치 (SL)
+  hard_sl_mult: 1.5      # 장중 즉시 손절 Hard Stop 가중치 (Soft Stop보다 타이트하게)
