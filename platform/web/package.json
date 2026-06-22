@@ -16,6 +16,11 @@
     "react-dom": "19.2.4",
     "recharts": "^3.8.1"
   },
+  "pnpm": {
+    "overrides": {
+      "postcss": "^8.5.15"
+    }
+  },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
