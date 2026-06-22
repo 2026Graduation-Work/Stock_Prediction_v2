@@ -1,5 +1,5 @@
 # ── 데이터 수집 및 전처리 ───────────────────────
-FinanceDataReader>=0.9.50
+finance-datareader>=0.9.50
 pykrx>=1.0.0
 pandas>=1.5.0
 numpy>=1.20.0
