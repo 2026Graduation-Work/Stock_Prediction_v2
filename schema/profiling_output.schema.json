@@ -124,6 +124,10 @@
         "market_regime_hint": {
           "type": "string",
           "description": "시장 상태 힌트 (선택)"
+        },
+        "benchmark_index": {
+          "type": "string",
+          "description": "사용자별 성과 비교 기준 지수 코드 (예: KOSPI, KOSDAQ). target_ticker(추천/예측 대상 개별 종목)와는 별개 개념 — 사용자마다 다른 벤치마크를 기준으로 삼을 수 있어 profiling 단계에서 함께 수집한다."
         }
       }
     },

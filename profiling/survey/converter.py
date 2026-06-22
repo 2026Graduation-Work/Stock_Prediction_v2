@@ -37,6 +37,7 @@ _FIXED_CONFIDENCE = 0.85
 # MVP에서 고정하는 필드
 _TARGET_RETURN_ANNUAL = 0.10
 _TARGET_TICKER = "TBD"
+_BENCHMARK_INDEX = "TBD"  # TODO: 설문 문항 추가 후 사용자 입력값으로 교체 예정
 
 
 # ---------------------------------------------------------------------------
@@ -170,6 +171,7 @@ def survey_to_schema(answers: dict) -> dict:
             "target_ticker": _TARGET_TICKER,
             "investment_amount_krw": answers.get("investment_amount_krw", 0),
             "action_intent": answers.get("action_intent", "buy_consideration"),
+            "benchmark_index": answers.get("benchmark_index", _BENCHMARK_INDEX),  # TODO: 설문 문항 추가 후 사용자 입력값으로 교체
         },
         "meta": {
             "schema_version": _SCHEMA_VERSION,

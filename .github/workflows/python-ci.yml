@@ -1,7 +1,8 @@
 name: Python CI
 
-# Python 영역(profiling / analysis / schema) 변경 시 lint + test 자동 실행.
-# JS/TS(platform/web) CI는 프론트엔드 scaffold 후 별도 워크플로(web-ci.yml)로 추가한다.
+# Python 영역(profiling / analysis/chart / analysis/text / schema) 변경 시 블록별 lint + test.
+# dorny/paths-filter로 변경된 블록만 해당 job을 실행한다.
+# schema/** 변경은 블록 간 계약이므로 3개 job 모두 트리거.
 
 on:
   push:
@@ -20,15 +21,51 @@ on:
       - "ruff.toml"
       - ".github/workflows/python-ci.yml"
 
-jobs:
-  lint-and-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+permissions:
+  contents: read
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+jobs:
+  # ── 경로 감지 ──────────────────────────────────────────────────────────────
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      profiling: ${{ steps.filter.outputs.profiling }}
+      chart: ${{ steps.filter.outputs.chart }}
+      text: ${{ steps.filter.outputs.text }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            profiling:
+              - 'profiling/**'
+              - 'schema/**'
+              - 'ruff.toml'
+              - '.github/workflows/python-ci.yml'
+            chart:
+              - 'analysis/chart/**'
+              - 'schema/**'
+              - 'ruff.toml'
+              - '.github/workflows/python-ci.yml'
+            text:
+              - 'analysis/text/**'
+              - 'schema/**'
+              - 'ruff.toml'
+              - '.github/workflows/python-ci.yml'
+
+  # ── profiling 블록 ─────────────────────────────────────────────────────────
+  profiling-test:
+    needs: changes
+    if: ${{ needs.changes.outputs.profiling == 'true' }}
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: profiling/survey
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: pip
@@ -39,10 +76,78 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r profiling/survey/requirements-dev.txt
+          pip install -r requirements-dev.txt
 
       - name: Lint (ruff)
-        run: ruff check .
+        working-directory: .
+        run: ruff check profiling/
 
       - name: Run tests (pytest)
-        run: pytest profiling/survey -v
+        run: pytest . -v
+
+  # ── analysis/chart 블록 ────────────────────────────────────────────────────
+  chart-test:
+    needs: changes
+    if: ${{ needs.changes.outputs.chart == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: analysis/chart/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+          pip install -r analysis/chart/requirements.txt
+
+      - name: Lint (ruff)
+        run: ruff check analysis/chart/
+
+      - name: Run tests (pytest)
+        run: |
+          if find analysis/chart -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+            pytest analysis/chart/ -v
+          else
+            echo "No test files in analysis/chart — lint-only pass."
+          fi
+
+  # ── analysis/text 블록 ─────────────────────────────────────────────────────
+  text-test:
+    needs: changes
+    if: ${{ needs.changes.outputs.text == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: analysis/text/value_pipeline/requirements.txt
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ruff
+          # value_pipeline 전용 의존성
+          pip install -r analysis/text/value_pipeline/requirements.txt
+          # torch/transformers/requests: 루트 requirements.txt가 없으므로 CI에서 별도 설치.
+          # KR-FinBERT 폴백 경로에서 사용; CPU-only 빌드로 용량을 줄인다.
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install transformers requests
+
+      - name: Lint (ruff)
+        run: ruff check analysis/text/
+
+      - name: Run tests (pytest)
+        run: |
+          if find analysis/text -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+            pytest analysis/text/ -v
+          else
+            echo "No test files in analysis/text — lint-only pass."
+          fi

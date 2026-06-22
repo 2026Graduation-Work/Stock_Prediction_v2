@@ -19,6 +19,6 @@ beautifulsoup4>=4.12.0
 # .env 자동 로드
 python-dotenv>=1.0.0
 
-# 참고: torch, transformers, requests 는 루트 requirements.txt에 이미 포함.
+# 참고: torch, transformers, requests 는 이 파일에 명시되지 않으며 CI에서 별도 설치됨.
 #       KR-FinBERT(snunlp/KR-FinBert-SC)는 transformers+torch로 동작하며
 #       미설치/미다운로드 시 사전 기반 감성으로 자동 폴백된다.
