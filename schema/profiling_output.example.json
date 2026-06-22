@@ -44,7 +44,8 @@
     "target_ticker": "TBD",
     "investment_amount_krw": 500000,
     "action_intent": "buy_consideration",
-    "market_regime_hint": "high_volatility"
+    "market_regime_hint": "high_volatility",
+    "benchmark_index": "KOSPI"
   },
 
   "meta": {

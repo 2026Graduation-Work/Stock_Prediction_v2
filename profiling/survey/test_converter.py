@@ -182,3 +182,7 @@ class TestJsonSchema:
         answers = {**MINJI_ANSWERS, "Q4": []}
         out = survey_to_schema(answers)
         assert out["psychological_state"]["self_confidence"] == pytest.approx(0.3)
+
+    def test_benchmark_index_key_exists(self, minji_output: dict):
+        """context 에 benchmark_index 키가 존재해야 한다 (schema 필드 추가 확인)."""
+        assert "benchmark_index" in minji_output["context"]
