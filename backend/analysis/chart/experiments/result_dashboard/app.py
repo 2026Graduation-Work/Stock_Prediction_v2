@@ -459,8 +459,10 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
                     os.path.join(current_dir, "..", "..", "data", "ticker_metadata.csv")
                 ),  # backend/analysis/chart/data
                 os.path.abspath(
-                    os.path.join(current_dir, "..", "..", "..", "data", "ticker_metadata.csv")
-                ),  # Stock_Prediction_v2/data
+                    os.path.join(
+                        current_dir, "..", "..", "..", "..", "..", "data", "ticker_metadata.csv"
+                    )
+                ),  # 레포 루트 data/ (result_dashboard에서 5단계 위)
                 os.path.abspath(os.path.join(os.getcwd(), "data", "ticker_metadata.csv")),
                 os.path.abspath(os.path.join(current_dir, "..", "data", "ticker_metadata.csv")),
             ]
