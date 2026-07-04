@@ -19,7 +19,8 @@ from converter import survey_to_schema
 # ---------------------------------------------------------------------------
 # 경로
 # ---------------------------------------------------------------------------
-_REPO_ROOT = Path(__file__).parent.parent.parent
+# backend/profiling/survey/ → 레포 루트는 3단계 위
+_REPO_ROOT = Path(__file__).parents[3]
 _SCHEMA_PATH = _REPO_ROOT / "schema" / "profiling_output.schema.json"
 _EXAMPLE_PATH = _REPO_ROOT / "schema" / "profiling_output.example.json"
 
