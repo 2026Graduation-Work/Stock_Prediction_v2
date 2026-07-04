@@ -457,7 +457,7 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
             metadata_candidates = [
                 os.path.abspath(
                     os.path.join(current_dir, "..", "..", "data", "ticker_metadata.csv")
-                ),  # analysis/chart/data
+                ),  # backend/analysis/chart/data
                 os.path.abspath(
                     os.path.join(current_dir, "..", "..", "..", "data", "ticker_metadata.csv")
                 ),  # Stock_Prediction_v2/data

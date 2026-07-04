@@ -22,7 +22,7 @@
 ## 코드
 
 - `value_pipeline/` — 가치투자 피처 전처리 파이프라인 (DART 재무제표 + 감성 → 구조화 JSON).
-  실행: `analysis/text/`에서 `python -m value_pipeline.run` (API 키 없으면 동봉 샘플·규칙 기반으로 동작).
+  실행: `backend/analysis/text/`에서 `python -m value_pipeline.run` (API 키 없으면 동봉 샘플·규칙 기반으로 동작).
 - `gdelt_samsung.py` — GDELT DOC API로 뉴스 수집 (무료, 키 불필요).
 
 ## 참고
