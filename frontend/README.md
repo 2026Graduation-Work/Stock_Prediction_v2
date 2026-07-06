@@ -1,6 +1,33 @@
+# 🔵 Frontend Block — 대시보드 / API / 인프라
+
+담당: 성우
+
+## 역할
+
+profiling + analysis 블록의 결과를 통합하여 사용자에게 보여주는
+웹 대시보드를 구현하고, API와 인프라를 담당한다.
+
+## 범위
+
+- 기능 명세서 → API 명세서
+- 토스 스타일 대시보드 UI
+- Supabase 스키마 설계
+- 배포 (Vercel)
+
+## 화이트박스 출력 4패턴 (시연 핵심)
+
+1. 모든 추천 옆에 "근거 패널"
+2. RAG 답변에 출처 강제 인용
+3. 시나리오 결과에 토네이도 차트
+4. AI의 한계 명시
+
+---
+
+## 개발 환경 (Next.js)
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
-## Getting Started
+### Getting Started
 
 First, run the development server:
 
@@ -20,7 +47,7 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
-## Learn More
+### Learn More
 
 To learn more about Next.js, take a look at the following resources:
 
@@ -29,7 +56,7 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+### Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 

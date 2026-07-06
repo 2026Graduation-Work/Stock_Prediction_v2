@@ -90,7 +90,7 @@ streamlit run experiments/dashboard/app.py
 ## 📂 6. 상세 파일 구조 및 설명
 
 ```
-analysis/chart/
+backend/analysis/chart/
 ├── README.md                 # 블록 개요, 실행법 및 가이드라인
 ├── requirements.txt          # 차트 분석 블록 의존 패키지 리스트
 │

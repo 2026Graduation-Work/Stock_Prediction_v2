@@ -1,6 +1,6 @@
 name: Python CI
 
-# Python 영역(profiling / analysis/chart / analysis/text / schema) 변경 시 블록별 lint + test.
+# Python 영역(backend/profiling / backend/analysis/chart / backend/analysis/text / schema) 변경 시 블록별 lint + test.
 # dorny/paths-filter로 변경된 블록만 해당 job을 실행한다.
 # schema/** 변경은 블록 간 계약이므로 3개 job 모두 트리거.
 
@@ -8,15 +8,15 @@ on:
   push:
     branches: [main]
     paths:
-      - "profiling/**"
-      - "analysis/**"
+      - "backend/profiling/**"
+      - "backend/analysis/**"
       - "schema/**"
       - "ruff.toml"
       - ".github/workflows/python-ci.yml"
   pull_request:
     paths:
-      - "profiling/**"
-      - "analysis/**"
+      - "backend/profiling/**"
+      - "backend/analysis/**"
       - "schema/**"
       - "ruff.toml"
       - ".github/workflows/python-ci.yml"
@@ -39,17 +39,17 @@ jobs:
         with:
           filters: |
             profiling:
-              - 'profiling/**'
+              - 'backend/profiling/**'
               - 'schema/**'
               - 'ruff.toml'
               - '.github/workflows/python-ci.yml'
             chart:
-              - 'analysis/chart/**'
+              - 'backend/analysis/chart/**'
               - 'schema/**'
               - 'ruff.toml'
               - '.github/workflows/python-ci.yml'
             text:
-              - 'analysis/text/**'
+              - 'backend/analysis/text/**'
               - 'schema/**'
               - 'ruff.toml'
               - '.github/workflows/python-ci.yml'
@@ -61,7 +61,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: profiling/survey
+        working-directory: backend/profiling/survey
     steps:
       - uses: actions/checkout@v4
 
@@ -70,8 +70,8 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            profiling/survey/requirements.txt
-            profiling/survey/requirements-dev.txt
+            backend/profiling/survey/requirements.txt
+            backend/profiling/survey/requirements-dev.txt
 
       - name: Install dependencies
         run: |
@@ -80,12 +80,12 @@ jobs:
 
       - name: Lint (ruff)
         working-directory: .
-        run: ruff check profiling/
+        run: ruff check backend/profiling/
 
       - name: Run tests (pytest)
         run: pytest . -v
 
-  # ── analysis/chart 블록 ────────────────────────────────────────────────────
+  # ── backend/analysis/chart 블록 ────────────────────────────────────────────────────
   chart-test:
     needs: changes
     if: ${{ needs.changes.outputs.chart == 'true' }}
@@ -97,26 +97,26 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: analysis/chart/requirements.txt
+          cache-dependency-path: backend/analysis/chart/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install ruff
-          pip install -r analysis/chart/requirements.txt
+          pip install -r backend/analysis/chart/requirements.txt
 
       - name: Lint (ruff)
-        run: ruff check analysis/chart/
+        run: ruff check backend/analysis/chart/
 
       - name: Run tests (pytest)
         run: |
-          if find analysis/chart -name "test_*.py" -o -name "*_test.py" | grep -q .; then
-            pytest analysis/chart/ -v
+          if find backend/analysis/chart -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+            pytest backend/analysis/chart/ -v
           else
-            echo "No test files in analysis/chart — lint-only pass."
+            echo "No test files in backend/analysis/chart — lint-only pass."
           fi
 
-  # ── analysis/text 블록 ─────────────────────────────────────────────────────
+  # ── backend/analysis/text 블록 ─────────────────────────────────────────────────────
   text-test:
     needs: changes
     if: ${{ needs.changes.outputs.text == 'true' }}
@@ -128,26 +128,26 @@ jobs:
         with:
           python-version: "3.11"
           cache: pip
-          cache-dependency-path: analysis/text/value_pipeline/requirements.txt
+          cache-dependency-path: backend/analysis/text/value_pipeline/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install ruff
           # value_pipeline 전용 의존성
-          pip install -r analysis/text/value_pipeline/requirements.txt
+          pip install -r backend/analysis/text/value_pipeline/requirements.txt
           # torch/transformers/requests: 루트 requirements.txt가 없으므로 CI에서 별도 설치.
           # KR-FinBERT 폴백 경로에서 사용; CPU-only 빌드로 용량을 줄인다.
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install transformers requests
 
       - name: Lint (ruff)
-        run: ruff check analysis/text/
+        run: ruff check backend/analysis/text/
 
       - name: Run tests (pytest)
         run: |
-          if find analysis/text -name "test_*.py" -o -name "*_test.py" | grep -q .; then
-            pytest analysis/text/ -v
+          if find backend/analysis/text -name "test_*.py" -o -name "*_test.py" | grep -q .; then
+            pytest backend/analysis/text/ -v
           else
-            echo "No test files in analysis/text — lint-only pass."
+            echo "No test files in backend/analysis/text — lint-only pass."
           fi

@@ -17,20 +17,20 @@
 
 | 블록 | 담당 | 역할 |
 | --- | --- | --- |
-| 🟡 profiling | 중현 | 사용자 내부 정보 — 설문, JSON 스키마 |
-| 🟢 analysis/chart | 진세 | 차트 패턴 분석 (기술적 분석, DT 계열 모델) |
-| 🟢 analysis/text | 서환 | 뉴스 감성·재무제표·SNS 심리 분석 |
-| 🔵 platform | 성우 | 기능 명세, API, 대시보드, 인프라 |
+| 🟡 backend/profiling | 중현 | 사용자 내부 정보 — 설문, JSON 스키마 |
+| 🟢 backend/analysis/chart | 진세 | 차트 패턴 분석 (기술적 분석, DT 계열 모델) |
+| 🟢 backend/analysis/text | 서환 | 뉴스 감성·재무제표·SNS 심리 분석 |
+| 🔵 frontend | 성우 | 기능 명세, API, 대시보드, 인프라 |
 
 ## 디렉토리 구조
 
 ```
-/docs              프로젝트 문서 (회의록, 설계 문서)
-/schema            블록 간 공유 인터페이스 스키마 (JSON)
-/profiling         🟡 설문, 사용자 프로파일링
-/analysis/chart    🟢 차트/기술적 분석
-/analysis/text     🟢 뉴스/재무제표/SNS LLM 분석
-/platform          🔵 대시보드, API, 인프라
+/docs                     프로젝트 문서 (회의록, 설계 문서)
+/schema                   블록 간 공유 인터페이스 스키마 (JSON)
+/backend/profiling        🟡 설문, 사용자 프로파일링
+/backend/analysis/chart   🟢 차트/기술적 분석
+/backend/analysis/text    🟢 뉴스/재무제표/SNS LLM 분석
+/frontend                 🔵 대시보드, API, 인프라 (Next.js)
 ```
 
 ## 기술 스택

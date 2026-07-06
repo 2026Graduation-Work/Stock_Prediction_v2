@@ -25,5 +25,5 @@
 
 ## 다음 블록으로 넘기는 계약
 
-analysis/chart · analysis/text 는 이 JSON을 모델 입력 컨텍스트로 사용한다.
+backend/analysis/chart · backend/analysis/text 는 이 JSON을 모델 입력 컨텍스트로 사용한다.
 스키마 변경 시 반드시 팀 공유 후 버전을 올린다.

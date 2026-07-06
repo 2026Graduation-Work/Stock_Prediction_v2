@@ -24,18 +24,18 @@
 ## 레포 구조 (4블록)
 
 ```
-profiling/         🟡 사용자 내부 정보 — 심리 설문, 사용자 프로파일링
-analysis/chart/    🟢 차트 패턴 분석 (기술적 분석, DT 계열 모델)
-analysis/text/     🟢 뉴스 감성·재무제표·SNS 심리 분석 (LLM)
-platform/          🔵 기능 명세, API, 대시보드, 인프라
-schema/            블록 간 공유 인터페이스 스키마 (JSON)
-docs/              기획·설계·협업 규칙 문서
-.github/           PR 템플릿 등 GitHub 관련 설정
+backend/profiling/        🟡 사용자 내부 정보 — 심리 설문, 사용자 프로파일링
+backend/analysis/chart/   🟢 차트 패턴 분석 (기술적 분석, DT 계열 모델)
+backend/analysis/text/    🟢 뉴스 감성·재무제표·SNS 심리 분석 (LLM)
+frontend/                 🔵 기능 명세, API, 대시보드, 인프라 (Next.js)
+schema/                   블록 간 공유 인터페이스 스키마 (JSON)
+docs/                     기획·설계·협업 규칙 문서
+.github/                  PR 템플릿 등 GitHub 관련 설정
 ```
 
 ## 작업 규칙
 
-- **블록(디렉터리) 경계**: 작업은 담당 블록 디렉터리(`profiling/`, `analysis/chart/`, `analysis/text/`, `platform/`) 안에서만 한다. 여러 블록을 동시에 건드리는 변경은 PR을 분리하는 것을 우선 고려한다.
+- **블록(디렉터리) 경계**: 작업은 담당 블록 디렉터리(`backend/profiling/`, `backend/analysis/chart/`, `backend/analysis/text/`, `frontend/`) 안에서만 한다. 여러 블록을 동시에 건드리는 변경은 PR을 분리하는 것을 우선 고려한다.
 - **블록 간 인터페이스는 `schema/`로만**: 블록끼리 주고받는 데이터는 `schema/`의 JSON 스키마를 계약(contract)으로 삼는다. 스키마 변경은 **모든 블록에 영향을 주므로** 변경 전 관련 블록 담당자와 합의하고, 예시 파일(`*.example.json`)도 함께 갱신한다.
 - **커밋 메시지**: 한국어로, `타입: 설명` 형식. 타입은 `feat`, `fix`, `docs`, `chore`, `refactor`, `test` 중 하나.
   - 예) `feat: 설문 응답 변환기 추가`
