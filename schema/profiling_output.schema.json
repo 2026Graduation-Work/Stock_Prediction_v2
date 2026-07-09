@@ -93,6 +93,7 @@
     "free_text_signal": {
       "type": "object",
       "description": "자유 텍스트 1문항 LLM 추출 시그널. LLM은 설명/추출만, 점수 산출은 결정론(정량/정성 분리).",
+      "required": ["raw_text"],
       "properties": {
         "raw_text": { "type": "string" },
         "extracted_signals": { "type": "object", "description": "psychological_state 보정용 추출값" },

@@ -46,6 +46,7 @@
     "confidence": {
       "type": "object",
       "description": "신뢰도 관련",
+      "required": ["calibration_bucket", "bucket_hit_rate"],
       "properties": {
         "calibration_bucket": { "type": "string", "description": "확률 구간 라벨" },
         "bucket_hit_rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "이 구간 과거 적중률 — UI 신뢰도 표시의 원천" },
@@ -57,6 +58,7 @@
     "horizon_agreement": {
       "type": "object",
       "description": "H5/H10/H20 신호 일치(진세 overlap 분석). 뱃지 원천.",
+      "required": ["h5", "h10", "h20", "agreement"],
       "properties": {
         "h5": { "type": "string", "enum": ["up", "flat", "down"] },
         "h10": { "type": "string", "enum": ["up", "flat", "down"] },
@@ -70,6 +72,7 @@
       "description": "예측 근거 상위 피처(화이트박스). 일반어 매핑표로 번역해 화면 표시.",
       "items": {
         "type": "object",
+        "required": ["feature", "label_ko", "contribution"],
         "properties": {
           "feature": { "type": "string", "description": "피처 원명" },
           "label_ko": { "type": "string", "description": "일반어 설명(예: 최근 20일 거래량이 평소의 3배)" },
