@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/2026Graduation-Work/Stock_Prediction_v2/schema/chart_output.schema.json",
+  "title": "Chart Block Output Schema",
+  "description": "analysis/chart 블록(진세) 예측 출력 계약. v1.0 FREEZE (2026-07-07). 진세 기술문서(7/1) output 필드 기준. 회의(7/6) 반영: 성향별 2모델(model_type). 가격 곡선이 아니라 확률·순위·수익률 밴드 출력.",
+  "version": "1.0.0",
+  "type": "object",
+  "required": ["code", "name", "date", "model_type", "prob_up", "rank_percentile", "signal_light", "return_band", "confidence", "risk_flags", "meta"],
+  "properties": {
+    "code": { "type": "string", "description": "종목 코드" },
+    "name": { "type": "string", "description": "종목명" },
+    "date": { "type": "string", "format": "date", "description": "예측 생성 기준일" },
+    "data_asof": { "type": "string", "format": "date", "description": "입력 데이터 기준일(화면에 예측일과 구분 표시)" },
+
+    "model_type": {
+      "type": "string",
+      "enum": ["stable", "aggressive"],
+      "description": "[회의 7/6] 성향별 2모델. stable(안정)↔보수 사용자·긴 horizon, aggressive(수익)↔공격 사용자·짧은 horizon. profiling profile_type과 매칭."
+    },
+    "horizon": {
+      "type": "string",
+      "enum": ["h5", "h10", "h20"],
+      "description": "예측 보유기간(거래일). 성향별 대표 horizon."
+    },
+
+    "prob_up": { "type": "number", "minimum": 0, "maximum": 1, "description": "상승 확률. 단정 표시 금지 — UI는 순위·적중률로 번역." },
+    "rank_percentile": { "type": "number", "minimum": 0, "maximum": 1, "description": "당일 전체 종목 중 신호 강도 상대 순위(0=최하위, 1=최상위)" },
+
+    "signal_light": {
+      "type": "string",
+      "enum": ["strong_positive", "positive", "neutral", "negative", "strong_negative"],
+      "description": "[확정] 신호등 5단계. rank_percentile 결정론적 매핑."
+    },
+
+    "return_band": {
+      "type": "object",
+      "description": "예상 수익률 밴드(가격 곡선 대체). 이 신호 구간의 과거 실현수익률 분포.",
+      "required": ["low", "high"],
+      "properties": {
+        "low": { "type": "number", "description": "밴드 하한(%). -1.2 = -1.2%" },
+        "high": { "type": "number", "description": "밴드 상한(%)" },
+        "ci_level": { "type": "number", "description": "신뢰구간 수준(예: 0.68)" }
+      }
+    },
+
+    "confidence": {
+      "type": "object",
+      "description": "신뢰도 관련",
+      "required": ["calibration_bucket", "bucket_hit_rate"],
+      "properties": {
+        "calibration_bucket": { "type": "string", "description": "확률 구간 라벨" },
+        "bucket_hit_rate": { "type": "number", "minimum": 0, "maximum": 1, "description": "이 구간 과거 적중률 — UI 신뢰도 표시의 원천" },
+        "similar_case_count": { "type": "integer", "description": "과거 유사 사례 수" },
+        "uncertainty": { "type": "number", "description": "불확실성 지표" }
+      }
+    },
+
+    "horizon_agreement": {
+      "type": "object",
+      "description": "H5/H10/H20 신호 일치(진세 overlap 분석). 뱃지 원천.",
+      "required": ["h5", "h10", "h20", "agreement"],
+      "properties": {
+        "h5": { "type": "string", "enum": ["up", "flat", "down"] },
+        "h10": { "type": "string", "enum": ["up", "flat", "down"] },
+        "h20": { "type": "string", "enum": ["up", "flat", "down"] },
+        "agreement": { "type": "string", "enum": ["aligned", "mixed", "conflict"], "description": "단기·중기 방향 일치 여부" }
+      }
+    },
+
+    "top_features": {
+      "type": "array",
+      "description": "예측 근거 상위 피처(화이트박스). 일반어 매핑표로 번역해 화면 표시.",
+      "items": {
+        "type": "object",
+        "required": ["feature", "label_ko", "contribution"],
+        "properties": {
+          "feature": { "type": "string", "description": "피처 원명" },
+          "label_ko": { "type": "string", "description": "일반어 설명(예: 최근 20일 거래량이 평소의 3배)" },
+          "contribution": { "type": "number", "description": "기여도" }
+        }
+      }
+    },
+
+    "risk_flags": {
+      "type": "array",
+      "description": "리스크 태그. profiling avoided_assets와 동일 체계 → 회피 필터 입력값.",
+      "items": {
+        "type": "string",
+        "enum": ["spac", "managed_stock", "low_liquidity", "penny_stock", "high_volatility", "preferred_stock"]
+      }
+    },
+
+    "factor_exposures": {
+      "type": "object",
+      "description": "factor 노출(momentum/size/volatility 등). 편향 고지용.",
+      "additionalProperties": { "type": "number" }
+    },
+
+    "benchmark_index": { "type": "string", "description": "초과수익 계산 기준 지수" },
+    "expected_holding_days": { "type": "integer", "description": "권장 보유일" },
+
+    "meta": {
+      "type": "object",
+      "required": ["schema_version", "source", "model_version"],
+      "properties": {
+        "schema_version": { "type": "string", "const": "1.0.0" },
+        "source": { "type": "string", "const": "chart_block" },
+        "model_version": { "type": "string", "description": "모델 버전 태그" },
+        "prediction_hash": { "type": "string", "description": "재현성 해시(시드 고정)" },
+        "disclaimer": { "type": "string", "description": "투자 자문 아님 고지" }
+      }
+    }
+  }
+}

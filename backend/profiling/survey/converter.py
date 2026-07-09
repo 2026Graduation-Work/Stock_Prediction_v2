@@ -27,7 +27,7 @@ from questions import Q1_MAP, Q2_MAP, Q3_MAP, Q4_BASE, Q4_MAP, Q5_MAP
 # ---------------------------------------------------------------------------
 # 상수
 # ---------------------------------------------------------------------------
-_SCHEMA_VERSION = "0.2.0-draft"
+_SCHEMA_VERSION = "1.0.0"
 _KST = timezone(timedelta(hours=9))
 
 # TODO: confidence_per_field — 현재는 고정값(0.85).
@@ -38,6 +38,7 @@ _FIXED_CONFIDENCE = 0.85
 _TARGET_RETURN_ANNUAL = 0.10
 _TARGET_TICKER = "TBD"
 _BENCHMARK_INDEX = "TBD"  # TODO: 설문 문항 추가 후 사용자 입력값으로 교체 예정
+_PROFILE_TYPE_THRESHOLD = 0.6
 
 
 # ---------------------------------------------------------------------------
@@ -57,8 +58,8 @@ def survey_to_schema(answers: dict) -> dict:
 
     Returns
     -------
-    dict
-        profiling_output.schema.json v0.2.0-draft 규격 JSON (dict)
+        dict
+        profiling_output.schema.json v1.0.0 규격 JSON (dict)
     """
     # ------------------------------------------------------------------
     # 1. investor_profile 계산
@@ -73,6 +74,9 @@ def survey_to_schema(answers: dict) -> dict:
 
     q5 = Q5_MAP[answers["Q5"]]
     investment_experience_years: float = q5["investment_experience_years"]
+    profile_type: str = answers.get("profile_type") or _derive_profile_type(
+        risk_tolerance
+    )
 
     # ------------------------------------------------------------------
     # 2. psychological_state 계산
@@ -140,7 +144,25 @@ def survey_to_schema(answers: dict) -> dict:
     confidence_per_field: dict[str, float] = {f: _FIXED_CONFIDENCE for f in _fields}
 
     # ------------------------------------------------------------------
-    # 5. 메타 조립
+    # 5. constraints / portfolio
+    # ------------------------------------------------------------------
+    constraints = {
+        "avoided_assets": list(answers.get("avoided_assets", [])),
+        "preferred_sectors": list(answers.get("preferred_sectors", [])),
+    }
+
+    portfolio_input = answers.get("portfolio") or {}
+    portfolio = {
+        "holdings": list(
+            answers.get("holdings", portfolio_input.get("holdings", []))
+        ),
+        "watchlist": list(
+            answers.get("watchlist", portfolio_input.get("watchlist", []))
+        ),
+    }
+
+    # ------------------------------------------------------------------
+    # 6. 메타 조립
     # ------------------------------------------------------------------
     user_id: str = answers.get("user_id") or f"u_{uuid.uuid4().hex[:8]}"
     session_id: str = answers.get("session_id") or f"s_{uuid.uuid4().hex[:8]}"
@@ -156,6 +178,7 @@ def survey_to_schema(answers: dict) -> dict:
             "liquidity_need_ratio": liquidity_need_ratio,
             "target_return_annual": _TARGET_RETURN_ANNUAL,  # MVP 고정
             "investment_experience_years": investment_experience_years,
+            "profile_type": profile_type,
         },
         "psychological_state": {
             "fomo_index": fomo_index,
@@ -165,6 +188,8 @@ def survey_to_schema(answers: dict) -> dict:
             "current_market_anxiety": current_market_anxiety,
             "overheating_caution": overheating_caution,
         },
+        "constraints": constraints,
+        "portfolio": portfolio,
         "free_text_signal": free_text_signal,
         "confidence_per_field": confidence_per_field,
         "context": {
@@ -188,3 +213,10 @@ def survey_to_schema(answers: dict) -> dict:
 def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
     """값을 [lo, hi] 범위로 제한한다."""
     return max(lo, min(hi, v))
+
+
+def _derive_profile_type(risk_tolerance: float) -> str:
+    """성향별 2모델 매칭을 위한 stable/aggressive 라벨."""
+    if risk_tolerance >= _PROFILE_TYPE_THRESHOLD:
+        return "aggressive"
+    return "stable"

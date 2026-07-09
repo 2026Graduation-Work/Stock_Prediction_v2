@@ -1,63 +1,55 @@
-# AGENTS.md — Stock Prediction v2
+# AGENTS.md
 
-이 레포에서 일하는 모든 AI 에이전트(코드 어시스턴트)는 이 문서의 규칙을 따른다.
+> 행동재무학 기반 심리 지수 반영 주가 예측 플랫폼 (성균관대 졸업작품, 4인 팀).
+> 이 파일은 Codex·Claude Code 등 모든 코딩 에이전트의 상시 지침입니다. 상세 기획은 노션 "과제 안내서 v1.2"가 SSOT.
 
-## 프로젝트 한 줄 소개
+## 프로젝트 한 줄 정의
+사용자의 투자 심리를 진단(설문→IPS)해서, ML 예측을 그 사람 성향에 맞게 번역해 보여주는 웹 플랫폼.
+연구 질문: "심리 지수를 반영하면 예측이 나아지는가?"
 
-성균관대학교 소프트웨어학과 2026학년도 졸업작품 — 행동재무학 기반 투자 심리 지수를 결합한 **주가 예측 모델**과, 금융 지식이 부족한 일반 사용자도 직관적으로 이해할 수 있는 **웹 플랫폼**.
+## 저장소 구조
+- `backend/profiling/` — 설문·심리 프로파일링 (Python). 담당: 중현(🟡)
+- `backend/analysis/chart/` — 단기 예측 LightGBM. 담당: 진세(🟢)
+- `backend/analysis/text/` — 뉴스 감성·재무. 담당: 서환(🟢)
+- `frontend/` — Next.js 대시보드. 담당: 성우(🔵)
+- `schema/` — 블록 간 JSON 계약 (SSOT, freeze됨). 변경 시 전원 합의 필수.
+- `.github/` — CI(블록별 3-job), Dependabot, CodeQL
 
-핵심 키워드: 행동재무학 · 일반인 접근성 · **화이트박스(설명 가능한) AI**.
+## 개발 환경
+- Python: 각 블록 디렉토리 기준. dev 의존성은 `backend/profiling/survey/requirements-dev.txt` (ruff 등)
+- Frontend: `frontend/`에서 `pnpm install` → `pnpm dev` / `pnpm build`
+- Node: nvm 관리
 
-## 기술 스택
+## 명령어 (커밋·PR 전 필수)
+- Python lint: `ruff check .`
+- Python test: `pytest`
+- Frontend build 검증: `cd frontend && pnpm build`
+- 본인 블록 CI가 초록인지 확인 후 리뷰 요청
 
-| 영역 | 사용 기술 |
-| --- | --- |
-| 프론트엔드 | Next.js (App Router), TypeScript, TailwindCSS |
-| 시각화 | Recharts |
-| 모델링 | Python — DT 계열 ML (결정트리·랜덤포레스트·그래디언트부스팅 등) |
-| DB·인증 | Supabase (PostgreSQL + pgvector) |
-| 시장 데이터 | yfinance, KRX API |
-| LLM | Claude API / OpenAI API |
-| 배포 | Vercel |
-| 협업 | GitHub, Notion, Slack |
+## PR 규칙
+- 항상 새 브랜치 → PR → 리뷰(봇 + 상호) → 머지. main 직접 push 금지.
+- 브랜치명: `feat/`, `fix/`, `chore/`, `refactor/` 접두
+- 스키마 변경 PR은 제목에 `[schema]` + 전원 멘션
+- 커밋: 이동/리네임과 로직 수정은 분리
 
-## 레포 구조 (4블록)
+## 아키텍처 원칙 (위반 금지)
+- **화이트박스**: 모든 출력의 근거를 비전공자에게 설명 가능해야 함. "AI가 그렇게 판단" 식 금지.
+- **DT 계열 ML만**: 예측기는 LightGBM(GBDT). 딥러닝 보류. 감성 추출만 신경망(FinBERT) 허용.
+- **정량/정성 분리**: 점수 산출은 100% 결정론(같은 입력→같은 출력). LLM은 설명 텍스트 생성에만.
+- **명시 규칙만 하드 제약**: 사용자가 직접 체크한 회피 항목(`avoided_assets`)만 종목 제거. 성향 점수는 소프트(가중치·임계값).
+- **재현성**: 시드 고정 + 공용 평가함수(SSOT). 모델별 자체 평가 코드 금지.
+- **HITL**: 자동 매매·손절·익절 실행 금지. 시그널은 선택지로 제시, 최종 판단은 사용자. 근거·출처 항상 표시.
+- **표현 제한**: "상승 확률 70%" 단정 금지 → "과거 유사 신호 구간 상위 N%". 미래 주가 점선 곡선 금지(모델은 가격 예측 안 함).
 
-```
-backend/profiling/        🟡 사용자 내부 정보 — 심리 설문, 사용자 프로파일링
-backend/analysis/chart/   🟢 차트 패턴 분석 (기술적 분석, DT 계열 모델)
-backend/analysis/text/    🟢 뉴스 감성·재무제표·SNS 심리 분석 (LLM)
-frontend/                 🔵 기능 명세, API, 대시보드, 인프라 (Next.js)
-schema/                   블록 간 공유 인터페이스 스키마 (JSON)
-docs/                     기획·설계·협업 규칙 문서
-.github/                  PR 템플릿 등 GitHub 관련 설정
-```
+## 데이터 계약 (schema/)
+- profiling → analysis/platform: `profiling_output.schema.json` (v1.0 freeze)
+- chart → platform: `chart_output.schema.json` (v1.0 freeze)
+- 성향별 2모델: `profile_type`(stable/aggressive) ↔ chart `model_type` 매칭
+- 회피 태그 체계 통일: profiling `avoided_assets` == chart `risk_flags` enum
+- Supabase: 프론트가 DB 직접 조회(별도 API 서버 없음). 스키마 = 사실상 API 계약.
 
-## 작업 규칙
-
-- **블록(디렉터리) 경계**: 작업은 담당 블록 디렉터리(`backend/profiling/`, `backend/analysis/chart/`, `backend/analysis/text/`, `frontend/`) 안에서만 한다. 여러 블록을 동시에 건드리는 변경은 PR을 분리하는 것을 우선 고려한다.
-- **블록 간 인터페이스는 `schema/`로만**: 블록끼리 주고받는 데이터는 `schema/`의 JSON 스키마를 계약(contract)으로 삼는다. 스키마 변경은 **모든 블록에 영향을 주므로** 변경 전 관련 블록 담당자와 합의하고, 예시 파일(`*.example.json`)도 함께 갱신한다.
-- **커밋 메시지**: 한국어로, `타입: 설명` 형식. 타입은 `feat`, `fix`, `docs`, `chore`, `refactor`, `test` 중 하나.
-  - 예) `feat: 설문 응답 변환기 추가`
-- **빌드/실행 확인**: 푸시 전 반드시 로컬에서 동작을 확인한다. 웹(`platform`)은 `npm run build`, Python 모델은 최소한 스크립트/노트북이 에러 없이 실행되는지 확인한다.
-- **덮어쓰기 알림**: 기존 파일을 지우거나 덮어쓰기 전 사용자에게 먼저 알리고 동의를 받는다.
-- **비밀 정보 금지**: `.env` 파일과 모든 비밀키는 절대 커밋하지 않는다. `.env.example`만 추적 대상이다.
-
-## 프론트엔드 작업 시 주의 (Next.js App Router)
-
-이 프로젝트의 Next.js는 학습 데이터 시점 이후의 버전일 수 있어 API·관례·파일 구조가 다를 수 있다. 코드를 쓰기 전 `node_modules/next/dist/` 안의 문서나 공식 문서를 먼저 확인하고, 사용 중단(deprecation) 경고는 그때그때 반영한다.
-
-## 도메인 주의사항 (행동재무학 · 화이트박스 모델)
-
-이 프로젝트의 차별점은 **예측의 설명 가능성**이다. 그래서 다음을 반드시 지킨다.
-
-- **화이트박스 원칙**: 예측 모델은 DT 계열 화이트박스 모델을 사용한다. 설명력을 포기한 블랙박스 모델로 임의 교체하지 않는다. 예측 결과는 어떤 피처(심리 지수·차트 지표·뉴스 감성 등)가 얼마나 기여했는지 추적 가능해야 한다.
-- **데이터 진실성**: 심리 지수·기술적 지표·감성 점수 등은 가짜/더미 데이터가 아니라 **실제 데이터와 실제 수식**으로 계산한다. "일단 동작하게" 임의 값을 박아두지 않는다. 데이터가 없으면 함수부터 만들지 말고, 데이터 소스부터 연결한 뒤 작성한다.
-- **숫자 추적성**: 화면에 표시되는 모든 수치(예측값·심리 지수·확률 등)는 그 출처와 계산식이 코드에서 추적 가능해야 한다.
-- **일반인 대상 표현**: 금융 지식이 부족한 사용자가 대상이다. 예측 결과를 투자 권유나 단정으로 오해하지 않도록 표현하고, 불확실성과 근거를 함께 보여준다. (본 서비스는 투자 자문이 아니다.)
-
-## 보안
-
-- API 키(Claude·OpenAI·KRX 등), 팀 계정 정보, 비밀번호를 코드·커밋·이슈·PR 본문 어디에도 포함하지 않는다.
-- 외부 API 호출 시 키는 환경변수로만 읽는다. 하드코딩 금지.
-- 사용자 설문·프로파일 등 개인정보를 다루는 코드는 로깅 시 PII 마스킹을 고려한다.
+## 하지 말 것
+- 다른 팀/조직 레포를 참고할 때 커밋·푸시 금지 (읽기 전용, 분석 후 클론 삭제)
+- 팀 산출물에 특정 외부 프로젝트명 명시 금지 → "참고 자료"로 표현
+- 유료 기능 활성화 금지 (GitHub Advanced Security 등)
+- schema/ 파일을 단독 판단으로 수정 금지 (freeze 상태, 전원 합의 필요)
