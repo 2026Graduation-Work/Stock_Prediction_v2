@@ -2,151 +2,134 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/2026Graduation-Work/Stock_Prediction_v2/schema/profiling_output.schema.json",
   "title": "Profiling Block Output Schema",
-  "description": "profiling 블록(설문/사용자 프로파일링)이 analysis 블록으로 넘기는 표준 인터페이스. v0.2 (회의 ② 검토용)",
-  "version": "0.2.0-draft",
+  "description": "profiling 블록(설문/사용자 프로파일링)이 analysis 블록·platform으로 넘기는 표준 인터페이스. v1.0 FREEZE (2026-07-07). 회의(7/6) 결정 반영: 회피 제약(하드/소프트 분리), 보유 종목(포트폴리오 히트맵), 3축(risk/fomo/horizon) 매핑 명시.",
+  "version": "1.0.0",
   "type": "object",
-  "required": ["user_id", "session_id", "timestamp", "investor_profile", "psychological_state", "context", "meta"],
+  "required": ["user_id", "session_id", "timestamp", "investor_profile", "psychological_state", "constraints", "context", "meta"],
   "properties": {
-    "user_id": {
-      "type": "string",
-      "description": "사용자 식별자"
-    },
-    "session_id": {
-      "type": "string",
-      "description": "설문 세션 식별자"
-    },
-    "timestamp": {
-      "type": "string",
-      "format": "date-time",
-      "description": "설문 완료 시각 (ISO 8601)"
-    },
+    "user_id": { "type": "string", "description": "사용자 식별자" },
+    "session_id": { "type": "string", "description": "설문 세션 식별자" },
+    "timestamp": { "type": "string", "format": "date-time", "description": "설문 완료 시각 (ISO 8601)" },
+
     "investor_profile": {
       "type": "object",
-      "description": "이 사람이 누구인가 — RRTTLLU 기반 (R·T·L)",
-      "required": ["risk_tolerance", "time_horizon_months", "liquidity_need_ratio", "target_return_annual", "investment_experience_years"],
+      "description": "이 사람이 누구인가 — RRTTLLU 프레임(문서 계층). 대시보드 3축 매핑: risk_tolerance→risk_score, time_horizon_months→horizon_score.",
+      "required": ["risk_tolerance", "time_horizon_months", "liquidity_need_ratio", "target_return_annual", "investment_experience_years", "profile_type"],
       "properties": {
-        "risk_tolerance": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "위험 감수도. 0=극도로 보수적, 1=극도로 공격적"
-        },
-        "time_horizon_months": {
-          "type": "integer", "minimum": 0,
-          "description": "투자 기간 (개월)"
-        },
-        "liquidity_need_ratio": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "유동성 필요도. 0=장기 묶어둠 OK, 1=급히 빼야 함"
-        },
-        "target_return_annual": {
-          "type": "number",
-          "description": "연 목표 수익률. 0.10 = 10%"
-        },
-        "investment_experience_years": {
-          "type": "number", "minimum": 0,
-          "description": "투자 경험 (년)"
+        "risk_tolerance": { "type": "number", "minimum": 0, "maximum": 1, "description": "위험 감수도(3축의 risk). 0=극보수, 1=극공격" },
+        "time_horizon_months": { "type": "integer", "minimum": 0, "description": "투자 기간(개월). 3축의 horizon 원천" },
+        "liquidity_need_ratio": { "type": "number", "minimum": 0, "maximum": 1, "description": "유동성 필요도. RRTTLLU의 L" },
+        "target_return_annual": { "type": "number", "description": "연 목표 수익률. 0.10 = 10%" },
+        "investment_experience_years": { "type": "number", "minimum": 0, "description": "투자 경험(년)" },
+        "profile_type": {
+          "type": "string",
+          "enum": ["stable", "aggressive"],
+          "description": "[회의 7/6 확정] 성향별 2모델 운용. stable=안정추구형, aggressive=수익추구형. chart 블록의 model_type과 매칭되는 키."
         }
       }
     },
+
     "psychological_state": {
       "type": "object",
-      "description": "지금 이 사람 심리 상태 — 행동재무학 핵심 지표",
+      "description": "지금 이 사람 심리 상태 — 행동재무학 지표. fomo_index=3축의 fomo.",
       "required": ["fomo_index", "panic_sell_tendency", "herding_score", "self_confidence", "current_market_anxiety", "overheating_caution"],
       "properties": {
-        "fomo_index": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "FOMO(소외 불안) 강도"
+        "fomo_index": { "type": "number", "minimum": 0, "maximum": 1, "description": "FOMO 강도(3축의 fomo)" },
+        "panic_sell_tendency": { "type": "number", "minimum": 0, "maximum": 1, "description": "패닉셀 경향" },
+        "herding_score": { "type": "number", "minimum": 0, "maximum": 1, "description": "군집행동 점수" },
+        "self_confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "본인 판단 신뢰도" },
+        "current_market_anxiety": { "type": "number", "minimum": 0, "maximum": 1, "description": "[확정] text 블록(FinBERT/합성지수)이 채움. profiling은 0.5 더미로 초기화." },
+        "overheating_caution": { "type": "number", "minimum": 0, "maximum": 1, "description": "[확정] 변동성 점수+거래량 점수 단순평균. text/chart 블록 산출." }
+      }
+    },
+
+    "constraints": {
+      "type": "object",
+      "description": "[회의 7/6 핵심] 하드/소프트 제약 분리. avoided(사용자가 직접 체크)만 하드=유니버스 제거. preferred/성향점수는 소프트=가중치·임계값. 화이트박스 유지의 근거.",
+      "required": ["avoided_assets"],
+      "properties": {
+        "avoided_assets": {
+          "type": "array",
+          "description": "[하드 제약] 사용자가 설문 Q6에서 직접 체크한 회피 항목. 유니버스에서 통째로 제거. 사용자 명시 의사이므로 화이트박스 안 깨짐.",
+          "items": {
+            "type": "string",
+            "enum": ["spac", "managed_stock", "low_liquidity", "penny_stock", "high_volatility", "preferred_stock"],
+            "description": "chart 블록의 risk_flags와 동일 태그 체계 → 필터 입력값으로 직결"
+          }
         },
-        "panic_sell_tendency": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "패닉셀 경향"
-        },
-        "herding_score": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "군집행동 점수"
-        },
-        "self_confidence": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "본인 판단 신뢰도"
-        },
-        "current_market_anxiety": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "시장 불안 강도. [회의 ② 안건] 노란색 설문 vs 초록색 FinBERT 중 누가 채울지 미정"
-        },
-        "overheating_caution": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "과열 경계. [회의 ② 안건] 교수님 코멘트 반영. 측정 방식 미정"
+        "preferred_sectors": {
+          "type": "array",
+          "description": "[소프트] 선호 섹터. 가중치 상향만, 종목 제거 아님.",
+          "items": { "type": "string" }
         }
       }
     },
+
+    "portfolio": {
+      "type": "object",
+      "description": "[회의 7/6 신규 — 히트맵용] 사용자 보유 종목. MVP는 계좌 연동 없이 수동 등록/데모 프리셋. 포트폴리오 히트맵(신호 강도 색상)의 원천.",
+      "properties": {
+        "holdings": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["ticker", "name", "quantity", "avg_buy_price"],
+            "properties": {
+              "ticker": { "type": "string", "description": "종목 코드" },
+              "name": { "type": "string", "description": "종목명" },
+              "quantity": { "type": "integer", "minimum": 0, "description": "보유 수량" },
+              "avg_buy_price": { "type": "integer", "minimum": 0, "description": "평균 매수가(원)" }
+            }
+          }
+        },
+        "watchlist": {
+          "type": "array",
+          "description": "관심 종목(미보유). 히트맵 보조.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
     "free_text_signal": {
       "type": "object",
-      "description": "[v0.2 신규 안건] 자유 텍스트 1문항에서 LLM이 추출한 추가 시그널. 회의 ②에서 채택 여부 결정",
+      "description": "자유 텍스트 1문항 LLM 추출 시그널. LLM은 설명/추출만, 점수 산출은 결정론(정량/정성 분리).",
       "properties": {
-        "raw_text": {
-          "type": "string",
-          "description": "사용자가 입력한 원문"
-        },
-        "extracted_signals": {
-          "type": "object",
-          "description": "원문에서 LLM이 추출한 행동재무학 시그널 (psychological_state 보정용)"
-        },
-        "conflict_with_survey": {
-          "type": "boolean",
-          "description": "객관식 응답과 자유 텍스트가 모순되는지 여부. true면 사용자 재확인 필요"
-        }
+        "raw_text": { "type": "string" },
+        "extracted_signals": { "type": "object", "description": "psychological_state 보정용 추출값" },
+        "conflict_with_survey": { "type": "boolean", "description": "객관식과 자유텍스트 모순 여부" }
       }
     },
+
     "confidence_per_field": {
       "type": "object",
-      "description": "[v0.2 신규 안건] 각 필드별 추출 신뢰도 (0~1). 화이트박스 원칙 강화. 낮은 값은 추가 확인 대상",
-      "additionalProperties": {
-        "type": "number", "minimum": 0, "maximum": 1
-      }
+      "description": "필드별 추출 신뢰도(0~1). 화이트박스 강화.",
+      "additionalProperties": { "type": "number", "minimum": 0, "maximum": 1 }
     },
+
     "context": {
       "type": "object",
-      "description": "사용자가 현재 보고 있는 투자 맥락",
-      "required": ["target_ticker", "investment_amount_krw", "action_intent"],
+      "description": "사용자 현재 투자 맥락",
+      "required": ["investment_amount_krw", "action_intent"],
       "properties": {
-        "target_ticker": {
-          "type": "string",
-          "description": "대상 종목/지수 코드. [회의 ② 안건] 기업 vs 지수 미정이라 현재 TBD"
-        },
-        "investment_amount_krw": {
-          "type": "integer", "minimum": 0,
-          "description": "투자 예정 금액 (원)"
-        },
+        "target_ticker": { "type": "string", "description": "추천/조회 대상 개별 종목(선택). 없으면 대시보드 추천 목록 기준." },
+        "investment_amount_krw": { "type": "integer", "minimum": 0, "description": "투자 예정 금액(원)" },
         "action_intent": {
           "type": "string",
           "enum": ["buy_consideration", "sell_consideration", "hold_consideration"],
-          "description": "사용자의 현재 의도"
+          "description": "현재 의도"
         },
-        "market_regime_hint": {
-          "type": "string",
-          "description": "시장 상태 힌트 (선택)"
-        },
-        "benchmark_index": {
-          "type": "string",
-          "description": "사용자별 성과 비교 기준 지수 코드 (예: KOSPI, KOSDAQ). target_ticker(추천/예측 대상 개별 종목)와는 별개 개념 — 사용자마다 다른 벤치마크를 기준으로 삼을 수 있어 profiling 단계에서 함께 수집한다."
-        }
+        "market_regime_hint": { "type": "string", "description": "시장 상태 힌트(선택)" },
+        "benchmark_index": { "type": "string", "description": "사용자별 성과 비교 기준 지수(예: KOSPI). target_ticker와 별개." }
       }
     },
+
     "meta": {
       "type": "object",
       "required": ["schema_version", "source"],
       "properties": {
-        "schema_version": {
-          "type": "string",
-          "description": "스키마 버전"
-        },
-        "source": {
-          "type": "string",
-          "const": "profiling_block"
-        },
-        "confidence": {
-          "type": "number", "minimum": 0, "maximum": 1,
-          "description": "전체 응답 신뢰도 (개별 필드는 confidence_per_field 참조)"
-        }
+        "schema_version": { "type": "string", "const": "1.0.0" },
+        "source": { "type": "string", "const": "profiling_block" },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "전체 응답 신뢰도" }
       }
     }
   }
