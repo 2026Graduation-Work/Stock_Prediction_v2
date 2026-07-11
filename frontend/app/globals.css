@@ -1,26 +1,42 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  /* 브랜드 */
+  --color-brand: #2f5fd0;
+  --color-brand-deep: #22459c;
+  --color-brand-soft: #e8eefb;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  /* 텍스트 (진한 순) */
+  --color-ink: #1b2434;
+  --color-body: #4a5568;
+  --color-muted: #667085;
+  --color-faint: #98a2b3;
+  --color-ghost: #b6bfcc;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  /* 면·선 */
+  --color-line: #e4e7ec;
+  --color-line-soft: #f0f2f5;
+  --color-track: #eef1f5;
+  --color-page: #f4f5f7;
+  --color-field: #f9fafb;
+  --color-edge: #d5dae3;
+
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Malgun Gothic", sans-serif;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-page);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-brand);
+}
+
+a:hover {
+  color: var(--color-brand-deep);
+  text-decoration: underline;
 }
