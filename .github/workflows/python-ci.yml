@@ -135,7 +135,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
+          pip install ruff pytest
           # 빅카인즈 엑셀 전처리 의존성
           pip install -r backend/analysis/text/requirements-preprocess.txt
           # value_pipeline 전용 의존성
