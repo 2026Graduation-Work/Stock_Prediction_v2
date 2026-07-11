@@ -20,6 +20,7 @@ function formatPercent(value: number) {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
 }
 
+// 활성 도트만 신호 색, 비활성은 회색 — 5단계 중 현재 단계가 색으로 바로 구분되게
 function SignalDots({ active }: { active: RecommendedStock["signalLight"] }) {
   return (
     <div className="flex items-center gap-[5px]">
@@ -32,11 +33,7 @@ function SignalDots({ active }: { active: RecommendedStock["signalLight"] }) {
             style={{ backgroundColor: dot, boxShadow: `0 0 0 3px ${dot}38` }}
           />
         ) : (
-          <span
-            key={signal}
-            className="size-[9px] rounded-full opacity-20"
-            style={{ backgroundColor: dot }}
-          />
+          <span key={signal} className="size-[9px] rounded-full bg-edge" />
         );
       })}
     </div>

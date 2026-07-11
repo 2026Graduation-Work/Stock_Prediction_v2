@@ -26,6 +26,8 @@ export const investorProfile: InvestorProfileSummary = {
   surveyedAt: "2026.03",
 };
 
+// 추천 리스트: max_risk_tier 규칙(안정추구형 = 위험 4·5등급)을 만족하는 종목만.
+// 등급 미달 보유 종목(셀트리온)은 추천이 아닌 "보유 종목 알림"으로 분리 노출.
 export const recommendedStocks: RecommendedStock[] = [
   {
     code: "005930",
@@ -53,6 +55,10 @@ export const recommendedStocks: RecommendedStock[] = [
     horizonAgreement: { h5: "up", h10: "up", h20: "up", agreement: "aligned" },
     riskFlags: [],
   },
+];
+
+// 보유 중이라 신호를 알려주지만 추천은 아닌 종목 (성향 대비 위험등급 미달)
+export const holdingAlerts: RecommendedStock[] = [
   {
     code: "068270",
     name: "셀트리온",
@@ -70,10 +76,11 @@ export const recommendedStocks: RecommendedStock[] = [
   },
 ];
 
-// 회피 설정(avoided_assets)으로 추천에서 제외된 종목 안내
+// 회피 설정(avoided_assets)으로 추천에서 제외된 종목 안내.
+// 화이트박스 원칙: 어떤 종목이 왜 빠졌는지 펼쳐서 확인 가능해야 한다.
 export const avoidanceNotice = {
-  excludedCount: 1,
   avoidedLabels: ["SPAC", "관리종목"],
+  excludedStocks: [{ name: "미래에셋비전스팩3호", code: "418250", reason: "SPAC" }],
 };
 
 export const portfolioHoldings: PortfolioHolding[] = [

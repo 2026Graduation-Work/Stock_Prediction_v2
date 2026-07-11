@@ -10,7 +10,7 @@ interface SiteHeaderProps {
 export default function SiteHeader({ query, onQueryChange, profile }: SiteHeaderProps) {
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-white">
-      <div className="mx-auto box-border flex h-16 w-[1440px] items-center gap-6 px-8">
+      <div className="mx-auto box-border flex h-16 w-full max-w-[1440px] items-center gap-6 px-8">
         <Link href="/" className="flex items-center gap-2.5 text-ink hover:no-underline">
           <div className="grid size-7 place-items-center rounded-lg bg-brand text-sm font-extrabold text-white">
             S

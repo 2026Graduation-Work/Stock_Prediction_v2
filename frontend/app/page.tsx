@@ -1,6 +1,7 @@
 import Dashboard from "./components/dashboard";
 import {
   avoidanceNotice,
+  holdingAlerts,
   investorProfile,
   marketStatus,
   portfolioHoldings,
@@ -13,8 +14,9 @@ export default function Home() {
       marketStatus={marketStatus}
       profile={investorProfile}
       stocks={recommendedStocks}
+      holdingAlerts={holdingAlerts}
       holdings={portfolioHoldings}
-      excludedCount={avoidanceNotice.excludedCount}
+      excludedStocks={avoidanceNotice.excludedStocks}
       avoidedLabels={avoidanceNotice.avoidedLabels}
     />
   );

@@ -1,4 +1,3 @@
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css");
 @import "tailwindcss";
 
 @theme {
@@ -22,7 +21,7 @@
   --color-field: #f9fafb;
   --color-edge: #d5dae3;
 
-  --font-sans: "Pretendard Variable", Pretendard, -apple-system, "Malgun Gothic", sans-serif;
+  --font-sans: var(--font-pretendard), Pretendard, -apple-system, "Malgun Gothic", sans-serif;
 }
 
 body {
