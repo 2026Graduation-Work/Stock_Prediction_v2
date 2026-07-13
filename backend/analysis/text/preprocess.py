@@ -90,14 +90,10 @@ def _parse_date(value: object) -> pd.Timestamp | pd.NaT:
     if isinstance(value, (datetime, date)):
         return pd.Timestamp(value).normalize()
 
-    text = _clean_text(value)
-    formats = ("%Y%m%d", "%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d")
-    for date_format in formats:
-        try:
-            return pd.Timestamp(datetime.strptime(text, date_format))
-        except ValueError:
-            continue
-    return pd.NaT
+    parsed = pd.to_datetime(_clean_text(value), errors="coerce", yearfirst=True)
+    if pd.isna(parsed):
+        return pd.NaT
+    return pd.Timestamp(parsed).normalize()
 
 
 def _read_workbook(path: Path) -> pd.DataFrame:
@@ -114,7 +110,9 @@ def _read_workbook(path: Path) -> pd.DataFrame:
     else:
         normalized["news_id"] = frame[news_id_column].map(_clean_text)
 
-    normalized["date"] = frame[columns["date"]].map(_parse_date)
+    normalized["date"] = pd.to_datetime(
+        frame[columns["date"]].map(_parse_date), errors="coerce"
+    )
     invalid_dates = normalized["date"].isna()
     if invalid_dates.any():
         rows = [str(index + 2) for index in frame.index[invalid_dates][:5]]
@@ -179,7 +177,11 @@ def build_news_corpus(ticker: str, out: Path, raw_dir: Path = DEFAULT_RAW_DIR) -
     if not ticker:
         raise ValueError("ticker는 빈 문자열일 수 없습니다.")
 
-    input_files = sorted(raw_dir.glob(f"**/{INPUT_PATTERN}"))
+    input_files = [
+        path
+        for path in sorted(raw_dir.glob(f"**/{INPUT_PATTERN}"))
+        if not path.name.startswith("~$")
+    ]
     if not input_files:
         raise FileNotFoundError(f"입력 파일이 없습니다: {raw_dir / '**' / INPUT_PATTERN}")
 
