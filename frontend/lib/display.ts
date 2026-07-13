@@ -6,6 +6,7 @@ import type {
   HorizonDirection,
   InvestmentHorizon,
   MarketCondition,
+  ReasonSource,
   RiskFlag,
   RiskGrade,
   SignalLight,
@@ -130,6 +131,13 @@ export const MARKET_CONDITION_META: Record<
     bg: "#fdf1e6",
     comment: "단기 변동성이 크게 확대된 구간입니다. 신규 진입은 신중히 판단하세요",
   },
+};
+
+// 예측 근거 출처 칩: 출처 계열(차트/뉴스/재무)별로 색을 고정해 섞이지 않게 한다
+export const REASON_SOURCE_META: Record<ReasonSource, { bg: string; text: string }> = {
+  chart: { bg: "#e8eefb", text: "#2f5fd0" },
+  news: { bg: "#eee8fb", text: "#6b4fc9" },
+  financial: { bg: "#e2f1ec", text: "#14735a" },
 };
 
 export const INVESTMENT_HORIZON_LABEL: Record<InvestmentHorizon, string> = {
