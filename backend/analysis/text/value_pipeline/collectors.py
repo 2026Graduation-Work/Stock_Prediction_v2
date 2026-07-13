@@ -12,12 +12,16 @@ import datetime as dt
 import html
 import json
 import re
+import unicodedata
+import warnings
 from email.utils import parsedate_to_datetime
 from pathlib import Path
+from typing import Any
 
 from .config import SETTINGS
 
 SAMPLE_DIR = Path(__file__).parent / "sample_data"
+DATA_DIR = Path(__file__).resolve().parents[4] / "data"
 
 
 def _load_sample(name: str):
@@ -37,8 +41,14 @@ def _filter_by_date(items: list[dict], date: str) -> list[dict]:
 def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict], str]:
     """해당 날짜 '하루치' 상위 10건 기사 리스트와 출처 반환.
     각 항목: {title, summary, url, press, date}.
-    우선순위: 네이버 검색 OpenAPI(키 있으면) → HTML 크롤 → 샘플."""
+    우선순위: 로컬 엑셀(data/) → 네이버 검색 OpenAPI(키 있으면) → HTML 크롤 → 샘플."""
     query = company_name or ticker
+    try:
+        items = _load_excel_news(query, date)
+        if items:
+            return items, "excel"
+    except Exception:
+        pass
     if SETTINGS.has_naver:
         try:
             items = _fetch_naver_news_api(query, date)
@@ -54,6 +64,98 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
         pass
     sample = _load_sample(f"{ticker}_news.json") or _load_sample("default_news.json") or []
     return _filter_by_date(sample, date)[:10], "sample"
+
+
+def _parse_news_workbook_name(path: Path) -> tuple[str, str, str] | None:
+    match = re.fullmatch(r"(.+)_(\d{8})-(\d{8})\.xlsx", path.name)
+    if not match:
+        return None
+    return match.group(1), match.group(2), match.group(3)
+
+
+def _normalize_yyyymmdd(value: Any) -> str:
+    if isinstance(value, dt.datetime | dt.date):
+        return value.strftime("%Y%m%d")
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    if re.fullmatch(r"\d+\.0", text):
+        text = text[:-2]
+    digits = re.sub(r"\D", "", text)
+    return digits[:8]
+
+
+def _format_iso_date(yyyymmdd: str) -> str:
+    return f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:8]}"
+
+
+def _find_excel_news_file(company_name: str, date: str) -> Path | None:
+    target_day = date.replace("-", "")
+    normalized_company = unicodedata.normalize("NFC", company_name)
+    for path in sorted(DATA_DIR.glob("*.xlsx")):
+        parsed = _parse_news_workbook_name(path)
+        if parsed is None:
+            continue
+        file_company, start, end = parsed
+        file_company = unicodedata.normalize("NFC", file_company)
+        if file_company == normalized_company and start <= target_day <= end:
+            return path
+    return None
+
+
+def _load_excel_news(company_name: str, date: str, limit: int = 10) -> list[dict]:
+    """data/<회사명>_YYYYMMDD-YYYYMMDD.xlsx에서 해당 날짜 제목을 읽는다."""
+    path = _find_excel_news_file(company_name, date)
+    if path is None:
+        return []
+
+    from openpyxl import load_workbook
+
+    with warnings.catch_warnings():
+        warnings.filterwarnings(
+            "ignore",
+            message="Workbook contains no default style.*",
+            category=UserWarning,
+        )
+        wb = load_workbook(path, read_only=True, data_only=True)
+    ws = wb.active
+    if hasattr(ws, "reset_dimensions"):
+        ws.reset_dimensions()
+    rows = ws.iter_rows(values_only=True)
+    try:
+        header = next(rows)
+    except StopIteration:
+        return []
+
+    columns = {str(name).strip(): idx for idx, name in enumerate(header) if name is not None}
+    if "일자" not in columns or "제목" not in columns:
+        raise RuntimeError(f"엑셀 뉴스 파일 필수 컬럼 누락: {path}")
+
+    date_idx = columns["일자"]
+    title_idx = columns["제목"]
+    press_idx = columns.get("언론사")
+    target_day = date.replace("-", "")
+    items: list[dict] = []
+    for row in rows:
+        row_day = _normalize_yyyymmdd(row[date_idx] if date_idx < len(row) else "")
+        if row_day != target_day:
+            continue
+        title = str(row[title_idx] if title_idx < len(row) else "").strip()
+        if not title:
+            continue
+        press = ""
+        if press_idx is not None and press_idx < len(row) and row[press_idx] is not None:
+            press = str(row[press_idx]).strip()
+        items.append({
+            "title": title,
+            "summary": "",
+            "url": "",
+            "press": press,
+            "date": _format_iso_date(row_day),
+        })
+        if len(items) >= limit:
+            break
+    return items
 
 
 def _strip_tags(s: str) -> str:
