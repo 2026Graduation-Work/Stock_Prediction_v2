@@ -443,15 +443,17 @@ function PairCell({
   const baseline = findMetricRow(rows, profile, "A");
   const treatment = findMetricRow(rows, profile, "B");
   const delta = deltas.find((row) => row.profile === profile && row.sample === sample);
-  const deltaValue = delta?.[metric.deltaKey] ?? null;
+  const deltaValue = baseline && treatment ? (delta?.[metric.deltaKey] ?? null) : null;
   const outcome = deltaOutcome(deltaValue, metric);
   const style = OUTCOME_STYLE[outcome];
+  const baselineValue = baseline?.[metric.key] ?? null;
+  const treatmentValue = treatment?.[metric.key] ?? null;
 
   return (
     <td className="px-2 py-2 tabular-nums">
       <div className="whitespace-nowrap text-[10.5px] font-semibold text-body">
-        A {formatMetricValue(baseline[metric.key], metric)} → B{" "}
-        {formatMetricValue(treatment[metric.key], metric)}
+        A {formatMetricValue(baselineValue, metric)} → B{" "}
+        {formatMetricValue(treatmentValue, metric)}
       </div>
       <div className={`mt-0.5 text-[10px] font-extrabold ${style.text}`}>
         Δ {formatDeltaValue(deltaValue, metric)} · {style.label}
@@ -466,15 +468,13 @@ function metricValue(
   variant: "A" | "B",
   metric: MetricDefinition,
 ): number | null {
-  return findMetricRow(rows, profile, variant)[metric.key];
+  return findMetricRow(rows, profile, variant)?.[metric.key] ?? null;
 }
 
 function findMetricRow(
   rows: ComparisonMetricRow[],
   profile: ComparisonProfile,
   variant: "A" | "B",
-): ComparisonMetricRow {
-  const row = rows.find((candidate) => candidate.profile === profile && candidate.variant === variant);
-  if (!row) throw new Error(`${profile}-${variant} 실험 결과가 없습니다.`);
-  return row;
+): ComparisonMetricRow | undefined {
+  return rows.find((candidate) => candidate.profile === profile && candidate.variant === variant);
 }

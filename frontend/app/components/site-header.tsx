@@ -21,7 +21,7 @@ export default function SiteHeader({
   activePage = "dashboard",
   sectionLabel,
 }: SiteHeaderProps) {
-  const hasSearch = query !== undefined && onQueryChange !== undefined;
+  const hasSearch = onQueryChange !== undefined;
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-white">
@@ -59,8 +59,8 @@ export default function SiteHeader({
         {hasSearch ? (
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <input
-              value={query}
-              onChange={(event) => onQueryChange(event.target.value)}
+              value={query ?? ""}
+              onChange={(event) => onQueryChange?.(event.target.value)}
               placeholder="종목명 또는 코드 검색"
               className="box-border h-[38px] w-full min-w-[180px] max-w-[260px] rounded-[10px] border border-edge bg-field px-3.5 text-sm text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white xl:max-w-[330px]"
             />
