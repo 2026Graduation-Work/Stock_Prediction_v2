@@ -46,11 +46,30 @@ export default function ReturnHistogram({
 }: ReturnHistogramProps) {
   const [hovered, setHovered] = useState<number | null>(null);
 
+  if (
+    bins.length === 0 ||
+    bins.some(
+      (bin) =>
+        !Number.isFinite(bin.from) ||
+        !Number.isFinite(bin.to) ||
+        !Number.isFinite(bin.count) ||
+        bin.from >= bin.to ||
+        bin.count < 0,
+    ) ||
+    !Number.isFinite(band.low) ||
+    !Number.isFinite(band.high) ||
+    band.low > band.high
+  ) {
+    return null;
+  }
+
   const xMin = bins[0].from;
   const xMax = bins[bins.length - 1].to;
+  if (xMax <= xMin) return null;
+
   const maxCount = Math.max(...bins.map((bin) => bin.count));
   const yStep = maxCount > 12 ? 5 : 2;
-  const yMax = Math.ceil(maxCount / yStep) * yStep;
+  const yMax = Math.max(yStep, Math.ceil(maxCount / yStep) * yStep);
 
   const plotW = VB_W - PAD.left - PAD.right;
   const plotH = VB_H - PAD.top - PAD.bottom;

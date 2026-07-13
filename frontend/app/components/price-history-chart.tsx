@@ -20,6 +20,7 @@ function formatSigned(value: number) {
 
 // 눈금 간격을 1/2/2.5/5 × 10^n 으로 스냅
 function niceStep(rough: number) {
+  if (!Number.isFinite(rough) || rough <= 0) return 1;
   const power = 10 ** Math.floor(Math.log10(rough));
   const unit = rough / power;
   if (unit <= 1) return power;
@@ -45,12 +46,23 @@ export default function PriceHistoryChart({
   const svgRef = useRef<SVGSVGElement>(null);
   const [hovered, setHovered] = useState<number | null>(null);
 
+  if (
+    prices.length < 2 ||
+    prices.some((price) => !Number.isFinite(price)) ||
+    !Number.isFinite(band.low) ||
+    !Number.isFinite(band.high) ||
+    band.low > band.high
+  ) {
+    return null;
+  }
+
   const last = prices[prices.length - 1];
   const bandHighPrice = last * (1 + band.high / 100);
   const bandLowPrice = last * (1 + band.low / 100);
   const rawMin = Math.min(...prices, bandLowPrice);
   const rawMax = Math.max(...prices, bandHighPrice);
-  const padValue = (rawMax - rawMin) * 0.08;
+  const rawRange = rawMax - rawMin;
+  const padValue = rawRange > 0 ? rawRange * 0.08 : Math.max(Math.abs(rawMax) * 0.01, 1);
   const vMin = rawMin - padValue;
   const vMax = rawMax + padValue;
 
@@ -59,7 +71,7 @@ export default function PriceHistoryChart({
   const y = (v: number) => PAD.top + ((vMax - v) / (vMax - vMin)) * plotH;
   const xAt = (i: number) => X0 + (i / (prices.length - 1)) * (X1 - X0);
 
-  const step = niceStep((rawMax - rawMin) / 3);
+  const step = niceStep(rawRange / 3);
   const ticks: number[] = [];
   for (let v = Math.ceil(vMin / step) * step; v <= vMax; v += step) ticks.push(v);
 
