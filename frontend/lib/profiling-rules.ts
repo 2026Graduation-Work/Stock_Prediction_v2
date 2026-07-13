@@ -136,7 +136,8 @@ export function horizonScoreForMonths(months: number) {
   return match.horizonScore;
 }
 
-export function convertSurveyAnswers(answers: SurveyAnswers): ProfilingOutput {
+export function convertSurveyAnswers(input: unknown): ProfilingOutput {
+  const answers = parseSurveyAnswers(input);
   const risk = requireChoice(RISK_ANSWER_MAP, answers.Q1, "Q1");
   const horizon = requireChoice(HORIZON_ANSWER_MAP, answers.Q2, "Q2");
   const fomo = requireChoice(FOMO_ANSWER_MAP, answers.Q3, "Q3");
@@ -222,6 +223,143 @@ export function convertSurveyAnswers(answers: SurveyAnswers): ProfilingOutput {
   };
 }
 
+function parseSurveyAnswers(input: unknown): SurveyAnswers {
+  if (!isRecord(input)) throw new Error("설문 응답이 존재하지 않습니다.");
+
+  const timestamp = requireText(input.timestamp, "timestamp");
+  if (Number.isNaN(Date.parse(timestamp))) {
+    throw new Error("timestamp는 ISO 8601 날짜여야 합니다.");
+  }
+
+  return {
+    user_id: requireText(input.user_id, "user_id"),
+    session_id: requireText(input.session_id, "session_id"),
+    timestamp,
+    Q1: parseChoice(RISK_ANSWER_MAP, input.Q1, "Q1"),
+    Q2: parseChoice(HORIZON_ANSWER_MAP, input.Q2, "Q2"),
+    Q3: parseChoice(FOMO_ANSWER_MAP, input.Q3, "Q3"),
+    Q4: parseChoiceArray(INFORMATION_SOURCE_MAP, input.Q4, "Q4", false),
+    Q5: parseChoice(EXPERIENCE_ANSWER_MAP, input.Q5, "Q5"),
+    Q6: parseChoiceArray(AVOIDED_ASSET_LABELS, input.Q6 ?? [], "Q6", true),
+    Q7: optionalText(input.Q7, "Q7"),
+    preferred_sectors: parseStringArray(
+      input.preferred_sectors ?? [],
+      "preferred_sectors",
+    ),
+    portfolio: parsePortfolio(input.portfolio),
+    investment_amount_krw: optionalNonNegativeInteger(
+      input.investment_amount_krw,
+      "investment_amount_krw",
+    ),
+    action_intent: parseActionIntent(input.action_intent),
+    target_ticker: optionalText(input.target_ticker, "target_ticker"),
+    market_regime_hint: optionalText(
+      input.market_regime_hint,
+      "market_regime_hint",
+    ),
+    benchmark_index: optionalText(input.benchmark_index, "benchmark_index"),
+  };
+}
+
+function parseChoice<T extends object>(
+  mapping: T,
+  choice: unknown,
+  question: string,
+): keyof T {
+  if (typeof choice !== "string" || !(choice in mapping)) {
+    throw new Error(`${question} 응답이 올바르지 않습니다.`);
+  }
+  return choice as keyof T;
+}
+
+function parseChoiceArray<T extends object>(
+  mapping: T,
+  value: unknown,
+  question: string,
+  allowEmpty: boolean,
+): (keyof T)[] {
+  if (!Array.isArray(value) || (!allowEmpty && value.length === 0)) {
+    throw new Error(
+      allowEmpty
+        ? `${question} 응답은 배열이어야 합니다.`
+        : `${question}는 한 개 이상 선택해야 합니다.`,
+    );
+  }
+  return value.map((choice) => parseChoice(mapping, choice, question));
+}
+
+function parseStringArray(value: unknown, field: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${field} 응답은 문자열 배열이어야 합니다.`);
+  }
+  return [...new Set(value)];
+}
+
+function parsePortfolio(value: unknown): ProfilingOutput["portfolio"] | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value) || !Array.isArray(value.holdings)) {
+    throw new Error("portfolio 응답이 올바르지 않습니다.");
+  }
+  const holdings = value.holdings.map((holding, index) => {
+    if (!isRecord(holding)) {
+      throw new Error(`portfolio.holdings[${index}] 응답이 올바르지 않습니다.`);
+    }
+    return {
+      ticker: requireText(holding.ticker, `holdings[${index}].ticker`),
+      name: requireText(holding.name, `holdings[${index}].name`),
+      quantity: requireNonNegativeInteger(
+        holding.quantity,
+        `holdings[${index}].quantity`,
+      ),
+      avg_buy_price: requireNonNegativeInteger(
+        holding.avg_buy_price,
+        `holdings[${index}].avg_buy_price`,
+      ),
+    };
+  });
+  return {
+    holdings,
+    watchlist: parseStringArray(value.watchlist ?? [], "portfolio.watchlist"),
+  };
+}
+
+function parseActionIntent(value: unknown): ActionIntent | undefined {
+  if (value === undefined) return undefined;
+  const allowed: ActionIntent[] = [
+    "buy_consideration",
+    "sell_consideration",
+    "hold_consideration",
+  ];
+  if (typeof value !== "string" || !allowed.includes(value as ActionIntent)) {
+    throw new Error("action_intent 응답이 올바르지 않습니다.");
+  }
+  return value as ActionIntent;
+}
+
+function optionalText(value: unknown, field: string): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== "string") throw new Error(`${field} 값은 문자열이어야 합니다.`);
+  return value.trim();
+}
+
+function optionalNonNegativeInteger(
+  value: unknown,
+  field: string,
+): number | undefined {
+  return value === undefined ? undefined : requireNonNegativeInteger(value, field);
+}
+
+function requireNonNegativeInteger(value: unknown, field: string): number {
+  if (!Number.isInteger(value) || (value as number) < 0) {
+    throw new Error(`${field} 값은 0 이상의 정수여야 합니다.`);
+  }
+  return value as number;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 function requireChoice<T extends object, K extends keyof T>(
   mapping: T,
   choice: K,
@@ -241,7 +379,8 @@ function assertChoices<T extends object>(
   }
 }
 
-function requireText(value: string, field: string) {
+function requireText(value: unknown, field: string) {
+  if (typeof value !== "string") throw new Error(`${field} 값은 문자열이어야 합니다.`);
   const normalized = value.trim();
   if (!normalized) throw new Error(`${field} 값이 필요합니다.`);
   return normalized;

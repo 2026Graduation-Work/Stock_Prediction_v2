@@ -155,6 +155,15 @@ const DEMO_PORTFOLIO: ProfilingOutput["portfolio"] = {
   watchlist: ["000660", "035420", "051910"],
 };
 
+function createSessionId() {
+  const uuid = globalThis.crypto?.randomUUID?.();
+  const fallback = `${Date.now().toString(36)}${Math.floor(
+    globalThis.performance?.now?.() ?? 0,
+  ).toString(36)}`;
+  const token = (uuid ?? fallback).replaceAll("-", "").slice(0, 12).padEnd(12, "0");
+  return `s_${token}`;
+}
+
 function AxisGauge({
   label,
   value,
@@ -226,7 +235,7 @@ export default function SurveyFlow() {
     setError("");
     const payload: SurveyAnswers = {
       user_id: "u_minji_001",
-      session_id: `s_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`,
+      session_id: createSessionId(),
       timestamp: new Date().toISOString(),
       Q1: answers.Q1 as SurveyAnswers["Q1"],
       Q2: answers.Q2 as SurveyAnswers["Q2"],

@@ -1,14 +1,11 @@
 // SSOT는 backend/profiling/입니다. 규칙 변경 시 Python 상수 테이블과 동기화합니다.
 
 import { NextResponse } from "next/server";
-import {
-  convertSurveyAnswers,
-  type SurveyAnswers,
-} from "@/lib/profiling-rules";
+import { convertSurveyAnswers } from "@/lib/profiling-rules";
 
 export async function POST(request: Request) {
   try {
-    const answers = (await request.json()) as SurveyAnswers;
+    const answers: unknown = await request.json();
     return NextResponse.json(convertSurveyAnswers(answers));
   } catch (error) {
     const message =

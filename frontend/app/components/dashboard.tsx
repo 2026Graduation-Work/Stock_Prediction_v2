@@ -56,6 +56,9 @@ function profileSummaryFromOutput(
   const horizon = months <= 24 ? "short" : months <= 60 ? "mid" : "long";
   const stable = output.investor_profile.profile_type === "stable";
   const completedAt = new Date(output.timestamp);
+  const surveyedAt = Number.isNaN(completedAt.getTime())
+    ? fallback.surveyedAt
+    : `${completedAt.getFullYear()}.${String(completedAt.getMonth() + 1).padStart(2, "0")}`;
   return {
     ...fallback,
     profileTypeLabel: stable ? "안정추구형" : "수익추구형",
@@ -63,7 +66,7 @@ function profileSummaryFromOutput(
     riskTolerance: Math.round(output.investor_profile.risk_tolerance * 100),
     sentimentSensitivity: Math.round(output.psychological_state.fomo_index * 100),
     horizon,
-    surveyedAt: `${completedAt.getFullYear()}.${String(completedAt.getMonth() + 1).padStart(2, "0")}`,
+    surveyedAt,
   };
 }
 
@@ -88,7 +91,9 @@ export default function Dashboard({
     ? profileSummaryFromOutput(savedProfile, profile)
     : profile;
   const activeAvoidedLabels = savedProfile
-    ? savedProfile.constraints.avoided_assets.map((asset) => AVOIDED_ASSET_LABELS[asset])
+    ? savedProfile.constraints.avoided_assets
+        .map((asset) => AVOIDED_ASSET_LABELS[asset])
+        .filter((label): label is string => Boolean(label))
     : avoidedLabels;
   const activeExcludedStocks = activeAvoidedLabels.length > 0 ? excludedStocks : [];
   const keyword = query.trim();
