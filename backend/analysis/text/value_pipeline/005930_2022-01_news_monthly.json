@@ -4,7 +4,7 @@
   "period_start": "2022-01-01",
   "period_end": "2022-01-31",
   "news_source": "excel",
-  "source_file": "/Users/seohwan/Desktop/SKKU/2026/Project/졸업작품/Stock_Prediction_v2/data/삼성전자_20220101-20221231.xlsx",
+  "source_file": "data/삼성전자_20220101-20221231.xlsx",
   "scoring_note": "USE_FINBERT=0으로 설정해 lexicon 감성 점수를 사용했다. 날짜별 전체 기사 제목을 점수화한 뒤 월간 요약을 계산했다.",
   "monthly_metrics": {
     "period_days": 31,

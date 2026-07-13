@@ -47,8 +47,8 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
         items = _load_excel_news(query, date)
         if items:
             return items, "excel"
-    except Exception:
-        pass
+    except Exception as e:
+        warnings.warn(f"엑셀 뉴스 로드 실패, 다음 소스로 폴백합니다: {e}", stacklevel=2)
     if SETTINGS.has_naver:
         try:
             items = _fetch_naver_news_api(query, date)
@@ -74,7 +74,7 @@ def _parse_news_workbook_name(path: Path) -> tuple[str, str, str] | None:
 
 
 def _normalize_yyyymmdd(value: Any) -> str:
-    if isinstance(value, dt.datetime | dt.date):
+    if isinstance(value, dt.date):  # dt.datetime은 dt.date의 하위 클래스라 함께 처리됨
         return value.strftime("%Y%m%d")
     text = str(value or "").strip()
     if not text:
@@ -118,44 +118,49 @@ def _load_excel_news(company_name: str, date: str, limit: int = 10) -> list[dict
             category=UserWarning,
         )
         wb = load_workbook(path, read_only=True, data_only=True)
-    ws = wb.active
-    if hasattr(ws, "reset_dimensions"):
-        ws.reset_dimensions()
-    rows = ws.iter_rows(values_only=True)
+
+    # read_only 모드는 zip 파일 핸들을 열어두므로, 모든 종료 경로에서 반드시 닫는다.
     try:
-        header = next(rows)
-    except StopIteration:
-        return []
+        ws = wb.active
+        if hasattr(ws, "reset_dimensions"):
+            ws.reset_dimensions()
+        rows = ws.iter_rows(values_only=True)
+        try:
+            header = next(rows)
+        except StopIteration:
+            return []
 
-    columns = {str(name).strip(): idx for idx, name in enumerate(header) if name is not None}
-    if "일자" not in columns or "제목" not in columns:
-        raise RuntimeError(f"엑셀 뉴스 파일 필수 컬럼 누락: {path}")
+        columns = {str(name).strip(): idx for idx, name in enumerate(header) if name is not None}
+        if "일자" not in columns or "제목" not in columns:
+            raise RuntimeError(f"엑셀 뉴스 파일 필수 컬럼 누락: {path}")
 
-    date_idx = columns["일자"]
-    title_idx = columns["제목"]
-    press_idx = columns.get("언론사")
-    target_day = date.replace("-", "")
-    items: list[dict] = []
-    for row in rows:
-        row_day = _normalize_yyyymmdd(row[date_idx] if date_idx < len(row) else "")
-        if row_day != target_day:
-            continue
-        title = str(row[title_idx] if title_idx < len(row) else "").strip()
-        if not title:
-            continue
-        press = ""
-        if press_idx is not None and press_idx < len(row) and row[press_idx] is not None:
-            press = str(row[press_idx]).strip()
-        items.append({
-            "title": title,
-            "summary": "",
-            "url": "",
-            "press": press,
-            "date": _format_iso_date(row_day),
-        })
-        if len(items) >= limit:
-            break
-    return items
+        date_idx = columns["일자"]
+        title_idx = columns["제목"]
+        press_idx = columns.get("언론사")
+        target_day = date.replace("-", "")
+        items: list[dict] = []
+        for row in rows:
+            row_day = _normalize_yyyymmdd(row[date_idx] if date_idx < len(row) else "")
+            if row_day != target_day:
+                continue
+            title = str(row[title_idx] if title_idx < len(row) else "").strip()
+            if not title:
+                continue
+            press = ""
+            if press_idx is not None and press_idx < len(row) and row[press_idx] is not None:
+                press = str(row[press_idx]).strip()
+            items.append({
+                "title": title,
+                "summary": "",
+                "url": "",
+                "press": press,
+                "date": _format_iso_date(row_day),
+            })
+            if len(items) >= limit:
+                break
+        return items
+    finally:
+        wb.close()
 
 
 def _strip_tags(s: str) -> str:
