@@ -11,6 +11,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+import pyarrow.dataset as pyarrow_dataset
 import yaml
 from lightgbm import LGBMClassifier
 
@@ -81,8 +82,6 @@ def _read_input(path: Path, columns: list[str]) -> pd.DataFrame:
         )
     try:
         if path.is_dir() or path.suffix.lower() in {".parquet", ".pq"}:
-            import pyarrow.dataset as pyarrow_dataset
-
             available = pyarrow_dataset.dataset(path, format="parquet").schema.names
             missing = [column for column in columns if column not in available]
             if missing:
