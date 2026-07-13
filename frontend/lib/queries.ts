@@ -126,7 +126,7 @@ export async function getHoldingAlerts(
       .order("display_order", { ascending: true });
     assertQuery(error, "보유 종목 알림 조회");
 
-    const predictions = latestDateRows((data ?? []) as PredictionRow[]);
+    const predictions = latestRowsByStock((data ?? []) as PredictionRow[]);
     const stocks = await loadStocks(
       client,
       predictions.map(({ stock_code }) => stock_code),
@@ -160,12 +160,11 @@ export async function getPortfolio(
     assertQuery(predictionResult.error, "포트폴리오 예측 조회");
 
     const stockByCode = new Map(stocks.map((stock) => [stock.code, stock]));
-    const predictionByCode = new Map<string, PredictionRow>();
-    for (const prediction of (predictionResult.data ?? []) as PredictionRow[]) {
-      if (!predictionByCode.has(prediction.stock_code)) {
-        predictionByCode.set(prediction.stock_code, prediction);
-      }
-    }
+    const predictionByCode = new Map(
+      latestRowsByStock((predictionResult.data ?? []) as PredictionRow[]).map(
+        (prediction) => [prediction.stock_code, prediction],
+      ),
+    );
 
     return holdings.flatMap((holding) => {
       const stock = stockByCode.get(holding.stock_code);
@@ -286,6 +285,17 @@ async function loadHoldings(
 function latestDateRows(rows: PredictionRow[]): PredictionRow[] {
   const latestDate = rows[0]?.prediction_date;
   return latestDate ? rows.filter(({ prediction_date }) => prediction_date === latestDate) : [];
+}
+
+function latestRowsByStock(rows: PredictionRow[]): PredictionRow[] {
+  const latestByStock = new Map<string, PredictionRow>();
+  for (const row of rows) {
+    if (!latestByStock.has(row.stock_code)) latestByStock.set(row.stock_code, row);
+  }
+  return [...latestByStock.values()].sort(
+    (left, right) =>
+      left.display_order - right.display_order || left.stock_code.localeCompare(right.stock_code),
+  );
 }
 
 async function withFallback<T>(

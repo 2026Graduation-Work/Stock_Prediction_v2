@@ -188,10 +188,12 @@ alter table public.predictions enable row level security;
 alter table public.prediction_features enable row level security;
 alter table public.market_status enable row level security;
 
--- PostgreSQL has no CREATE POLICY IF NOT EXISTS, so each policy is guarded explicitly.
-do $policies$
+-- Remove both the original broad policies and these policies before recreating them.
+-- This keeps the migration safe to rerun after an earlier MVP schema was applied.
+do $drop_policies$
 declare
   table_name text;
+  policy_suffix text;
 begin
   foreach table_name in array array[
     'users',
@@ -205,69 +207,207 @@ begin
     'market_status'
   ]
   loop
-    if not exists (
-      select 1 from pg_policies
-      where schemaname = 'public'
-        and tablename = table_name
-        and policyname = table_name || '_anon_select'
-    ) then
+    foreach policy_suffix in array array[
+      '_anon_select',
+      '_authenticated_insert',
+      '_authenticated_update',
+      '_public_select',
+      '_owner_select',
+      '_owner_insert',
+      '_owner_update'
+    ]
+    loop
       execute format(
-        'create policy %I on public.%I for select to anon, authenticated using (true)',
-        table_name || '_anon_select',
+        'drop policy if exists %I on public.%I',
+        table_name || policy_suffix,
         table_name
       );
-    end if;
-
-    if not exists (
-      select 1 from pg_policies
-      where schemaname = 'public'
-        and tablename = table_name
-        and policyname = table_name || '_authenticated_insert'
-    ) then
-      execute format(
-        'create policy %I on public.%I for insert to authenticated with check (true)',
-        table_name || '_authenticated_insert',
-        table_name
-      );
-    end if;
-
-    if not exists (
-      select 1 from pg_policies
-      where schemaname = 'public'
-        and tablename = table_name
-        and policyname = table_name || '_authenticated_update'
-    ) then
-      execute format(
-        'create policy %I on public.%I for update to authenticated using (true) with check (true)',
-        table_name || '_authenticated_update',
-        table_name
-      );
-    end if;
+    end loop;
   end loop;
 end
-$policies$;
+$drop_policies$;
+
+-- Market and model outputs are public read-only data. Backend ingestion uses
+-- service_role, which bypasses RLS; browser clients cannot mutate these rows.
+create policy stocks_public_select on public.stocks
+  for select to anon, authenticated using (true);
+create policy predictions_public_select on public.predictions
+  for select to anon, authenticated using (true);
+create policy prediction_features_public_select on public.prediction_features
+  for select to anon, authenticated using (true);
+create policy market_status_public_select on public.market_status
+  for select to anon, authenticated using (true);
+
+-- A user row is visible and writable only to the linked Supabase Auth account.
+create policy users_owner_select on public.users
+  for select to authenticated using (auth.uid() = auth_user_id);
+create policy users_owner_insert on public.users
+  for insert to authenticated with check (auth.uid() = auth_user_id);
+create policy users_owner_update on public.users
+  for update to authenticated
+  using (auth.uid() = auth_user_id)
+  with check (auth.uid() = auth_user_id);
+
+create policy ips_profiles_owner_select on public.ips_profiles
+  for select to authenticated using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = ips_profiles.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy ips_profiles_owner_insert on public.ips_profiles
+  for insert to authenticated with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = ips_profiles.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy ips_profiles_owner_update on public.ips_profiles
+  for update to authenticated
+  using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = ips_profiles.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = ips_profiles.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+
+create policy avoided_assets_owner_select on public.avoided_assets
+  for select to authenticated using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = avoided_assets.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy avoided_assets_owner_insert on public.avoided_assets
+  for insert to authenticated with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = avoided_assets.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy avoided_assets_owner_update on public.avoided_assets
+  for update to authenticated
+  using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = avoided_assets.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = avoided_assets.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+
+create policy portfolio_holdings_owner_select on public.portfolio_holdings
+  for select to authenticated using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = portfolio_holdings.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy portfolio_holdings_owner_insert on public.portfolio_holdings
+  for insert to authenticated with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = portfolio_holdings.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy portfolio_holdings_owner_update on public.portfolio_holdings
+  for update to authenticated
+  using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = portfolio_holdings.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = portfolio_holdings.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+
+create policy watchlist_owner_select on public.watchlist
+  for select to authenticated using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = watchlist.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy watchlist_owner_insert on public.watchlist
+  for insert to authenticated with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = watchlist.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
+create policy watchlist_owner_update on public.watchlist
+  for update to authenticated
+  using (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = watchlist.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  )
+  with check (
+    exists (
+      select 1 from public.users as app_user
+      where app_user.id = watchlist.user_id
+        and app_user.auth_user_id = auth.uid()
+    )
+  );
 
 grant usage on schema public to anon, authenticated;
-grant select on table
+
+revoke all on table
   public.users,
   public.ips_profiles,
   public.avoided_assets,
   public.portfolio_holdings,
-  public.watchlist,
+  public.watchlist
+from anon, authenticated;
+
+revoke all on table
+  public.stocks,
+  public.predictions,
+  public.prediction_features,
+  public.market_status
+from anon, authenticated;
+
+grant select, insert, update on table
+  public.users,
+  public.ips_profiles,
+  public.avoided_assets,
+  public.portfolio_holdings,
+  public.watchlist
+to authenticated;
+
+grant select on table
   public.stocks,
   public.predictions,
   public.prediction_features,
   public.market_status
 to anon, authenticated;
-
-grant insert, update on table
-  public.users,
-  public.ips_profiles,
-  public.avoided_assets,
-  public.portfolio_holdings,
-  public.watchlist,
-  public.stocks,
-  public.predictions,
-  public.prediction_features,
-  public.market_status
-to authenticated;

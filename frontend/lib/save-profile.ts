@@ -27,15 +27,26 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
       : profile.user_id;
   const avatarLabel = Array.from(displayName)[0] ?? "";
 
+  const authUserId = data.session.user.id;
+  const { data: existingUser, error: existingUserError } = await client
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", authUserId)
+    .maybeSingle();
+  assertSupabaseResult(existingUserError, "기존 사용자 확인");
+
+  // Supabase Auth ID를 최초 DB 사용자 ID로 사용하고, 재설문 시 기존 ID를 재사용한다.
+  const userId = (existingUser as { id: string } | null)?.id ?? authUserId;
+  const storedProfile: ProfilingOutput = { ...profile, user_id: userId };
   const { error: userError } = await client.from("users").upsert(
     {
-      id: profile.user_id,
-      auth_user_id: data.session.user.id,
+      id: userId,
+      auth_user_id: authUserId,
       display_name: displayName,
       avatar_label: avatarLabel,
       updated_at: now,
     },
-    { onConflict: "id" },
+    { onConflict: "auth_user_id" },
   );
   assertSupabaseResult(userError, "사용자 저장");
 
@@ -45,7 +56,7 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
   const context = profile.context;
   const { error: profileError } = await client.from("ips_profiles").upsert(
     {
-      user_id: profile.user_id,
+      user_id: userId,
       session_id: profile.session_id,
       surveyed_at: profile.timestamp,
       profile_type: investor.profile_type,
@@ -77,7 +88,7 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
       schema_version: profile.meta.schema_version,
       source: profile.meta.source,
       confidence: profile.meta.confidence,
-      profile_payload: profile,
+      profile_payload: storedProfile,
       updated_at: now,
     },
     { onConflict: "user_id" },
@@ -88,29 +99,30 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
     client
       .from("avoided_assets")
       .update({ is_active: false, updated_at: now })
-      .eq("user_id", profile.user_id),
+      .eq("user_id", userId),
     client
       .from("portfolio_holdings")
       .update({ is_active: false, updated_at: now })
-      .eq("user_id", profile.user_id),
+      .eq("user_id", userId),
     client
       .from("watchlist")
       .update({ is_active: false, updated_at: now })
-      .eq("user_id", profile.user_id),
+      .eq("user_id", userId),
   ]);
   assertSupabaseResult(avoidedReset.error, "기존 회피 설정 비활성화");
   assertSupabaseResult(holdingsReset.error, "기존 보유 종목 비활성화");
   assertSupabaseResult(watchlistReset.error, "기존 관심 종목 비활성화");
 
   await Promise.all([
-    upsertAvoidedAssets(profile, now),
-    upsertPortfolioHoldings(profile, now),
-    upsertWatchlist(profile, now),
+    upsertAvoidedAssets(profile, userId, now),
+    upsertPortfolioHoldings(profile, userId, now),
+    upsertWatchlist(profile, userId, now),
   ]);
 }
 
 async function upsertAvoidedAssets(
   profile: ProfilingOutput,
+  userId: string,
   updatedAt: string,
 ): Promise<void> {
   if (!profile.constraints.avoided_assets.length) return;
@@ -118,7 +130,7 @@ async function upsertAvoidedAssets(
   if (!client) return;
   const { error } = await client.from("avoided_assets").upsert(
     profile.constraints.avoided_assets.map((assetType) => ({
-      user_id: profile.user_id,
+      user_id: userId,
       asset_type: assetType,
       is_active: true,
       updated_at: updatedAt,
@@ -130,6 +142,7 @@ async function upsertAvoidedAssets(
 
 async function upsertPortfolioHoldings(
   profile: ProfilingOutput,
+  userId: string,
   updatedAt: string,
 ): Promise<void> {
   if (!profile.portfolio.holdings.length) return;
@@ -149,7 +162,7 @@ async function upsertPortfolioHoldings(
     knownCodes.has(holding.ticker)
       ? [
           {
-            user_id: profile.user_id,
+            user_id: userId,
             stock_code: holding.ticker,
             quantity: holding.quantity,
             avg_buy_price: holding.avg_buy_price,
@@ -170,6 +183,7 @@ async function upsertPortfolioHoldings(
 
 async function upsertWatchlist(
   profile: ProfilingOutput,
+  userId: string,
   updatedAt: string,
 ): Promise<void> {
   if (!profile.portfolio.watchlist.length) return;
@@ -177,7 +191,7 @@ async function upsertWatchlist(
   if (!client) return;
   const { error } = await client.from("watchlist").upsert(
     profile.portfolio.watchlist.map((stockCode, index) => ({
-      user_id: profile.user_id,
+      user_id: userId,
       stock_code: stockCode,
       display_order: index + 1,
       is_active: true,

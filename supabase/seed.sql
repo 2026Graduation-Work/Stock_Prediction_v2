@@ -26,7 +26,6 @@ on conflict (code) do update set
   updated_at = now();
 
 insert into public.ips_profiles (
-  id,
   user_id,
   session_id,
   surveyed_at,
@@ -61,7 +60,6 @@ insert into public.ips_profiles (
   profile_payload
 )
 values (
-  '00000000-0000-4000-8000-000000000001',
   'u_minji_001',
   's_20260307_001',
   '2026-03-07T14:32:00+09:00',
@@ -233,7 +231,6 @@ on conflict (user_id, stock_code) do update set
   updated_at = now();
 
 insert into public.predictions (
-  id,
   stock_code,
   prediction_date,
   data_asof,
@@ -266,7 +263,6 @@ insert into public.predictions (
 )
 values
   (
-    '10000000-0000-4000-8000-000000000001',
     '005930',
     '2026-07-07',
     '2026-07-07',
@@ -298,7 +294,6 @@ values
     1
   ),
   (
-    '10000000-0000-4000-8000-000000000002',
     '005380',
     '2026-07-07',
     '2026-07-07',
@@ -330,7 +325,6 @@ values
     2
   ),
   (
-    '10000000-0000-4000-8000-000000000003',
     '068270',
     '2026-07-07',
     '2026-07-07',
@@ -362,7 +356,6 @@ values
     3
   ),
   (
-    '10000000-0000-4000-8000-000000000004',
     '035720',
     '2026-07-07',
     '2026-07-07',
@@ -429,15 +422,35 @@ insert into public.prediction_features (
   contribution,
   display_order
 )
-values
-  ('10000000-0000-4000-8000-000000000001', 'volume_ratio_20d', '최근 거래량이 평소보다 증가했습니다.', 0.31, 1),
-  ('10000000-0000-4000-8000-000000000001', 'volatility_20d', '최근 변동성은 신호를 일부 낮췄습니다.', -0.12, 2),
-  ('10000000-0000-4000-8000-000000000002', 'momentum_20d', '최근 20일 가격 흐름이 견조합니다.', 0.43, 1),
-  ('10000000-0000-4000-8000-000000000002', 'volume_ratio_20d', '거래량 흐름이 신호를 뒷받침합니다.', 0.22, 2),
-  ('10000000-0000-4000-8000-000000000003', 'momentum_20d', '가격 흐름의 방향성이 뚜렷하지 않습니다.', 0.08, 1),
-  ('10000000-0000-4000-8000-000000000003', 'volatility_20d', '최근 변동성이 평소보다 높습니다.', 0.38, 2),
-  ('10000000-0000-4000-8000-000000000004', 'momentum_20d', '최근 가격 흐름이 약세입니다.', -0.36, 1),
-  ('10000000-0000-4000-8000-000000000004', 'volatility_20d', '변동성이 신호의 불확실성을 높입니다.', 0.20, 2)
+select
+  prediction.id,
+  seed.feature,
+  seed.label_ko,
+  seed.contribution,
+  seed.display_order
+from (
+  values
+    ('005930', '2026-07-07'::date, 'stable', 'volume_ratio_20d', '최근 거래량이 평소보다 증가했습니다.', 0.31, 1),
+    ('005930', '2026-07-07'::date, 'stable', 'volatility_20d', '최근 변동성은 신호를 일부 낮췄습니다.', -0.12, 2),
+    ('005380', '2026-07-07'::date, 'stable', 'momentum_20d', '최근 20일 가격 흐름이 견조합니다.', 0.43, 1),
+    ('005380', '2026-07-07'::date, 'stable', 'volume_ratio_20d', '거래량 흐름이 신호를 뒷받침합니다.', 0.22, 2),
+    ('068270', '2026-07-07'::date, 'stable', 'momentum_20d', '가격 흐름의 방향성이 뚜렷하지 않습니다.', 0.08, 1),
+    ('068270', '2026-07-07'::date, 'stable', 'volatility_20d', '최근 변동성이 평소보다 높습니다.', 0.38, 2),
+    ('035720', '2026-07-07'::date, 'stable', 'momentum_20d', '최근 가격 흐름이 약세입니다.', -0.36, 1),
+    ('035720', '2026-07-07'::date, 'stable', 'volatility_20d', '변동성이 신호의 불확실성을 높입니다.', 0.20, 2)
+) as seed (
+  stock_code,
+  prediction_date,
+  model_type,
+  feature,
+  label_ko,
+  contribution,
+  display_order
+)
+join public.predictions as prediction
+  on prediction.stock_code = seed.stock_code
+  and prediction.prediction_date = seed.prediction_date
+  and prediction.model_type = seed.model_type
 on conflict (prediction_id, feature) do update set
   label_ko = excluded.label_ko,
   contribution = excluded.contribution,
