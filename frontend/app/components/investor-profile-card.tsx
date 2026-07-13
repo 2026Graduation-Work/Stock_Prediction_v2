@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { INVESTMENT_HORIZON_LABEL } from "@/lib/display";
 import type { InvestmentHorizon, InvestorProfileSummary } from "@/lib/types";
 
@@ -17,17 +18,23 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
   );
 }
 
-export default function InvestorProfileCard({ profile }: { profile: InvestorProfileSummary }) {
+export default function InvestorProfileCard({
+  profile,
+  avoidedLabels,
+}: {
+  profile: InvestorProfileSummary;
+  avoidedLabels: string[];
+}) {
   return (
     <section className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-white px-5 py-[18px]">
       <div className="flex items-center">
         <span className="text-sm font-extrabold">나의 투자 성향</span>
-        <button
-          type="button"
-          className="ml-auto h-[26px] whitespace-nowrap rounded-lg border border-edge bg-white px-2.5 text-[11.5px] font-semibold text-body hover:border-ghost hover:bg-field"
+        <Link
+          href="/survey"
+          className="ml-auto inline-flex h-[26px] items-center whitespace-nowrap rounded-lg border border-edge bg-white px-2.5 text-[11.5px] font-semibold text-body hover:border-ghost hover:bg-field hover:no-underline"
         >
           설정 변경
-        </button>
+        </Link>
       </div>
       <span className="inline-flex h-6 items-center self-start rounded-full bg-brand-soft px-3 text-xs font-bold text-brand">
         {profile.personaLabel}
@@ -52,6 +59,23 @@ export default function InvestorProfileCard({ profile }: { profile: InvestorProf
               />
             ))}
           </div>
+        </div>
+      </div>
+      <div className="border-t border-line-soft pt-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11.5px] text-muted">회피 설정</span>
+          {avoidedLabels.length > 0 ? (
+            avoidedLabels.map((label) => (
+              <span
+                key={label}
+                className="rounded-full bg-[#fff5f3] px-2 py-1 text-[10.5px] font-bold text-[#a83a31]"
+              >
+                {label}
+              </span>
+            ))
+          ) : (
+            <span className="text-[11.5px] text-faint">없음</span>
+          )}
         </div>
       </div>
       <span className="text-[11.5px] text-faint">

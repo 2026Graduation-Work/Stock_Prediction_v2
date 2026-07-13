@@ -1,5 +1,5 @@
-// 대시보드 UI 타입. 값 체계는 schema/ v1.0 freeze 계약을 그대로 따른다.
-// (chart_output.schema.json: signal_light·rank_percentile·return_band·confidence·horizon_agreement·risk_flags)
+// schema/ v1.0에서 파생된 프론트 타입입니다. 스키마 변경 시 반드시 동기화합니다.
+// chart_output.schema.json: signal_light·rank_percentile·return_band·confidence·horizon_agreement·risk_flags
 
 export type SignalLight =
   | "strong_positive"
@@ -76,4 +76,65 @@ export interface PortfolioHolding {
   code: string;
   name: string;
   signalLight: SignalLight;
+}
+
+export type ProfileType = "stable" | "aggressive";
+export type ActionIntent =
+  | "buy_consideration"
+  | "sell_consideration"
+  | "hold_consideration";
+
+export interface ProfilingHolding {
+  ticker: string;
+  name: string;
+  quantity: number;
+  avg_buy_price: number;
+}
+
+export interface ProfilingOutput {
+  user_id: string;
+  session_id: string;
+  timestamp: string;
+  investor_profile: {
+    risk_tolerance: number;
+    time_horizon_months: number;
+    liquidity_need_ratio: number;
+    target_return_annual: number;
+    investment_experience_years: number;
+    profile_type: ProfileType;
+  };
+  psychological_state: {
+    fomo_index: number;
+    panic_sell_tendency: number;
+    herding_score: number;
+    self_confidence: number;
+    current_market_anxiety: number;
+    overheating_caution: number;
+  };
+  constraints: {
+    avoided_assets: RiskFlag[];
+    preferred_sectors: string[];
+  };
+  portfolio: {
+    holdings: ProfilingHolding[];
+    watchlist: string[];
+  };
+  free_text_signal: {
+    raw_text: string;
+    extracted_signals: Record<string, number>;
+    conflict_with_survey: boolean;
+  };
+  confidence_per_field: Record<string, number>;
+  context: {
+    target_ticker?: string;
+    investment_amount_krw: number;
+    action_intent: ActionIntent;
+    market_regime_hint?: string;
+    benchmark_index?: string;
+  };
+  meta: {
+    schema_version: "1.0.0";
+    source: "profiling_block";
+    confidence: number;
+  };
 }
