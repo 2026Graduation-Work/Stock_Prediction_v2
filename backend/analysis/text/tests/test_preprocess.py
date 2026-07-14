@@ -5,6 +5,7 @@ import pytest
 from analysis.text.preprocess import (
     OUTPUT_COLUMNS,
     BigKindsSchemaError,
+    _read_workbook,
     build_news_corpus,
     print_report,
 )
@@ -98,6 +99,67 @@ def test_uses_fallback_key_and_keywords_when_optional_columns_are_missing(
     assert report.deduplicated_rows == 1
     assert result.loc[0, "body"] == "반도체, 실적"
     assert result.loc[0, "news_id"].startswith("generated:")
+
+
+def test_parses_date_strings_with_time_as_datetime64(tmp_path: Path) -> None:
+    workbook = tmp_path / "NewsResult_dates.xlsx"
+    _write_workbook(
+        workbook,
+        [
+            {
+                "일자": "2025-01-01 00:00:00",
+                "제목": "초 단위 시간",
+                "본문": "본문",
+                "언론사": "테스트일보",
+            },
+            {
+                "일자": "2025.01.02 09:00",
+                "제목": "분 단위 시간",
+                "본문": "본문",
+                "언론사": "테스트일보",
+            },
+        ],
+    )
+
+    normalized = _read_workbook(workbook)
+
+    assert pd.api.types.is_datetime64_any_dtype(normalized["date"])
+    assert normalized["date"].dt.strftime("%Y-%m-%d").tolist() == [
+        "2025-01-01",
+        "2025-01-02",
+    ]
+
+
+def test_ignores_excel_temporary_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    raw_dir = tmp_path / "raw"
+    raw_dir.mkdir()
+    workbook = raw_dir / "NewsResult_valid.xlsx"
+    temporary_workbook = raw_dir / "~$NewsResult_open.xlsx"
+    _write_workbook(
+        workbook,
+        [
+            {
+                "뉴스 식별자": "news-1",
+                "일자": 20250101,
+                "제목": "정상 기사",
+                "본문": "본문",
+                "언론사": "테스트일보",
+            }
+        ],
+    )
+    temporary_workbook.write_bytes(b"not an Excel workbook")
+    monkeypatch.setattr(
+        Path,
+        "glob",
+        lambda self, pattern: iter([workbook, temporary_workbook]),
+    )
+
+    report = build_news_corpus("005930", tmp_path / "output.csv", raw_dir)
+
+    assert report.input_files == 1
+    assert report.raw_rows == 1
 
 
 def test_fails_with_clear_error_when_required_column_is_missing(tmp_path: Path) -> None:

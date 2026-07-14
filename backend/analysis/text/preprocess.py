@@ -7,7 +7,6 @@ import hashlib
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import date, datetime
 from pathlib import Path
 
 import pandas as pd
@@ -82,24 +81,6 @@ def _clean_text(value: object) -> str:
     return str(value).strip()
 
 
-def _parse_date(value: object) -> pd.Timestamp | pd.NaT:
-    if pd.isna(value):
-        return pd.NaT
-    if isinstance(value, pd.Timestamp):
-        return value.normalize()
-    if isinstance(value, (datetime, date)):
-        return pd.Timestamp(value).normalize()
-
-    text = _clean_text(value)
-    formats = ("%Y%m%d", "%Y-%m-%d", "%Y/%m/%d", "%Y.%m.%d")
-    for date_format in formats:
-        try:
-            return pd.Timestamp(datetime.strptime(text, date_format))
-        except ValueError:
-            continue
-    return pd.NaT
-
-
 def _read_workbook(path: Path) -> pd.DataFrame:
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Workbook contains no default style")
@@ -114,7 +95,12 @@ def _read_workbook(path: Path) -> pd.DataFrame:
     else:
         normalized["news_id"] = frame[news_id_column].map(_clean_text)
 
-    normalized["date"] = frame[columns["date"]].map(_parse_date)
+    normalized["date"] = pd.to_datetime(
+        frame[columns["date"]].map(_clean_text),
+        errors="coerce",
+        format="mixed",
+        yearfirst=True,
+    ).dt.normalize()
     invalid_dates = normalized["date"].isna()
     if invalid_dates.any():
         rows = [str(index + 2) for index in frame.index[invalid_dates][:5]]
@@ -179,7 +165,11 @@ def build_news_corpus(ticker: str, out: Path, raw_dir: Path = DEFAULT_RAW_DIR) -
     if not ticker:
         raise ValueError("ticker는 빈 문자열일 수 없습니다.")
 
-    input_files = sorted(raw_dir.glob(f"**/{INPUT_PATTERN}"))
+    input_files = [
+        path
+        for path in sorted(raw_dir.glob(f"**/{INPUT_PATTERN}"))
+        if not path.name.startswith("~$")
+    ]
     if not input_files:
         raise FileNotFoundError(f"입력 파일이 없습니다: {raw_dir / '**' / INPUT_PATTERN}")
 
