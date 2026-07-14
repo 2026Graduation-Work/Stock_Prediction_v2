@@ -5,6 +5,7 @@
     python -m value_pipeline.run --ticker 000660        # SK하이닉스
     python -m value_pipeline.run --ticker 005930 --date 2026-05-17 --out out.json
 
+뉴스는 data/의 로컬 엑셀 파일을 우선 사용한다.
 API 키가 없으면 동봉 샘플 + 규칙 기반으로 끝까지 동작하고,
 .env에 GEMINI_API_KEY / DART_API_KEY 를 넣으면 자동으로 실데이터로 전환된다.
 """
@@ -31,7 +32,8 @@ def main(argv: list[str] | None = None) -> int:
     print(
         f"[설정] Gemini={'ON' if SETTINGS.has_gemini else 'OFF(규칙기반)'}, "
         f"DART={'ON' if SETTINGS.has_dart else 'OFF(샘플)'}, "
-        f"Naver={'ON' if SETTINGS.has_naver else 'OFF(크롤/샘플)'}, "
+        f"News=Excel(data/) 우선"
+        f"{'→Naver API' if SETTINGS.has_naver else '→크롤/샘플'}, "
         f"FinBERT={'시도' if SETTINGS.use_finbert else 'OFF'}",
         file=sys.stderr,
     )

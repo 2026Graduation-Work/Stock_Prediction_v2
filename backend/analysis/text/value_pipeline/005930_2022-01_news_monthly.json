@@ -1,0 +1,501 @@
+{
+  "ticker": "005930",
+  "company_name": "삼성전자",
+  "period_start": "2022-01-01",
+  "period_end": "2022-01-31",
+  "news_source": "excel",
+  "source_file": "data/삼성전자_20220101-20221231.xlsx",
+  "scoring_note": "USE_FINBERT=0으로 설정해 lexicon 감성 점수를 사용했다. 날짜별 전체 기사 제목을 점수화한 뒤 월간 요약을 계산했다.",
+  "monthly_metrics": {
+    "period_days": 31,
+    "days_with_articles": 31,
+    "days_without_articles": 0,
+    "total_article_count": 1798,
+    "average_daily_article_count": 58.0,
+    "average_daily_news_sentiment": 0.1203,
+    "article_weighted_news_sentiment": 0.1285,
+    "article_weighted_news_sentiment_std": 0.4907,
+    "average_news_impact_score": 7.2581,
+    "average_news_sentiment_std": 0.4552,
+    "sentiment_backend": "lexicon",
+    "top_monthly_key_events": [
+      "반도체 가격 반등 빨라지나 삼성 중국공장 봉쇄 여파는 [MK위클리반도체]",
+      "▶[정보] 무조건 100% 오를 급등주 (클릭)",
+      "[SK證 주간추천주]임인년 이익 성장 기대 SFA반도체 KH바텍 레이",
+      "\"한국, 종전선언 집착 말라 한일관계 개선이 먼저\"",
+      "이부진 이서현과 어깨 나란히 주식부호 톱5 들어간 창업주는",
+      "[주간추천주]새해 업황 호조 실적 성장株 '제이콘텐트리 SFA 반도체'",
+      "\"치킨 아닌 소고기, 킹크랩값 벌기 가능\" 올해 첫 IPO 주자 LG엔솔 기대감 쑥",
+      "1년새 폭풍성장 크래프톤 SK이노 등 시총 20조 넘었다",
+      "대형 IPO에 발목 시총만 늘고 수익률 제자리",
+      "시계제로 경영환경 재계 수장들 '차차차' 전략으로 정면돌파"
+    ]
+  },
+  "daily_metrics": [
+    {
+      "date": "2022-01-01",
+      "article_count": 18,
+      "news_sentiment": 0.2222,
+      "news_sentiment_std": 0.4157,
+      "news_impact_score": 8,
+      "key_events": [
+        "반도체 가격 반등 빨라지나 삼성 중국공장 봉쇄 여파는 [MK위클리반도체]",
+        "▶[정보] 무조건 100% 오를 급등주 (클릭)",
+        "[SK證 주간추천주]임인년 이익 성장 기대 SFA반도체 KH바텍 레이",
+        "\"한국, 종전선언 집착 말라 한일관계 개선이 먼저\"",
+        "\"반도체부터 리츠까지\" 증권사가 '이구동성' 추천한 주식은?"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-02",
+      "article_count": 35,
+      "news_sentiment": 0.0857,
+      "news_sentiment_std": 0.3681,
+      "news_impact_score": 7,
+      "key_events": [
+        "이부진 이서현과 어깨 나란히 주식부호 톱5 들어간 창업주는",
+        "[주간추천주]새해 업황 호조 실적 성장株 '제이콘텐트리 SFA 반도체'",
+        "\"치킨 아닌 소고기, 킹크랩값 벌기 가능\" 올해 첫 IPO 주자 LG엔솔 기대감 쑥",
+        "1년새 폭풍성장 크래프톤 SK이노 등 시총 20조 넘었다",
+        "대형 IPO에 발목 시총만 늘고 수익률 제자리"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-03",
+      "article_count": 97,
+      "news_sentiment": 0.1649,
+      "news_sentiment_std": 0.4907,
+      "news_impact_score": 7,
+      "key_events": [
+        "시계제로 경영환경 재계 수장들 '차차차' 전략으로 정면돌파",
+        "SK이노 에코프로비엠 상반기 리스크 방어주 주목",
+        "회삿돈 횡령후 몰빵 투자 동진쎄미켐 주식으로 117억 손실",
+        "“거점오피스 시장 진출, 성장 이어갈 것”",
+        "“반도체주 바닥 찍었다” 삼성전자, SK하이닉스 실적 전망 긍정적, 상향 여지는 충분"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-04",
+      "article_count": 92,
+      "news_sentiment": 0.163,
+      "news_sentiment_std": 0.4491,
+      "news_impact_score": 7,
+      "key_events": [
+        "【재테크TIP 3】 미리 읽어두는 다음 폭등 기대 테마",
+        "'올레드 名家' 재확인한 LG, 세계 최대 최다 모델 내놓는다",
+        "돈 몰리는 충남 작년 기업투자 5조 돌파",
+        "[마감시황] 기관 매도 폭탄에 짓눌린 코스피, 3,000선 돌파 좌절",
+        "\"삼성 올레드 합류 환영한다\" 1등 LG의 여유, 최대 크기 TV로 초격차"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-05",
+      "article_count": 90,
+      "news_sentiment": 0.0889,
+      "news_sentiment_std": 0.4864,
+      "news_impact_score": 7,
+      "key_events": [
+        "美 조기 금리인상 우려 기관 매물에 코스피 휘청",
+        "기관 1.3조 매도 폭탄 코스피 1% 이상 하락 마감",
+        "[마감 시황] 기관 1.3조 순매도에 코스피 1% 넘게 하락",
+        "기관 1.3조 매물 폭탄에 코스피 1%대 하락 2950선으로 밀려나",
+        "[코스피 마감]美 금리 인상 환율 상승 부담에 2950선까지 후퇴"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-06",
+      "article_count": 69,
+      "news_sentiment": 0.1691,
+      "news_sentiment_std": 0.4527,
+      "news_impact_score": 8,
+      "key_events": [
+        "(영상)‘소유보다 공유’ 렌털 가전 시장 ‘쑥쑥’...“올해도 폭풍성장”",
+        "5G 스마트폰, 시장규모도 5G급 성장 \"中 공세 무섭네\"",
+        "▶[정보] 무조건 100% 오를 급등주 (클릭)",
+        "[마켓리더에게 듣는다] 환율 1,300원 근처도 간다?...중소형 성장주, 'BBIG'주목!",
+        "▶[정보] 하루만에 상한가 수익볼 급등주 (클릭)"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-07",
+      "article_count": 112,
+      "news_sentiment": 0.3571,
+      "news_sentiment_std": 0.4792,
+      "news_impact_score": 8,
+      "key_events": [
+        "상승 시동 거나? 심상치 않은 10일(월) 급등 유망 5종목",
+        "삼성전자 역대급 호실적에 외국인 \"사자\" 코스피 반등 이끌었다",
+        "(영상)실적 시즌 포문 연 삼성전자 IT기업 호실적 예고",
+        "7만전자 덫 이젠 풀려날까 삼성전자 '반도체 봄날' 기대되는 이유",
+        "코스피, 외국인 '사자'에 반등 삼성전자 역대급 실적에 1%대 올라"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-08",
+      "article_count": 23,
+      "news_sentiment": 0.087,
+      "news_sentiment_std": 0.4079,
+      "news_impact_score": 7,
+      "key_events": [
+        "\"진짜 감쪽같더라\" CES 푸드트럭 긴 줄 이유 있었네 [추적자추기자]",
+        "▶[정보] 무조건 100% 오를 급등주 (클릭)",
+        "[VC's Pick]메타버스부터 디지털 수익증권까지 기술기반 서비스 주목",
+        "【재테크TIP 3】 다음 폭등기대 종목은?",
+        "오스템임플란트 후폭풍 동진쎄미켐 시총 4200억원 증발"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-09",
+      "article_count": 23,
+      "news_sentiment": -0.0435,
+      "news_sentiment_std": 0.55,
+      "news_impact_score": 7,
+      "key_events": [
+        "【재테크TIP 3】 미리 읽어두는 다음 폭등 기대 테마",
+        "삼성 前 특허담당 임원 퇴사 1년 만에 특허소송",
+        "삼성 前 특허 수장 '친정' 삼성 상대로 특허소송 냈다",
+        "삼성 퇴직 IP센터장, 친정 상대로 특허소송",
+        "美 긴축 우려에 떨고있는 증시 \"반도체 등 경기민감주 주목\""
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-10",
+      "article_count": 74,
+      "news_sentiment": 0.0946,
+      "news_sentiment_std": 0.4699,
+      "news_impact_score": 7,
+      "key_events": [
+        "\"삼성전자 올 매출 300조 연다\" 증권사, 목표가 상향 랠리",
+        "“삼성전자 올해 메모리업 반등으로 매출 300조원 넘을 듯” 증권가 목표주가 상향",
+        "ASML \"EUV장비 생산 차질\" 공식화 삼성 SK '악재' 가능성",
+        "삼성 전 특허담당 임원이 '특허 소송' '영업기밀' 문제없나",
+        "▶[공개] 단타로 하루에 30%씩 수익보는 종목 공개"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-11",
+      "article_count": 63,
+      "news_sentiment": 0.1429,
+      "news_sentiment_std": 0.4994,
+      "news_impact_score": 7,
+      "key_events": [
+        "[시그널] 소송 맡은 수탁위 '책임질 능력' 의문",
+        "[단독] \"한국, 오너경영으로 과감한 기술투자 고속성장 이끌었다\"",
+        "외국인 '사자'에 코스피 2920선 턱걸이 삼전 하이닉스 강세",
+        "[급등왕의 '급등맥 필살기'] 마그네슘 공급난 따른 매출 증가 예상 <포스코엠텍>",
+        "삼성전자도 제쳤다 카카오 급락에 속 타는 개미들, 8490억 사들이며 물타기"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-12",
+      "article_count": 92,
+      "news_sentiment": 0.1196,
+      "news_sentiment_std": 0.4855,
+      "news_impact_score": 7,
+      "key_events": [
+        "[시그널] 기관들 \"LG엔솔, 한 주라도 더 잡자\" 총력전 몸값 최대 122조 전망도",
+        "[단독] 상상 속 숫자 '1경' 돌파 LG엔솔, 역대급 수요예측",
+        "13억이 313억으로 껑충 '24배 수익' 올린 L&S의 대박투자 비법",
+        "G마켓 옥션, '2022 설빅세일' 진행 최대 82% 할인 판매",
+        "[이슈진단] 금리인상, 긴축발작 없다? 미 금리인상 시 韓증시 평균 -19.3% 하락!"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-13",
+      "article_count": 59,
+      "news_sentiment": 0.1017,
+      "news_sentiment_std": 0.4394,
+      "news_impact_score": 7,
+      "key_events": [
+        "외인 기관 올 '순매수 톱10' 8% 수익 '쏠쏠' 개인은 -12% '씁쓸'",
+        "[단독] CES 참석 격리면제자 1,166명 \"오미크론 대유행 앞당길 우려\"",
+        "코스피 2960선으로 후퇴 코스닥 시총순위 1~8위 기업 전부 하락",
+        "[마감시황] 금통위 앞두고 커지는 경계심...코스피 소폭 하락",
+        "[특징주] 퍼스텍, 삼성전자 M&A 기대감에 급등"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-14",
+      "article_count": 62,
+      "news_sentiment": 0.0968,
+      "news_sentiment_std": 0.4292,
+      "news_impact_score": 7,
+      "key_events": [
+        "물류 산업 급성장 '빅블러' 시대...\"로봇 선점해야 생존\" 총성 없는 전쟁",
+        "[마감시황] 금리인상 공포에 무너진 코스피 1%대 하락",
+        "[코스피 마감]금리인상 긴축 우려에 2920선 후퇴 1%이상 ↓",
+        "[공개] 단기로 매일 30% 수익보는 종목 공개",
+        "[정보] 하루만에 폭등 가능한 급등주 (클릭)"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-15",
+      "article_count": 20,
+      "news_sentiment": 0.1,
+      "news_sentiment_std": 0.3,
+      "news_impact_score": 7,
+      "key_events": [
+        "[정보] 무조건 100% 오를 급등주 (클릭)",
+        "※ 파죽지세로 치고 오를 다음주 급등 기대종목 ※",
+        "\"1.2조원 주식 거래\" 오스템임플란트 횡령 직원은 어디에 투자했을까",
+        "[국정농담] 이미 갈라진 국민을 대선철에만 통합할 수 있나요",
+        "\"150만원 폰 나오나\" 삼성 야심작, 아이폰보다 비싸다?"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-16",
+      "article_count": 19,
+      "news_sentiment": 0.2105,
+      "news_sentiment_std": 0.4077,
+      "news_impact_score": 8,
+      "key_events": [
+        "해상 운임 원자재價 급등에 가전 배터리값 '도미노 인상'",
+        "8년 버틴 끝에 OLED 시대 열렸다 LGD, 흑자 전환 전망",
+        "'네카라쿠배에 밀릴라' 조직 개선 나서는 대기업",
+        "치솟는 원재료값 물류비 삼성 LG 새해 수익성 고심 커진다",
+        "[포토] 큐커 밀키트 한곳서 구매"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-17",
+      "article_count": 62,
+      "news_sentiment": 0.0968,
+      "news_sentiment_std": 0.4652,
+      "news_impact_score": 7,
+      "key_events": [
+        "어떤 종목이 오를까? 내일 폭등기대 【1등 종목】 확인하세요.",
+        "두바이에서 '아이오닉5' 살펴본 文대통령 \"현대차 눈부신 성장\"",
+        "우진, UAE서 ‘원전 등급업체’ 인증 중동 진출 기대에 9%↑",
+        "'IPO 최대어' LG엔솔 상장하면 LG그룹 시총 2위 오른다",
+        "[코스피 마감] 2900선 붕괴 금리인상 우려 여파 지속"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-18",
+      "article_count": 66,
+      "news_sentiment": 0.101,
+      "news_sentiment_std": 0.5156,
+      "news_impact_score": 7,
+      "key_events": [
+        "【재테크TIP 3】 다음 폭등기대 종목은?",
+        "LG엔솔 청약 광풍에 찬밥된 코스피, 나흘째 약세 2860선 추락",
+        "[오후시황] LG엔솔 수급 불안에 코스피 1% 가까이 하락",
+        "“총수리스크 사전에 막는 컴플라이언스 제도 필요”",
+        "[공개] 단기로 매일 30% 수익보는 종목 공개"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-19",
+      "article_count": 65,
+      "news_sentiment": 0.1692,
+      "news_sentiment_std": 0.4826,
+      "news_impact_score": 8,
+      "key_events": [
+        "목요일(20일) 급등 유망주 5선 전격공개",
+        "삼성 SK도 줄서는 ASML, 작년 최대실적 냈다 순이익 66%↑",
+        "배터리 10% TV 20% 가격인상 '도미노' [기업 덮친 글로벌 3대 악재]",
+        "외인 기관 싹쓸이 “매집中”, 내일 급등株 확인!",
+        "LG엔솔 청약 열풍에 예탁금 9조 증가 자금 이동도 분주"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-20",
+      "article_count": 70,
+      "news_sentiment": 0.1714,
+      "news_sentiment_std": 0.4772,
+      "news_impact_score": 8,
+      "key_events": [
+        "文, 이집트와 그린산업 협업...전기차 IT 등 경제협력 확대",
+        "내일 \"급등주\" 찾았습니다",
+        "美, 러 반도체 수출제한 준비 삼성 SK '제2 화웨이 사태' 우려",
+        "[긴급] “SK하이닉스” 급락하고 있는 이유",
+        "LG엔솔 청약 끝나자 코스피 6일만에 반등"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-21",
+      "article_count": 70,
+      "news_sentiment": 0.0143,
+      "news_sentiment_std": 0.5475,
+      "news_impact_score": 7,
+      "key_events": [
+        "바닥이냐 대세하락이냐 13개월째 지킨 ‘2,800P’ 사수에 달렸다",
+        "마이크로 LED 시장 4년뒤 年5조로 성장",
+        "코스피, 미국 조기긴축 우려에 2830선으로 '털썩' 2020년 12월 이후 최저",
+        "마이크론 급락에 얼어붙은 투심 SK하이닉스 5% 삼전 1%↓",
+        "[마감시황] 코스피, 美 조정 조기 긴축 우려에 2,830선 후퇴"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-22",
+      "article_count": 11,
+      "news_sentiment": 0.1818,
+      "news_sentiment_std": 0.3857,
+      "news_impact_score": 7,
+      "key_events": [
+        "[정보] 무조건 100% 오를 급등주 (클릭)",
+        "【재테크TIP 3】 다음 폭등기대 종목은?",
+        "[부고]이종왕씨(전 삼성전자 고문) 본인상",
+        "[부고]이종왕 전 삼성전자 고문 별세",
+        "절대 '을' 손잡은 인텔 삼성전자 TSMC 천하에 도전장 [MK위클리반도체]"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-23",
+      "article_count": 23,
+      "news_sentiment": -0.087,
+      "news_sentiment_std": 0.4079,
+      "news_impact_score": 7,
+      "key_events": [
+        "[미리보는 이데일리 신문]\"조정 아닌 거품 붕괴\" 월가 리더들 날선 경고",
+        "2월 제조업 기지개 펴나 반도체 디스플레이 휴대폰 기계 대폭 개선 전망",
+        "코스피 기업 4분기 영업익 추정치 한달새 6% 하락",
+        "\"끝날 때까지 끝난 게 아니다\" 주가 34% 빠진 LG화학, 목표주가 하향",
+        "\"이러니 중국서 삼성 고전?\" 애플, 한국 무시 '중국 찬양' 논란"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-24",
+      "article_count": 59,
+      "news_sentiment": -0.0169,
+      "news_sentiment_std": 0.5039,
+      "news_impact_score": 7,
+      "key_events": [
+        "[단독] 삼성전자 또 당했다 거액 노린 유럽 특허 사냥꾼 소송",
+        "삼성, 일주일 한번꼴 특허소송 시달린다 절반은 울며 겨자먹기 합의",
+        "해외소송 쏟아지는데 정부는 강건너 불구경",
+        "현산 에코프로비엠 효성티앤씨 잇단 악재에 투자자들 \"울고싶다\"",
+        "외인 기관 싹쓸이 “매집中”, 내일 급등株 확인!"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-25",
+      "article_count": 92,
+      "news_sentiment": 0.087,
+      "news_sentiment_std": 0.5244,
+      "news_impact_score": 7,
+      "key_events": [
+        "핑크빛 전망 내일(수) 주가 상승이 기대되는 급등주 5선",
+        "상승여력' 충분 「수요일 뜨는 종목 TOP 5」",
+        "【단독포착】 후속 급등 기대주 상승예감 TOP 5",
+        "삼성전자 카카오 시총상위 100종목 중 무려 98개 하락",
+        "내일 주식시장, 미리 꼽아본 급등유망주 5선"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-26",
+      "article_count": 88,
+      "news_sentiment": 0.0568,
+      "news_sentiment_std": 0.4852,
+      "news_impact_score": 7,
+      "key_events": [
+        "'하락의 늪' 탈출하나 27일 '3대 이벤트'에 달렸다",
+        "동학개미 계좌가 박살났다 올해 들어 평균 20% 손실",
+        "\"삼성-LG OLED 계약 언급 어려워 고객 확대는 긍정적\"-LG디스플레이 컨콜",
+        "[마감 시황] 코스피, FOMC 경계감에 나흘째 하락 마감",
+        "2기 삼성준감위 이끄는 이찬희 위원장 \"지배구조 개선할 것\"(종합)"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-27",
+      "article_count": 130,
+      "news_sentiment": 0.141,
+      "news_sentiment_std": 0.5514,
+      "news_impact_score": 7,
+      "key_events": [
+        "LG에너지솔루션 상장 \"최대수혜株\" 1200% 뛴다",
+        "LG엔솔, '따상' 불발했지만 공모가보다 70% 상승",
+        "'갤럭시 생태계 확대'의 힘 삼성전자. 모바일 연매출 100조 복귀",
+        "D램 기대 높인 삼성 매출 300조시대 연다",
+        "\"하락장 피신처는 그나마 IT부품 금융株\""
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-28",
+      "article_count": 65,
+      "news_sentiment": 0.2,
+      "news_sentiment_std": 0.587,
+      "news_impact_score": 8,
+      "key_events": [
+        "\"애플카\" 핵심부품 공급! 최대수혜株 나왔다, 지금잡아도 400%",
+        "코스피 급락세 일단 멈췄다",
+        "코스피, 개인 기관 쌍끌이에 반등 성공 2660선 회복",
+        "[코스피 마감]연휴 앞두고 반도체株 강세에 반등 2660선 회복",
+        "코아시아, 대만서 지난해 매출액 1조원 돌파 \"파운드리 2배 성장”"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-29",
+      "article_count": 16,
+      "news_sentiment": 0.125,
+      "news_sentiment_std": 0.3307,
+      "news_impact_score": 7,
+      "key_events": [
+        "[정보] 무조건 100% 오를 급등주 (클릭)",
+        "155조 반도체 '쩐의 전쟁'...'역대최대' 투자 삼성전자, TSMC 멱살 잡나",
+        "올해도 꺾이지 않는 ‘반도체의 힘’ 삼성 SK 역대 매출 찍는다",
+        "아미 보이콧 사라질까 친환경 ‘BTS NFT’ 출시 추진",
+        "크몽 엔터프라이즈, 에듀윌과 업무협약 개발 및 콘텐츠 제작 지원"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-30",
+      "article_count": 15,
+      "news_sentiment": 0.2,
+      "news_sentiment_std": 0.4,
+      "news_impact_score": 8,
+      "key_events": [
+        "도쿄일렉트론, 삼성 인텔 반도체 투자 확대에 실적 개선",
+        "LG화학, 공매도 280% 급증 1월 공매도 거래액 '5월 이후 최대'",
+        "\"따뜻한 봄날 온다\" 증권가 '10만전자' 기대하는 이유",
+        "\"내가 반도체 끝판왕\" 삼성전자 TSMC 인텔 파운드리 격전",
+        "바이오 투자 달인이 '한 우물만 파는 회사' 피하라는 이유"
+      ],
+      "sentiment_backend": "lexicon"
+    },
+    {
+      "date": "2022-01-31",
+      "article_count": 18,
+      "news_sentiment": 0.1296,
+      "news_sentiment_std": 0.317,
+      "news_impact_score": 7,
+      "key_events": [
+        "[정보] 하루만에 폭등 가능한 급등주 (클릭)",
+        "[적중] 100% 수익 예정 급등주 大공개",
+        "악재 걷히고 빛 볼까? 주가 상승이 기대되는 5 유망주",
+        "2022 유망기업 베스트20 | 어보브반도체 \"MCU 전문...전장 AI로 승부수\"",
+        "초등생 내 아이, 삼성전자 아마존 테슬라 주주입니다"
+      ],
+      "sentiment_backend": "lexicon"
+    }
+  ]
+}
