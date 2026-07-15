@@ -78,6 +78,16 @@ python experiments/run_backtest.py --config core/config.yaml
 streamlit run experiments/dashboard/app.py
 ```
 
+### 4.4 심리 피처 A/B 비교실험
+
+Baseline(차트 피처)과 Treatment(Baseline + 합성 심리지수 + 뉴스 감성)를 `stable/aggressive`
+각각 비교한다. 입력 계약, 고정 조건, 결과 표 정의는
+[`experiments/comparison/README.md`](experiments/comparison/README.md)를 따른다.
+
+```bash
+python -m experiments.comparison.runner --config experiments/comparison/config.yaml
+```
+
 ---
 
 ## 📁 5. 디렉토리 역할 요약
