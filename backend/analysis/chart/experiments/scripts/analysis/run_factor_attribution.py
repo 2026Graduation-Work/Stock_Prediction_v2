@@ -164,8 +164,9 @@ def add_exposures(panel: pd.DataFrame, metadata: pd.DataFrame) -> pd.DataFrame:
     df["momentum_20_lag"] = grouped["roc_20"].shift(1)
     df["momentum_60_lag"] = grouped["roc_60"].shift(1)
     df["volatility_lag"] = grouped["Sigma"].shift(1)
-    rolling_liq = grouped["dollar_volume"].rolling(20, min_periods=5).mean()
-    df["liquidity_lag"] = rolling_liq.reset_index(level=0, drop=True).groupby(df["Code"]).shift(1)
+    df["liquidity_lag"] = grouped["dollar_volume"].transform(
+        lambda values: values.shift(1).rolling(20, min_periods=5).mean()
+    )
     df["forward_return_1d"] = grouped["Change"].shift(-1)
 
     ranked = df.groupby("Date", sort=False)

@@ -1,12 +1,16 @@
 import argparse
 import json
 import os
+
 import numpy as np
 import pandas as pd
 import yaml
 
-from evaluation.metrics import calculate_classification_metrics, calculate_calibration_table, calculate_rank_ic
-from evaluation.report import generate_markdown_report
+from evaluation.metrics import (
+    calculate_calibration_table,
+    calculate_classification_metrics,
+    calculate_rank_ic,
+)
 from experiment_utils import (
     build_fold_alignment,
     find_processed_dir,
@@ -73,15 +77,21 @@ def main(config_path, predictions_path=None):
     actual_df["Date"] = pd.to_datetime(actual_df["Date"]).dt.tz_localize(None)
 
     # Align predictions and actual labels
-    alignment_df, alignment_status = build_fold_alignment(final_predictions, splits)
-    if not alignment_status["is_exact_fold_match"]:
+    alignment_df, alignment_status = build_fold_alignment(final_predictions, splits, eval_df=actual_df)
+    if not alignment_status["is_exact_row_match"]:
         raise ValueError(
-            "예측 캐시가 config의 test fold들과 정확히 매칭되지 않습니다. "
+            "예측 캐시와 실제 라벨이 config의 test fold 행 키와 정확히 매칭되지 않습니다. "
             f"alignment={alignment_status}"
         )
 
     # Merge predictions with actuals
-    eval_df = pd.merge(final_predictions, actual_df, on=["Date", "Code"], how="inner")
+    eval_df = pd.merge(
+        final_predictions,
+        actual_df,
+        on=["Date", "Code"],
+        how="inner",
+        validate="one_to_one",
+    )
 
     # Calculate fold alignment details
     alignment_df.to_csv(os.path.join(result_dir(config, __file__), "fold_alignment.csv"), index=False)

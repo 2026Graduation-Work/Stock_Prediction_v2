@@ -1,4 +1,4 @@
-from experiment_utils import resolve_splits, validate_embargo
+from experiment_utils import resolve_splits
 
 
 def get_sliding_splits(config: dict) -> list[dict]:

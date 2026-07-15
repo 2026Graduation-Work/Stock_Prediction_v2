@@ -1,9 +1,22 @@
-import os
 import json
+import os
 
 import numpy as np
 import pandas as pd
 import vectorbt as vbt
+
+
+BENCHMARK_WEIGHTS_VERSION = "krx_annual_market_cap_v1"
+
+
+def _parse_naive_dates(values: pd.Series) -> pd.Series:
+    """Parse mixed date representations without retaining timezone information."""
+    try:
+        parsed = pd.to_datetime(values, format="mixed")
+    except (TypeError, ValueError):
+        # pandas < 2.0 does not support ``format='mixed'``.
+        parsed = pd.to_datetime(values)
+    return parsed.dt.tz_localize(None)
 
 
 def _empty_benchmark(index: pd.DatetimeIndex, source: str, reason: str) -> pd.Series:
@@ -57,12 +70,23 @@ def _load_cached_benchmark(index: pd.DatetimeIndex) -> pd.Series | None:
     if "Date" not in cached.columns or "Return" not in cached.columns:
         return None
 
-    cached["Date"] = pd.to_datetime(cached["Date"]).dt.tz_localize(None)
-    series = cached.set_index("Date")["Return"].reindex(index).fillna(0.0)
+    cached["Date"] = _parse_naive_dates(cached["Date"])
+    if cached["Date"].duplicated().any():
+        return None
+
+    requested_index = pd.DatetimeIndex(index)
+    if requested_index.tz is not None:
+        requested_index = requested_index.tz_localize(None)
+    cached_returns = cached.set_index("Date")["Return"].sort_index()
+    if not requested_index.isin(cached_returns.index).all():
+        return None
+    series = cached_returns.reindex(requested_index)
     metadata = {}
     if os.path.exists(metadata_path):
         with open(metadata_path, encoding="utf-8") as f:
             metadata = json.load(f)
+    if metadata.get("weights_version") != BENCHMARK_WEIGHTS_VERSION:
+        return None
     result = _attach_benchmark_attrs(
         series,
         metadata.get("source", "cache"),
@@ -89,6 +113,7 @@ def _save_benchmark_cache(series: pd.Series, source: str, reason: str) -> None:
                 "reason": reason,
                 "valid": valid,
                 "validity_reason": validity_reason,
+                "weights_version": BENCHMARK_WEIGHTS_VERSION,
                 "start": str(pd.to_datetime(out["Date"]).min().date()),
                 "end": str(pd.to_datetime(out["Date"]).max().date()),
             },
@@ -110,7 +135,7 @@ def _compute_internal_equal_weight_benchmark(
         return _empty_benchmark(index, "unavailable", f"missing columns: {sorted(missing)}")
 
     prices = price_df.copy()
-    prices["Date"] = pd.to_datetime(prices["Date"]).dt.tz_localize(None)
+    prices["Date"] = _parse_naive_dates(prices["Date"])
     close = prices.pivot(index="Date", columns="Code", values="Close").sort_index().ffill()
     close = close.reindex(index).ffill()
     returns = close.pct_change(fill_method=None)
@@ -263,19 +288,25 @@ def calculate_rule_exits(
                 continue
 
             # A. 하드 손절 (Hard Stop Loss) - 장중 저가가 손절 라인 돌파 시 당일 청산
-            hard_stop_line = entry_price * (1.0 - hard_sl_mult * entry_sigma)
-            if low_series.iloc[i] <= hard_stop_line:
+            hard_stop_line = (
+                entry_price * (1.0 - hard_sl_mult * entry_sigma)
+                if hard_sl_mult is not None
+                else float("-inf")
+            )
+            if hard_sl_mult is not None and low_series.iloc[i] <= hard_stop_line:
                 exits.iloc[i] = True
-                exit_prices.iloc[i] = hard_stop_line
+                exit_prices.iloc[i] = min(open_series.iloc[i], hard_stop_line)
                 in_position = False
                 trading_days_held = 0
                 continue
 
             # B. 하드 익절 (Hard Take Profit) - 장중 고가가 익절 라인 돌파 시 당일 청산
-            take_profit_line = entry_price * (1.0 + up_mult * entry_sigma)
-            if high_series.iloc[i] >= take_profit_line:
+            take_profit_line = (
+                entry_price * (1.0 + up_mult * entry_sigma) if up_mult is not None else float("inf")
+            )
+            if up_mult is not None and high_series.iloc[i] >= take_profit_line:
                 exits.iloc[i] = True
-                exit_prices.iloc[i] = take_profit_line
+                exit_prices.iloc[i] = max(open_series.iloc[i], take_profit_line)
                 in_position = False
                 trading_days_held = 0
                 continue
@@ -302,15 +333,15 @@ def calculate_soft_exits(
     exits, _ = calculate_rule_exits(
         entry_series=entry_series,
         open_series=open_series,
-        high_series=pd.Series(float("inf"), index=entry_series.index),
-        low_series=pd.Series(float("inf"), index=entry_series.index),
+        high_series=pd.Series(float("nan"), index=entry_series.index),
+        low_series=pd.Series(float("nan"), index=entry_series.index),
         close_series=close_series,
         sigma_series=sigma_series,
         halt_series=halt_series,
         holding_days=holding_days,
-        up_mult=float("inf"),
+        up_mult=None,
         down_mult=down_mult,
-        hard_sl_mult=float("inf"),
+        hard_sl_mult=None,
     )
     return exits
 
@@ -337,20 +368,24 @@ class VectorBTEngine:
             price_df["Date"].isin(entries.index) & price_df["Code"].isin(entries.columns)
         ]
 
-        open_price = price_df.pivot(index="Date", columns="Code", values="Open").ffill().bfill()
-        high_price = price_df.pivot(index="Date", columns="Code", values="High").ffill().bfill()
-        low_price = price_df.pivot(index="Date", columns="Code", values="Low").ffill().bfill()
-        close_price = price_df.pivot(index="Date", columns="Code", values="Close").ffill().bfill()
+        open_price = price_df.pivot(index="Date", columns="Code", values="Open").ffill()
+        high_price = price_df.pivot(index="Date", columns="Code", values="High").ffill()
+        low_price = price_df.pivot(index="Date", columns="Code", values="Low").ffill()
+        close_price = price_df.pivot(index="Date", columns="Code", values="Close").ffill()
         trading_halt = price_df.pivot(index="Date", columns="Code", values="Trading_Halt").fillna(0)
         sigma = price_df.pivot(index="Date", columns="Code", values="Sigma").fillna(0.01)
 
         aligned_frames = [open_price, high_price, low_price, close_price, trading_halt, sigma]
         for idx, frame in enumerate(aligned_frames):
-            aligned = frame.reindex(index=entries.index, columns=entries.columns).ffill().bfill()
+            aligned = frame.reindex(index=entries.index, columns=entries.columns).ffill()
             aligned.index.name = entries.index.name
             aligned.columns.name = entries.columns.name
             aligned_frames[idx] = aligned
         open_price, high_price, low_price, close_price, trading_halt, sigma = aligned_frames
+
+        # 상장 전·데이터 시작 전의 미래 가격을 채우지 않는다. 가격이 없는 날에는 진입을 막는다.
+        price_available = open_price.notna() & high_price.notna() & low_price.notna() & close_price.notna()
+        entries = entries & price_available
 
         print("[Backtest] Stop 및 시간 만기(Horizon) 시그널 계산 중...")
         exits_dict = {}

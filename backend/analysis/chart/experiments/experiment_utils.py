@@ -273,6 +273,12 @@ def build_fold_alignment(
     splits: list[dict],
     eval_df: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, dict]:
+    key_columns = ["Date", "Code"]
+    if eval_df is not None:
+        missing_key_columns = [column for column in key_columns if column not in eval_df.columns]
+        if missing_key_columns:
+            raise ValueError(f"평가 데이터에 키 컬럼이 없습니다: {missing_key_columns}")
+
     rows = []
     covered_mask = pd.Series(False, index=predictions.index)
     eval_covered_mask = pd.Series(False, index=eval_df.index) if eval_df is not None else None
@@ -297,7 +303,18 @@ def build_fold_alignment(
         if eval_df is not None:
             eval_mask = (eval_df["Date"] >= test_start) & (eval_df["Date"] <= test_end)
             eval_covered_mask |= eval_mask
-            row["evaluation_rows"] = int(eval_mask.sum())
+            pred_rows = predictions.loc[pred_mask, key_columns]
+            eval_rows = eval_df.loc[eval_mask, key_columns]
+            pred_keys = pd.MultiIndex.from_frame(pred_rows.sort_values(key_columns))
+            eval_keys = pd.MultiIndex.from_frame(eval_rows.sort_values(key_columns))
+            row["evaluation_rows"] = int(len(eval_rows))
+            row["prediction_duplicate_keys"] = int(pred_rows.duplicated(key_columns).sum())
+            row["evaluation_duplicate_keys"] = int(eval_rows.duplicated(key_columns).sum())
+            row["is_exact_row_match"] = bool(
+                row["prediction_duplicate_keys"] == 0
+                and row["evaluation_duplicate_keys"] == 0
+                and pred_keys.equals(eval_keys)
+            )
             row["merged_row_ratio"] = (
                 float(row["evaluation_rows"] / row["prediction_rows"])
                 if row["prediction_rows"] > 0
@@ -327,6 +344,7 @@ def build_fold_alignment(
         status["folds_with_equal_prediction_evaluation_rows"] = int(
             (alignment_df["prediction_rows"] == alignment_df["evaluation_rows"]).sum()
         )
+        status["folds_with_exact_row_match"] = int(alignment_df["is_exact_row_match"].sum())
 
     status["is_exact_fold_match"] = (
         status["folds_with_predictions"] == len(splits)
@@ -341,8 +359,7 @@ def build_fold_alignment(
         )
         status["is_exact_row_match"] = (
             status["is_exact_fold_match"]
-            and status["folds_with_equal_prediction_evaluation_rows"] == len(splits)
-            and status["evaluation_total_rows"] == status["prediction_total_rows"]
+            and status["folds_with_exact_row_match"] == len(splits)
         )
     else:
         status["is_exact_row_match"] = status["is_exact_fold_match"]

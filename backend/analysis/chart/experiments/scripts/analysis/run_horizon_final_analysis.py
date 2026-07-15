@@ -148,7 +148,8 @@ def _extract_code(column_value) -> str:
         if isinstance(parsed, tuple) and parsed:
             return str(parsed[0]).zfill(6)
     except (SyntaxError, ValueError):
-        pass
+        # Non-literal column labels use the manual normalization fallback below.
+        parsed = None
     return (
         column_value.replace("'", "")
         .replace('"', "")
@@ -315,8 +316,6 @@ def build_overlap_tables(horizons: dict[str, HorizonData]) -> tuple[pd.DataFrame
     merged = probs[0]
     for df in probs[1:]:
         merged = merged.merge(df, on=["Date", "Code"], how="inner")
-    prob_cols = [f"{key}_prob_up" for key in horizons]
-
     corr_rows = []
     for left, right in [("H5", "H10"), ("H5", "H20"), ("H10", "H20")]:
         lcol, rcol = f"{left}_prob_up", f"{right}_prob_up"
@@ -424,7 +423,9 @@ def build_probability_tables(horizons: dict[str, HorizonData]) -> pd.DataFrame:
             )
             rows.append(metrics)
         for q in [0.01, 0.05, 0.10]:
-            cut = df.groupby("Date")["prob_up"].transform(lambda s: s.quantile(1.0 - q))
+            cut = df.groupby("Date")["prob_up"].transform(
+                lambda values, quantile=q: values.quantile(1.0 - quantile)
+            )
             group = df[df["prob_up"] >= cut]
             metrics = _profit_metrics(group["realized_return_proxy"])
             metrics.update(

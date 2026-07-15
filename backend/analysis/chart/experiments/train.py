@@ -3,6 +3,7 @@ import gc
 import json
 import os
 
+import lightgbm as lgb
 import numpy as np
 import pandas as pd
 import scipy.stats as stats
@@ -289,8 +290,6 @@ def main(config_path):
             return
         print("[*] 저장된 fold 모델로 Validation 결과 파일을 복원합니다.")
 
-        import lightgbm as lgb
-
         validation_records = []
         for idx, split_info in enumerate(splits):
             train_end = split_info["train_end"]
@@ -356,8 +355,6 @@ def main(config_path):
                 print(
                     f"\n⚡ [MODEL CACHE HIT] 기존 학습된 모델 파라미터 발견! -> {os.path.basename(model_save_path)}"
                 )
-                import lightgbm as lgb
-
                 model_wrapper.model = lgb.Booster(model_file=model_save_path)
                 feature_cols = model_wrapper.model.feature_name()
             else:
@@ -375,8 +372,6 @@ def main(config_path):
                         f"  [CACHE HIT] 기존 Train .bin으로 학습 데이터 로드 -> "
                         f"{os.path.basename(train_bin_path)}"
                     )
-                    import lightgbm as lgb
-
                     train_data = lgb.Dataset(train_bin_path, free_raw_data=False)
                     train_data.construct()
                     feature_cols = train_data.feature_name
@@ -428,7 +423,6 @@ def main(config_path):
                     X_val, y_val = val_df[feature_cols], val_df["Y_Label"]
 
                     print("[LGBM] Validation 데이터셋 준비 중...")
-                    import lightgbm as lgb
                     from sklearn.utils.class_weight import compute_sample_weight
 
                     sample_weights_val = compute_sample_weight("balanced", y_val)

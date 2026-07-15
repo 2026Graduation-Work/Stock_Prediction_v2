@@ -1,7 +1,6 @@
 import argparse
 import os
 import sys
-import yaml
 
 def main(config_path, predictions_path=None):
     if not os.path.exists(config_path):

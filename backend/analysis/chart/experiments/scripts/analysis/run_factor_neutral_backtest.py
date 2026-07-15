@@ -1,6 +1,5 @@
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
@@ -18,7 +17,6 @@ from evaluation.backtest_metrics import calculate_trading_metrics
 from experiment_utils import build_fold_alignment, label_params_from_config, resolve_splits, test_date_bounds
 from run_factor_attribution import (
     CHART_ROOT,
-    DEFAULT_OUTPUT_DIR as FACTOR_OUTPUT_DIR,
     EXPERIMENTS_DIR,
     EXPOSURE_COLUMNS,
     add_exposures,
