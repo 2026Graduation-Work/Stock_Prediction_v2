@@ -1,222 +1,223 @@
-"""
-설문 답변 → profiling_output.schema.json 형식 변환기
-
-사용법:
-    from converter import survey_to_schema
-
-    result = survey_to_schema({
-        "user_id": "u_001",
-        "Q1": "Q1_B",
-        "Q2": "Q2_B",
-        "Q3": "Q3_A",
-        "Q4": ["Q4_A", "Q4_C"],
-        "Q5": "Q5_B",
-        "Q6": "손실이 나면 어떡하지 걱정돼요.",
-        "investment_amount_krw": 500000,
-        "action_intent": "buy_consideration",
-    })
-"""
+"""Convert survey answers into the frozen profiling output v1.0 contract."""
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timedelta, timezone
+from typing import Any, Final
 
-from questions import Q1_MAP, Q2_MAP, Q3_MAP, Q4_BASE, Q4_MAP, Q5_MAP
+from questions import (
+    AVOIDED_ASSET_LABELS,
+    EXPERIENCE_ANSWER_MAP,
+    FOMO_ANSWER_MAP,
+    HORIZON_ANSWER_MAP,
+    HORIZON_MODEL_RULES,
+    INFORMATION_SOURCE_BASE,
+    INFORMATION_SOURCE_MAP,
+    PROFILE_TYPE_THRESHOLD,
+    RISK_ANSWER_MAP,
+)
 
-# ---------------------------------------------------------------------------
-# 상수
-# ---------------------------------------------------------------------------
-_SCHEMA_VERSION = "1.0.0"
-_KST = timezone(timedelta(hours=9))
+SCHEMA_VERSION: Final = "1.0.0"
+TARGET_RETURN_ANNUAL: Final = 0.08
+CURRENT_MARKET_ANXIETY_INITIAL: Final = 0.50
+# Downstream text/chart blocks replace this initialization with market measurements.
+OVERHEATING_CAUTION_INITIAL: Final = 0.61
 
-# TODO: confidence_per_field — 현재는 고정값(0.85).
-#       답변 일관성(Q1↔Q3 cross-check 등) 분석 후 동적 계산으로 교체 예정.
-_FIXED_CONFIDENCE = 0.85
+CONFIDENCE_PER_FIELD: Final = {
+    "risk_tolerance": 0.92,
+    "time_horizon_months": 0.95,
+    "liquidity_need_ratio": 0.88,
+    "fomo_index": 0.78,
+    "panic_sell_tendency": 0.70,
+    "herding_score": 0.85,
+    "self_confidence": 0.60,
+    "overheating_caution": 0.55,
+}
+META_CONFIDENCE: Final = 0.81
 
-# MVP에서 고정하는 필드
-_TARGET_RETURN_ANNUAL = 0.10
-_TARGET_TICKER = "TBD"
-_BENCHMARK_INDEX = "TBD"  # TODO: 설문 문항 추가 후 사용자 입력값으로 교체 예정
-_PROFILE_TYPE_THRESHOLD = 0.6
+FREE_TEXT_SIGNAL_RULES: Final = (
+    {
+        "field": "fomo_index",
+        "keywords": ("남들 다 버는데", "뒤처지는", "놓칠까"),
+        "value": 0.80,
+    },
+    {
+        "field": "panic_sell_tendency",
+        "keywords": ("마이너스", "손실", "잠을 못"),
+        "value": 0.75,
+    },
+)
 
 
-# ---------------------------------------------------------------------------
-# 공개 API
-# ---------------------------------------------------------------------------
+class SurveyValidationError(ValueError):
+    """Raised when survey answers cannot satisfy the explicit scoring contract."""
 
-def survey_to_schema(answers: dict) -> dict:
+
+def profile_type_for_risk_score(risk_score: int) -> str:
+    """Map the 0-100 risk axis to the stable/aggressive model split.
+
+    The 60-point threshold keeps neutral and cautious respondents on the stable
+    model while reserving aggressive for clearly risk-tolerant answers.
     """
-    설문 답변 dict를 profiling_output.schema.json 형식 dict로 변환한다.
+    if not 0 <= risk_score <= 100:
+        raise SurveyValidationError("risk_score must be between 0 and 100")
+    return "aggressive" if risk_score >= PROFILE_TYPE_THRESHOLD else "stable"
 
-    Parameters
-    ----------
-    answers : dict
-        필수 키: Q1, Q2, Q3, Q4 (list), Q5
-        선택 키: Q6 (str), user_id (str), session_id (str),
-                 investment_amount_krw (int), action_intent (str)
 
-    Returns
-    -------
-        dict
-        profiling_output.schema.json v1.0.0 규격 JSON (dict)
-    """
-    # ------------------------------------------------------------------
-    # 1. investor_profile 계산
-    # ------------------------------------------------------------------
-    q1 = Q1_MAP[answers["Q1"]]
-    risk_tolerance: float = q1["risk_tolerance"]
-    panic_sell_tendency: float = q1["panic_sell_tendency"]
+def horizon_code_for_score(horizon_score: int) -> str:
+    """Map aggressive/neutral/conservative horizon scores to H5/H10/H20."""
+    if not 0 <= horizon_score <= 100:
+        raise SurveyValidationError("horizon_score must be between 0 and 100")
+    for rule in HORIZON_MODEL_RULES:
+        if horizon_score >= rule["minimum"]:
+            return str(rule["model_horizon"])
+    raise AssertionError("horizon rules must cover the full 0-100 range")
 
-    q2 = Q2_MAP[answers["Q2"]]
-    time_horizon_months: int = q2["time_horizon_months"]
-    liquidity_need_ratio: float = q2["liquidity_need_ratio"]
 
-    q5 = Q5_MAP[answers["Q5"]]
-    investment_experience_years: float = q5["investment_experience_years"]
-    profile_type: str = answers.get("profile_type") or _derive_profile_type(
-        risk_tolerance
-    )
-
-    # ------------------------------------------------------------------
-    # 2. psychological_state 계산
-    # ------------------------------------------------------------------
-
-    # Q3: fomo_index, herding_score 기저값
-    q3 = Q3_MAP[answers["Q3"]]
-    fomo_index: float = q3["fomo_index"]
-    herding_base: float = q3["herding_score"]
-
-    # Q4: herding_score 증분, self_confidence 증분 (중복선택 → 가중합)
-    q4_choices: list[str] = answers.get("Q4", [])
-    herding_delta = 0.0
-    self_confidence_delta = 0.0
-    for choice_id in q4_choices:
-        delta = Q4_MAP[choice_id]
-        herding_delta += delta.get("herding_score", 0.0)
-        self_confidence_delta += delta.get("self_confidence", 0.0)
-
-    herding_score: float = _clamp(herding_base + herding_delta)
-    self_confidence: float = _clamp(Q4_BASE["self_confidence"] + self_confidence_delta)
-
-    # TODO: overheating_caution — 공식 측정 방식 미정 (회의 ② 안건).
-    #       현재는 fomo / herding / 정보의존도(1-self_confidence) 단순 평균.
-    #       교수님 코멘트 반영 후 공식 교체 예정.
-    info_dependency: float = 1.0 - self_confidence
-    overheating_caution: float = _clamp(
-        round((fomo_index + herding_score + info_dependency) / 3, 6)
-    )
-
-    # TODO: current_market_anxiety — 노란색 설문 vs 초록색 FinBERT 역할 분담 미정.
-    #       현재는 중립값 0.5 고정. 초록색 블록 연동 후 교체 예정.
-    current_market_anxiety: float = 0.5
-
-    # ------------------------------------------------------------------
-    # 3. free_text_signal
-    # ------------------------------------------------------------------
-    raw_text: str = answers.get("Q6", "")
-    free_text_signal = {
-        "raw_text": raw_text,
-        # TODO: extracted_signals — LLM 연동 후 fomo_index / panic_sell_tendency 등
-        #       보정값 추출 예정. (다음 스프린트)
-        "extracted_signals": {},
-        # TODO: conflict_with_survey — LLM 분석 결과와 객관식 응답 비교 후 계산.
-        "conflict_with_survey": False,
-    }
-
-    # ------------------------------------------------------------------
-    # 4. confidence_per_field
-    # ------------------------------------------------------------------
-    # TODO: 각 필드별 신뢰도를 답변 일관성·응답 시간·역문항 크로스체크로 계산.
-    #       현재는 전 필드 0.85 고정.
-    _fields = [
-        "risk_tolerance",
-        "time_horizon_months",
-        "liquidity_need_ratio",
-        "fomo_index",
-        "panic_sell_tendency",
-        "herding_score",
-        "self_confidence",
-        "overheating_caution",
-        "current_market_anxiety",
-        "investment_experience_years",
-    ]
-    confidence_per_field: dict[str, float] = {f: _FIXED_CONFIDENCE for f in _fields}
-
-    # ------------------------------------------------------------------
-    # 5. constraints / portfolio
-    # ------------------------------------------------------------------
-    constraints = {
-        "avoided_assets": list(answers.get("avoided_assets", [])),
-        "preferred_sectors": list(answers.get("preferred_sectors", [])),
-    }
-
-    portfolio_input = answers.get("portfolio") or {}
-    portfolio = {
-        "holdings": list(
-            answers.get("holdings", portfolio_input.get("holdings", []))
-        ),
-        "watchlist": list(
-            answers.get("watchlist", portfolio_input.get("watchlist", []))
-        ),
-    }
-
-    # ------------------------------------------------------------------
-    # 6. 메타 조립
-    # ------------------------------------------------------------------
-    user_id: str = answers.get("user_id") or f"u_{uuid.uuid4().hex[:8]}"
-    session_id: str = answers.get("session_id") or f"s_{uuid.uuid4().hex[:8]}"
-    timestamp: str = datetime.now(tz=_KST).isoformat()
-
+def axis_scores(answers: dict[str, Any]) -> dict[str, int]:
+    """Return the three dashboard axes using only explicit question mappings."""
+    risk = _single_choice(answers, "Q1", RISK_ANSWER_MAP)
+    horizon = _single_choice(answers, "Q2", HORIZON_ANSWER_MAP)
+    fomo = _single_choice(answers, "Q3", FOMO_ANSWER_MAP)
     return {
-        "user_id": user_id,
-        "session_id": session_id,
-        "timestamp": timestamp,
+        "risk": int(risk["risk_score"]),
+        "fomo": int(fomo["fomo_score"]),
+        "horizon": int(horizon["horizon_score"]),
+    }
+
+
+def convert(survey_answers: dict[str, Any]) -> dict[str, Any]:
+    """Purely convert one complete survey response into schema v1.0 JSON."""
+    risk = _single_choice(survey_answers, "Q1", RISK_ANSWER_MAP)
+    horizon = _single_choice(survey_answers, "Q2", HORIZON_ANSWER_MAP)
+    fomo = _single_choice(survey_answers, "Q3", FOMO_ANSWER_MAP)
+    experience = _single_choice(survey_answers, "Q5", EXPERIENCE_ANSWER_MAP)
+    information_sources = _multi_choice(
+        survey_answers, "Q4", INFORMATION_SOURCE_MAP, allow_empty=False
+    )
+    avoided_assets = _multi_choice(
+        survey_answers, "Q6", AVOIDED_ASSET_LABELS, allow_empty=True
+    )
+
+    risk_score = int(risk["risk_score"])
+    fomo_score = int(fomo["fomo_score"])
+    horizon_score = int(horizon["horizon_score"])
+    if horizon_code_for_score(horizon_score) != horizon["model_horizon"]:
+        raise SurveyValidationError("Q2 horizon mapping is internally inconsistent")
+
+    herding_score = float(fomo["herding_score"])
+    self_confidence = float(INFORMATION_SOURCE_BASE["self_confidence"])
+    for choice_id in information_sources:
+        mapping = INFORMATION_SOURCE_MAP[choice_id]
+        herding_score += float(mapping["herding_delta"])
+        self_confidence += float(mapping["self_confidence_delta"])
+
+    raw_text = str(survey_answers.get("Q7", "")).strip()
+    extracted_signals = _extract_free_text_signals(raw_text)
+    portfolio_input = survey_answers.get("portfolio") or {}
+
+    result = {
+        "user_id": _required_text(survey_answers, "user_id"),
+        "session_id": _required_text(survey_answers, "session_id"),
+        "timestamp": _required_text(survey_answers, "timestamp"),
         "investor_profile": {
-            "risk_tolerance": risk_tolerance,
-            "time_horizon_months": time_horizon_months,
-            "liquidity_need_ratio": liquidity_need_ratio,
-            "target_return_annual": _TARGET_RETURN_ANNUAL,  # MVP 고정
-            "investment_experience_years": investment_experience_years,
-            "profile_type": profile_type,
+            "risk_tolerance": risk_score / 100,
+            "time_horizon_months": int(horizon["time_horizon_months"]),
+            "liquidity_need_ratio": float(horizon["liquidity_need_ratio"]),
+            "target_return_annual": TARGET_RETURN_ANNUAL,
+            "investment_experience_years": float(
+                experience["investment_experience_years"]
+            ),
+            "profile_type": profile_type_for_risk_score(risk_score),
         },
         "psychological_state": {
-            "fomo_index": fomo_index,
-            "panic_sell_tendency": panic_sell_tendency,
-            "herding_score": herding_score,
-            "self_confidence": self_confidence,
-            "current_market_anxiety": current_market_anxiety,
-            "overheating_caution": overheating_caution,
+            "fomo_index": fomo_score / 100,
+            "panic_sell_tendency": float(risk["panic_sell_tendency"]),
+            "herding_score": _clamp(herding_score),
+            "self_confidence": _clamp(self_confidence),
+            "current_market_anxiety": CURRENT_MARKET_ANXIETY_INITIAL,
+            "overheating_caution": OVERHEATING_CAUTION_INITIAL,
         },
-        "constraints": constraints,
-        "portfolio": portfolio,
-        "free_text_signal": free_text_signal,
-        "confidence_per_field": confidence_per_field,
-        "context": {
-            "target_ticker": _TARGET_TICKER,
-            "investment_amount_krw": answers.get("investment_amount_krw", 0),
-            "action_intent": answers.get("action_intent", "buy_consideration"),
-            "benchmark_index": answers.get("benchmark_index", _BENCHMARK_INDEX),  # TODO: 설문 문항 추가 후 사용자 입력값으로 교체
+        "constraints": {
+            "avoided_assets": avoided_assets,
+            "preferred_sectors": list(survey_answers.get("preferred_sectors", [])),
         },
+        "portfolio": {
+            "holdings": list(portfolio_input.get("holdings", [])),
+            "watchlist": list(portfolio_input.get("watchlist", [])),
+        },
+        "free_text_signal": {
+            "raw_text": raw_text,
+            "extracted_signals": extracted_signals,
+            "conflict_with_survey": False,
+        },
+        "confidence_per_field": dict(CONFIDENCE_PER_FIELD),
+        "context": _build_context(survey_answers),
         "meta": {
-            "schema_version": _SCHEMA_VERSION,
+            "schema_version": SCHEMA_VERSION,
             "source": "profiling_block",
-            "confidence": _FIXED_CONFIDENCE,
+            "confidence": META_CONFIDENCE,
         },
     }
+    return result
 
 
-# ---------------------------------------------------------------------------
-# 내부 헬퍼
-# ---------------------------------------------------------------------------
-
-def _clamp(v: float, lo: float = 0.0, hi: float = 1.0) -> float:
-    """값을 [lo, hi] 범위로 제한한다."""
-    return max(lo, min(hi, v))
+def survey_to_schema(answers: dict[str, Any]) -> dict[str, Any]:
+    """Backward-compatible alias for callers of the previous converter API."""
+    return convert(answers)
 
 
-def _derive_profile_type(risk_tolerance: float) -> str:
-    """성향별 2모델 매칭을 위한 stable/aggressive 라벨."""
-    if risk_tolerance >= _PROFILE_TYPE_THRESHOLD:
-        return "aggressive"
-    return "stable"
+def _single_choice(
+    answers: dict[str, Any], question_id: str, mapping: dict[str, Any]
+) -> dict[str, Any]:
+    choice = answers.get(question_id)
+    if choice not in mapping:
+        raise SurveyValidationError(f"{question_id} must be one of {tuple(mapping)}")
+    return mapping[choice]
+
+
+def _multi_choice(
+    answers: dict[str, Any],
+    question_id: str,
+    mapping: dict[str, Any],
+    *,
+    allow_empty: bool,
+) -> list[str]:
+    choices = answers.get(question_id, [])
+    if not isinstance(choices, list):
+        raise SurveyValidationError(f"{question_id} must be a list")
+    if not allow_empty and not choices:
+        raise SurveyValidationError(f"{question_id} requires at least one choice")
+    invalid = [choice for choice in choices if choice not in mapping]
+    if invalid:
+        raise SurveyValidationError(f"{question_id} has invalid choices: {invalid}")
+    return list(dict.fromkeys(choices))
+
+
+def _required_text(answers: dict[str, Any], field: str) -> str:
+    value = str(answers.get(field, "")).strip()
+    if not value:
+        raise SurveyValidationError(f"{field} is required")
+    return value
+
+
+def _extract_free_text_signals(raw_text: str) -> dict[str, float]:
+    signals: dict[str, float] = {}
+    for rule in FREE_TEXT_SIGNAL_RULES:
+        if any(keyword in raw_text for keyword in rule["keywords"]):
+            signals[str(rule["field"])] = float(rule["value"])
+    return signals
+
+
+def _build_context(answers: dict[str, Any]) -> dict[str, Any]:
+    context = {
+        "investment_amount_krw": int(answers.get("investment_amount_krw", 0)),
+        "action_intent": answers.get("action_intent", "buy_consideration"),
+    }
+    for optional_field in ("target_ticker", "market_regime_hint", "benchmark_index"):
+        if optional_field in answers:
+            context[optional_field] = answers[optional_field]
+    return context
+
+
+def _clamp(value: float) -> float:
+    return round(max(0.0, min(1.0, value)), 6)
