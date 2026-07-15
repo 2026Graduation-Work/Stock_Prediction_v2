@@ -150,7 +150,7 @@ def _extract_code(column_value) -> str:
             return str(parsed[0]).zfill(6)
     except (SyntaxError, ValueError):
         # Non-literal column labels use the manual normalization fallback below.
-        parsed = None
+        pass
     return (
         column_value.replace("'", "")
         .replace('"', "")
