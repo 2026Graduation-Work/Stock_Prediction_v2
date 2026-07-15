@@ -21,7 +21,7 @@ from experiment_utils import (  # noqa: E402
     resolve_splits,
     test_date_bounds,
 )
-from run_factor_attribution import (
+from run_factor_attribution import (  # noqa: E402
     CHART_ROOT,
     EXPERIMENTS_DIR,
     EXPOSURE_COLUMNS,
@@ -31,7 +31,7 @@ from run_factor_attribution import (
     load_panel,
     markdown_table,
     normalize_code,
-)  # noqa: E402
+)
 from train_src.loaders import load_parquet_data  # noqa: E402
 from train_src.swing_strategy import SwingStrategy  # noqa: E402
 

@@ -1,4 +1,4 @@
-import argparse
+import argparse  # noqa: I001
 import math
 import re
 import sys
