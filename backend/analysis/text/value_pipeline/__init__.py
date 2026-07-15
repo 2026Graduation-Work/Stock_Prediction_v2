@@ -5,9 +5,10 @@
 
     ingest → {news_agent ∥ financial_agent} → validation_agent → synthesis_agent
 
-점수는 100% 결정론으로 산출한다. LLM(Gemini)은 뉴스 관련성 라벨링·핵심 이벤트
-추출·근거 문장 생성만 담당하며, 출력은 content-hash 캐시로 동결되어 재실행 시
-결정론이 유지된다. GEMINI_API_KEY가 없으면 규칙 기반으로 동작한다.
+점수는 100% 결정론으로 산출한다 — 뉴스 관련성 판정까지 포함해서다. 어떤 기사를
+채점할지 LLM이 정하면 그건 곧 점수를 LLM이 정하는 것이기 때문이다.
+LLM(Gemini)은 핵심 이벤트 추출·근거 문장 생성만 담당하며 어떤 숫자에도 영향을 주지
+않는다(GEMINI_API_KEY 유무로 숫자가 바뀌면 버그다).
 DART_API_KEY는 필수다 — 재무 없이는 시그널을 만들지 않는다.
 
 검증 기준: VALUE_PIPELINE_VALIDATION.md

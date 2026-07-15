@@ -21,7 +21,10 @@ python -m value_pipeline.run --ticker 005930 --name 삼성전자 --date 2022-06-
 | 키 | 필수 | 용도 |
 |---|---|---|
 | `DART_API_KEY` | **필수** | 재무제표. 없으면 exit 2 (재무 없이 시그널을 만들지 않음) |
-| `GEMINI_API_KEY` | 선택 | 뉴스 관련성 라벨링·이벤트 추출·근거 문장. 없으면 규칙 기반 |
+| `GEMINI_API_KEY` | 선택 | 핵심 이벤트 추출·근거 문장 **(설명 텍스트 전용)**. 없으면 규칙 폴백 |
+
+> `GEMINI_API_KEY` 유무는 **어떤 숫자도 바꾸지 않는다.** 바뀌면 그건 버그다
+> (회귀 테스트: `test_scores_identical_with_and_without_llm`).
 
 **환경변수**
 
@@ -120,9 +123,22 @@ confidence = clip(0.5 + 0.125*real_sources - 0.15*news_sentiment_std
 
 | 필드 | 기대값 | 아니면 |
 |---|---|---|
-| `news_source` | `bigkinds` | `naver*`는 과거 날짜 조회가 불안정 → 백테스트엔 부적합 |
+| `news_source` | `bigkinds` | `naver*`는 과거 날짜 조회가 불안정하고 `news_id`가 없어 그라운딩이 안 된다 → 백테스트엔 부적합 |
 | `financial_source` | `dart` | `sample`이면 **FAIL** — `sample_data/`는 존재하지 않으므로 이 값이 나오면 코드가 거짓말을 하는 것 |
 | `key_events[].news_ids` | 비어있지 않음 | 비면 출처 없는 이벤트 = 환각 의심 (`validation.warnings`에 기록됨) |
+
+**워크북 경로 규약** — `build_news_corpus`(CSV 코퍼스)와 `load_daily_news`(하루치)가 **같은
+디렉터리·같은 파일명 규약**을 본다. 규약이 갈리면 한쪽만 파일을 못 찾고 조용히 네이버로
+폴백해 오염된 행이 나온다(PR #22 블로커1).
+
+```
+<repo>/data/{종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx   ← 정본
+<repo>/data/{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx              ← 구버전(호환)
+NewsResult_*.xlsx                                            ← 레거시(종목 필터 불가)
+```
+
+워크북을 **찾았는데** 그날 기사가 0건이면 그것이 사실이므로 네이버로 폴백하지 않는다.
+워크북 자체가 없을 때만 폴백하며, 이때 경고가 뜬다 — 백테스트 중 이 경고가 보이면 FAIL이다.
 
 ### 2.6 값 범위
 
@@ -159,11 +175,17 @@ assert backend == "kr-finbert"   # 데이터셋 구축 전 필수 확인
 - `article_count == 0` → **FAIL.** `news_sentiment=0.0`은 관측이 아니라 날조다.
 - 재무 지표 전부 결측 → **FAIL.** 점수가 기본값으로 채워진 것이다.
 
+**관련성 필터가 전부 걸러도 전량 복원하지 않는다.** 복원하면 '무관 기사로 만든 감성'이 정상
+행처럼 보인다 — 이 문서가 금지하는 바로 그 패턴이다(PR #22 블로커3). `article_count=0`으로
+두고 검증에서 실패시킨다. 이 경우 `article_count_raw`가 0인지 확인할 것: 0이면 그날 기사가
+없는 것이고, 0이 아니면 **회사명 키워드가 잘못된 것**이다.
+
 **실제로 났던 사고**: 재무 결측 시 `valuation_score`가 3.0(결측을 적자로 오인) · `health_score`가
 5.0 → composite 3.8 → **confidence 0.548의 `SELL`과 그걸 정당화하는 유창한 LLM 근거문**이 나왔다.
 중립 HOLD가 아니라 그럴듯한 가짜 매도 신호였다.
 
-확인: `test_validation_catches_zero_articles`, `test_valuation_missing_data_is_not_treated_as_loss`
+확인: `test_validation_catches_zero_articles`, `test_valuation_missing_data_is_not_treated_as_loss`,
+`test_zero_relevant_articles_fails_validation_not_restored`
 
 ### 2.9 validation 블록
 
@@ -205,9 +227,13 @@ Gao·Jiang·Yan (2025)은 LLM 예측의 룩어헤드를 Lookahead Propensity로 
 **재현 가능한 것과 타당한 것은 다르다.** 환각은 잡음이라 백테스트를 나쁘게 만들지만, 암기는
 in-sample에만 존재하는 신호라 백테스트를 좋아 보이게 만들고 실전에서 사라진다.
 
-**구조적 방어**: `_NewsLabels`·`_RelevanceLabel`·`_Reason` 어느 스키마에도 **점수 필드를 두지 말 것.**
-LLM 출력 계약에 점수가 없으면 실수로 다시 연결할 수 없다.
-확인: `test_news_labels_schema_has_no_score_field`
+**"라벨은 점수가 아니다"는 궤변이다.** 어떤 기사를 채점할지 LLM이 정하면 점수가 LLM에
+의존한다. 실측으로 확인됐다: 같은 날 같은 기사에서 필터만 바꿔 감성이 +0.0429 → −0.046으로
+바뀌었다. 이 프로젝트는 그래서 관련성도 규칙으로 판정한다(§4.1).
+
+**구조적 방어**: `_NewsExtract`·`_Reason` 어느 스키마에도 **점수 필드도, '어떤 기사를 쓸지
+고르는 필드'도 두지 말 것.** LLM 출력 계약에 그런 필드가 없으면 실수로 다시 연결할 수 없다.
+확인: `test_llm_schemas_have_no_score_or_selection_field`, `test_scores_identical_with_and_without_llm`
 
 ### 3.2 `today()` 기반 회계연도
 
@@ -249,30 +275,52 @@ LLM 출력 계약에 점수가 없으면 실수로 다시 연결할 수 없다.
 
 측정으로 결판난 것들이라, 바꾸려면 재측정부터 할 것.
 
-### 4.1 LLM은 요약이 아니라 관련성 필터에 쓴다
+### 4.1 관련성 필터는 필요하지만, LLM이면 안 된다
 
-빅카인즈 키워드 검색이라 무관 기사가 섞인다. 2022-06-15(삼성전자 52주 신저가일) 실측:
+빅카인즈 키워드 검색이라 무관 기사가 섞이고, **그게 감성 부호를 뒤집는다.**
+2022-06-15(삼성전자 52주 신저가일) 실측:
 
-| | 감성 |
+| | 건수 | 감성 |
+|---|---|---|
+| 필터 없음 | 73 | **+0.0191** ← 긍정 (틀림) |
+| `'삼성' in 제목+본문` | 37 | **−0.0189** ← 부정 (맞음) |
+
+범인은 `구미대-희망디딤돌 업무협약`(+1.000), `제일기획 NFT`(+0.995), `두산 반도체 투자`(+0.985),
+`미래에셋 ELW 상장`(+0.976), `[공개] 오늘 아침 "폭등 예정" 종목 공개합니다` 리딩방 스팸.
+FinBERT 판정은 **전부 맞다** — 삼성전자 기사가 아닐 뿐이다.
+
+**그런데 필터가 LLM일 필요는 없다.** 2022년 6일 표본:
+
+| 비교 | 평균 절대차 |
 |---|---|
-| 전체 30건 | **+0.0429** ← 긍정 (틀림) |
-| 무관 8건 제외 (22건) | **−0.1230** ← 부정 (맞음) |
+| 필터없음 vs LLM | **0.1160** |
+| **규칙 vs LLM** | **0.0337** (상관 **0.9901**, Jaccard 0.87, 부호 불일치 **0/6일**) |
 
-**부호가 뒤집힌다.** 범인은 `구미대-희망디딤돌 업무협약`(+1.000), `제일기획 NFT`(+0.995),
-`두산 반도체 투자`(+0.985), `미래에셋 ELW 상장`(+0.976), 그리고 `[공개] 오늘 아침 "폭등 예정"
-종목 공개합니다` 주식 리딩방 스팸. FinBERT 판정은 **전부 맞다** — 삼성전자 기사가 아닐 뿐이다.
+필터 유무는 3.4배 더 중요하고, 어떤 필터냐는 거의 차이가 없다. **라벨이 채점 대상을 정하면
+그건 곧 점수를 정하는 것**이므로(PR #22 블로커), 관련성은 결정론 규칙으로 하고 LLM은 점수
+경로에서 완전히 뺐다. 캐시로 재현성을 보장한다는 건 첫 출력의 재현일 뿐, 환경이 바뀌거나
+캐시가 재생성되면 피처가 통째로 흔들린다.
+
+**키워드는 `삼성전자`가 아니라 `삼성`이다**(`relevance_key`가 법인격 접미사를 뗀다).
+제목에 `삼성전자`를 그대로 박는 기사는 폭락일엔 대부분 주가 기사라, 그것만 남기면 10건에
+감성 **−0.80**으로 편향된다. ASML·롤러블폰 기사는 `삼성`이라고만 쓴다. 게다가 주가 기사로
+감성을 만들면 **이미 일어난 주가 움직임의 메아리**를 피처로 쓰는 순환이 된다.
 
 반면 **본문 200자 중간 절단은 감성에 영향이 없다**: 2022 전수 19,549건 중 82.4%가 문장 중간에
-끊기지만, FinBERT raw vs 완전문장-트리밍 **상관 0.9995**, 평균 절대차 0.0047, 엔트로피 0.054 vs
-0.048(둘 다 매우 낮음 = 혼란스러워하지 않음). 제목+본문 최대 324자로 FinBERT 창(512토큰≈340자)에
-**100% 들어간다**(초과 0건).
+끊기지만, FinBERT raw vs 완전문장-트리밍 **상관 0.9995**, 평균 절대차 0.0047. 제목+본문 최대
+324자로 FinBERT 창(512토큰≈340자)에 **100% 들어간다**(초과 0건). 그래서 LLM 요약은 하지 않는다 —
+231자를 압축하는 게 아니라 버리는 것이고, 잘린 서술어는 LLM도 모르므로 극성을 **지어낼**
+(=메모리제이션 오염) 위험만 있다.
 
-**관련성 0.166(부호 반전) vs 절단 0.005 — 35배.** 그래서 LLM을 요약이 아니라 라벨링에 쓴다.
-요약은 231자를 압축하는 게 아니라 버리는 것이고, 잘린 서술어는 LLM도 모르므로 극성을
-**지어낼**(=메모리제이션 오염) 위험만 있다.
+### 4.1.1 그래서 LLM은 지금 뭘 하나
 
-비용도 반대다: 기사별 요약은 10년 백테스트에 ~109,500 콜, 하루치 배치 라벨링은 연 365콜 +
-content-hash 캐시로 재실행 0콜.
+`_extract_events` (하루치 배치 1콜) + `_Reason` (근거 문장 1콜). **둘 다 사람이 읽는 텍스트이며
+어떤 숫자에도 안 쓰인다.** LLM이 사는 값은 같은 사건 기사들을 묶는 것이다 — 2022-06-15에
+ASML 관련 기사 8건이 `'이재용 부회장, 네덜란드 총리 및 ASML 경영진 만나 반도체 장비 공급 협력
+논의'` 한 줄이 된다. 규칙 폴백은 중복 헤드라인 5개를 줄 뿐이다.
+
+`key_events`는 `list[KeyEvent]`라 LightGBM이 못 먹는다. **모델용 피처가 아니라 HITL 근거**다
+(각 이벤트에 출처 `news_id`가 붙어 사용자가 원문을 확인할 수 있다).
 
 ### 4.2 결정론은 모델이 아니라 인터페이스 경계에서 확보한다
 
@@ -309,15 +357,15 @@ CI엔 `.env`가 없어 헤르메틱성을 못 잡는다.
 | 기준 | 테스트 |
 |---|---|
 | 2.1 스키마 계약 | `test_value_signal_field_contract` |
-| 2.2 결정론 | `test_llm_text_cannot_change_any_score`, `test_run_pipeline_is_deterministic`, `test_news_impact_score_is_deterministic_regardless_of_llm` |
+| 2.2 결정론 | `test_llm_text_cannot_change_any_score`, `test_scores_identical_with_and_without_llm`, `test_run_pipeline_is_deterministic`, `test_relevance_is_deterministic_without_llm` |
 | 2.3 point-in-time | `test_select_fiscal_year_is_point_in_time`, `test_select_fiscal_year_does_not_depend_on_today`, `test_fetch_dart_financials_uses_point_in_time_fiscal_year`, `test_validation_catches_lookahead_fiscal_year`, `test_validation_catches_misaligned_news_date` |
 | 2.4 자기감사 | `test_row_is_self_auditing` |
-| 2.5 출처 | `test_key_events_carry_source_news_ids`, `test_load_daily_news_emits_news_id_for_grounding`, `test_validation_warns_on_ungrounded_event` |
-| 2.8 결측 vs 0 | `test_validation_catches_zero_articles`, `test_valuation_missing_data_is_not_treated_as_loss`, `test_collect_financials_raises_when_no_data` |
+| 2.5 출처 | `test_key_events_carry_source_news_ids`, `test_grounding_requires_two_token_overlap`, `test_load_daily_news_emits_news_id_for_grounding`, `test_validation_warns_on_ungrounded_event`, `test_corpus_and_daily_loader_share_path_contract`, `test_corpus_workbooks_filter_by_ticker` |
+| 2.8 결측 vs 0 | `test_validation_catches_zero_articles`, `test_zero_relevant_articles_fails_validation_not_restored`, `test_valuation_missing_data_is_not_treated_as_loss`, `test_collect_financials_raises_when_no_data` |
 | 2.9 validation | `test_validation_passes_on_consistent_data`, `test_validation_catches_accounting_identity_violation`, `test_validation_catches_implausible_metric`, `test_validation_result_reaches_output` |
-| 3.1 LLM 점수 개입 | `test_news_labels_schema_has_no_score_field` |
-| 4.1 관련성 필터 | `test_relevance_filter_excludes_unrelated_articles`, `test_relevance_filter_falls_back_to_rule_without_llm`, `test_relevance_filter_never_drops_everything` |
-| 4.3 staleness | `test_staleness_identical_article_is_fully_stale`, `test_staleness_new_article_is_fresh`, `test_staleness_is_deterministic` |
+| 3.1 LLM 점수 개입 | `test_llm_schemas_have_no_score_or_selection_field`, `test_scores_identical_with_and_without_llm` |
+| 4.1 관련성 필터 | `test_relevance_key_strips_corporate_suffix`, `test_relevance_filter_excludes_unrelated_articles`, `test_relevance_filter_matches_body_not_just_title`, `test_relevance_filter_keeps_all_when_company_unknown` |
+| 4.3 staleness | `test_staleness_identical_article_is_fully_stale`, `test_staleness_new_article_is_fresh`, `test_staleness_is_deterministic`, `test_published_at_sorts_by_time_not_press_code`, `test_collect_prior_news_returns_latest_first` |
 
 ---
 
@@ -331,9 +379,15 @@ CI엔 `.env`가 없어 헤르메틱성을 못 잡는다.
    잘린 파일도 커버한다고 주장한다 — 파일을 새로 받으면 실제 최소/최대 일자를 직접 확인할 것.
 2. **DART 정정공시.** DART는 해당 사업연도의 *최신 정정본*을 반환하므로, 기준일 이후 제출된
    정정공시는 여전히 새어든다. `select_fiscal_year`는 보고서 **연도**만 통제한다(2차 오차).
-3. **LLM 메모리제이션.** 3.1 참조. 점수 경로에서 LLM을 뺀 것이 주 방어책이지만, 관련성
-   라벨링에도 이론상 잔존한다("이 기사가 삼성전자 사업에 관한 것인가"는 미래 수익률을 알아야
-   답할 수 있는 질문이 아니라 노출이 작다). **모델 학습 컷오프와 백테스트 구간을 함께 명시할 것.**
+3. **LLM 메모리제이션.** 3.1 참조. 점수 경로에서 LLM을 완전히 뺐으므로 **피처에는 노출이
+   없다.** 다만 `key_events`·`reasoning`은 여전히 LLM 산출이라, 발표에서 그 텍스트를 인용할 때
+   "모델이 결과를 알고 쓴 문장"일 수 있음을 감안할 것. **모델 학습 컷오프와 백테스트 구간을
+   함께 명시할 것.**
+
+6. **관련성 규칙의 한계.** `'삼성' in 제목+본문`은 계열사 기사(제일기획 등)와 '삼성'이 스쳐
+   지나가는 시황 기사를 걸러내지 못한다(실측 LLM 대비 Jaccard 0.87). 감성 영향은 평균 0.034로
+   작지만, 종목을 늘릴 때 키워드가 흔한 단어면(예: 'CJ', 'GS') 오탐이 커질 수 있다.
+   `relevance_key`를 종목별로 검증할 것.
 4. **`_DART_MAP` 미매핑 항목.** `operating_cashflow`, `interest_expense`, `cash`, `ebitda`가
    매핑에 없어 `interest_coverage`는 DART 경로에서 **항상 결측**이고 `ev_ebitda`는 영업이익으로
    근사한다(둘 다 `FinancialMetrics`에서 제외되므로 출력엔 영향 없음).

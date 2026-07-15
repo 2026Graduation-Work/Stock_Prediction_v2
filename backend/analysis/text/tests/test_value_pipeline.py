@@ -248,39 +248,36 @@ def test_collect_financials_raises_when_no_data(monkeypatch: pytest.MonkeyPatch)
 
 
 # ── 결정론 계약 (AGENTS.md '정량/정성 분리') ───────────────────────
-def test_news_labels_schema_has_no_score_field() -> None:
-    """LLM 출력 계약에 점수가 없어야 실수로 점수 경로에 다시 연결되지 않는다."""
-    assert set(agents_mod._NewsLabels.model_fields) == {"labels", "key_events"}
-    assert set(agents_mod._RelevanceLabel.model_fields) == {"idx", "relevant"}
+def test_llm_schemas_have_no_score_or_selection_field() -> None:
+    """LLM 출력 계약에 점수도 '채점 대상 선택'도 없어야 한다.
+
+    라벨이 채점 대상을 정하면 그건 곧 점수를 정하는 것이다(PR #22 블로커).
+    남은 필드는 전부 사람이 읽는 텍스트여야 한다.
+    """
+    assert set(agents_mod._NewsExtract.model_fields) == {"key_events"}
     assert set(agents_mod._Reason.model_fields) == {"reasoning"}
+    # 관련성 판정 스키마가 되살아나면 안 된다
+    assert not hasattr(agents_mod, "_NewsLabels")
+    assert not hasattr(agents_mod, "_RelevanceLabel")
 
 
-def test_news_impact_score_is_deterministic_regardless_of_llm(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """LLM이 라벨을 어떻게 주든 news_impact_score는 동일해야 한다."""
+def test_relevance_is_deterministic_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """관련성 판정은 LLM을 아예 호출하지 않는다 — structured가 죽어도 동작해야 한다."""
+    def boom(prompt, schema):
+        raise AssertionError("관련성 경로에서 LLM이 호출되면 안 된다")
+
     news = [
         {"news_id": "n1", "title": "삼성전자 흑자 확대", "summary": "실적 개선",
          "url": "", "press": "", "date": "2022-06-15"},
-        {"news_id": "n2", "title": "삼성전자 신제품 출시", "summary": "호평",
+        {"news_id": "n2", "title": "두산 반도체 투자", "summary": "1조원",
          "url": "", "press": "", "date": "2022-06-15"},
     ]
-    state = {"raw_news": news, "company_name": "삼성전자", "ticker": "005930"}
-
-    monkeypatch.setattr(agents_mod, "structured", lambda p, s: None)
-    a = agents_mod.news_agent(dict(state))["news_result"]
-
-    labels = agents_mod._NewsLabels(
-        labels=[agents_mod._RelevanceLabel(idx=0, relevant=True),
-                agents_mod._RelevanceLabel(idx=1, relevant=True)],
-        key_events=["LLM이 뽑은 이벤트"],
-    )
-    monkeypatch.setattr(agents_mod, "structured", lambda p, s: labels)
-    b = agents_mod.news_agent(dict(state))["news_result"]
-
-    assert a["news_impact_score"] == b["news_impact_score"]
-    assert a["news_sentiment"] == b["news_sentiment"]
-    assert a["key_events"] != b["key_events"]  # 이벤트 텍스트만 달라진다
+    monkeypatch.setattr(agents_mod, "_extract_events", lambda items, company: [])
+    monkeypatch.setattr(agents_mod, "structured", boom)
+    out = agents_mod.news_agent(
+        {"raw_news": news, "company_name": "삼성전자", "ticker": "005930"}
+    )["news_result"]
+    assert out["article_count"] == 1  # 두산 기사 제외
 
 
 def test_llm_text_cannot_change_any_score(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -295,10 +292,7 @@ def test_llm_text_cannot_change_any_score(monkeypatch: pytest.MonkeyPatch) -> No
         calls["n"] += 1
         if schema is agents_mod._Reason:
             return agents_mod._Reason(reasoning=f"호출 {calls['n']}번째 근거 문장")
-        return agents_mod._NewsLabels(
-            labels=[agents_mod._RelevanceLabel(idx=0, relevant=True)],
-            key_events=[f"이벤트 {calls['n']}"],
-        )
+        return agents_mod._NewsExtract(key_events=[f"삼성전자 이벤트 {calls['n']}"])
 
     monkeypatch.setattr(agents_mod, "structured", fake_structured)
     a = graph_mod.run_pipeline("005930", "2022-06-15", "삼성전자")
@@ -307,11 +301,38 @@ def test_llm_text_cannot_change_any_score(monkeypatch: pytest.MonkeyPatch) -> No
     numeric = [
         "news_sentiment", "news_impact_score", "news_sentiment_std", "news_staleness",
         "financial_health_score", "valuation_score", "composite_score",
-        "value_investment_signal", "confidence", "article_count",
+        "value_investment_signal", "confidence", "article_count", "article_count_raw",
     ]
     for k in numeric:
         assert a[k] == b[k], f"{k}가 LLM 텍스트에 따라 달라짐 — 결정론 위반"
     assert a["reasoning"] != b["reasoning"]  # 설명 텍스트만 달라진다
+
+
+def test_scores_identical_with_and_without_llm(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM을 켜든 끄든 모든 숫자가 같아야 한다 — LLM이 점수 경로 밖이라는 증거."""
+    news = [
+        {"news_id": "n1", "title": "삼성전자 흑자 확대", "summary": "실적 개선",
+         "url": "", "press": "", "date": "2022-06-15"},
+        {"news_id": "n2", "title": "두산 반도체 투자", "summary": "1조원",
+         "url": "", "press": "", "date": "2022-06-15"},
+    ]
+    _patch_collectors(monkeypatch, news, _fin())
+
+    monkeypatch.setattr(agents_mod, "structured", lambda p, s: None)
+    off = graph_mod.run_pipeline("005930", "2022-06-15", "삼성전자")
+
+    def fake(prompt, schema):
+        if schema is agents_mod._Reason:
+            return agents_mod._Reason(reasoning="LLM이 쓴 근거")
+        return agents_mod._NewsExtract(key_events=["삼성전자 흑자 확대 이벤트"])
+
+    monkeypatch.setattr(agents_mod, "structured", fake)
+    on = graph_mod.run_pipeline("005930", "2022-06-15", "삼성전자")
+
+    for k in off:
+        if k in ("reasoning", "key_events"):
+            continue
+        assert off[k] == on[k], f"{k}가 LLM 유무로 달라짐 — LLM이 점수 경로에 있음"
 
 
 def test_run_pipeline_is_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -405,80 +426,90 @@ def test_run_pipeline_news_and_financial_only(monkeypatch: pytest.MonkeyPatch) -
     assert out["financial_fiscal_year"] == 2021
 
 
-# ── 관련성 필터 ────────────────────────────────────────────────────
-def test_relevance_filter_excludes_unrelated_articles(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """무관 기사가 감성에 들어가면 부호가 뒤집힌다 (실측 재현)."""
+# ── 관련성 필터 (결정론 규칙) ──────────────────────────────────────
+def test_relevance_key_strips_corporate_suffix() -> None:
+    """'삼성전자'로 제목만 매칭하면 폭락일에 주가 기사만 남아 표본이 편향된다.
+
+    실측(2022-06-15): 제목에 '삼성전자' → 10건, 감성 -0.80.
+                      제목+본문에 '삼성' → 37건, 감성 -0.019 (LLM과 상관 0.99).
+    """
+    assert agents_mod.relevance_key("삼성전자") == "삼성"
+    assert agents_mod.relevance_key("두산그룹") == "두산"
+    assert agents_mod.relevance_key("카카오") == "카카오"   # 접미사 없음 → 그대로
+    assert agents_mod.relevance_key("") == ""
+
+
+def test_relevance_filter_excludes_unrelated_articles() -> None:
     news = [
         {"news_id": "n1", "title": "삼성전자 52주 신저가 5만전자 위기",
          "summary": "주가 급락 지속", "url": "", "press": "", "date": "2022-06-15"},
         {"news_id": "n2", "title": "구미대-희망디딤돌 경북센터 상호교류 업무협약 체결",
          "summary": "협약 성과 기대", "url": "", "press": "", "date": "2022-06-15"},
     ]
-    labels = agents_mod._NewsLabels(
-        labels=[agents_mod._RelevanceLabel(idx=0, relevant=True),
-                agents_mod._RelevanceLabel(idx=1, relevant=False)],
-        key_events=[],
-    )
-    monkeypatch.setattr(agents_mod, "structured", lambda p, s: labels)
-    out = agents_mod.news_agent(
-        {"raw_news": news, "company_name": "삼성전자", "ticker": "005930"}
-    )["news_result"]
-
-    assert out["article_count"] == 1       # 무관 기사 제외
-    assert out["article_count_raw"] == 2   # 결측 지시자: 원래 몇 건이었는지
-    assert out["relevance_backend"] == "llm"
+    assert agents_mod.relevant_indices(news, "삼성전자") == [0]
 
 
-def test_relevance_filter_falls_back_to_rule_without_llm(
+def test_relevance_filter_matches_body_not_just_title() -> None:
+    """제목에 회사명이 없어도 본문에 있으면 관련 (ASML·롤러블폰 기사가 이 경우)."""
+    news = [
+        {"news_id": "n1", "title": "이재용, 네덜란드 총리 면담",
+         "summary": "삼성 반도체 장비 수급 논의", "url": "", "press": "",
+         "date": "2022-06-15"},
+    ]
+    assert agents_mod.relevant_indices(news, "삼성전자") == [0]
+
+
+def test_relevance_filter_keeps_all_when_company_unknown() -> None:
+    """회사명이 없으면 거를 근거가 없다 — 임의로 거르지 않는다."""
+    news = [{"news_id": "n1", "title": "아무 기사", "summary": "", "url": "",
+             "press": "", "date": "2022-06-15"}]
+    assert agents_mod.relevant_indices(news, "") == [0]
+
+
+def test_zero_relevant_articles_fails_validation_not_restored(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    news = [
-        {"news_id": "n1", "title": "삼성전자 흑자", "summary": "", "url": "",
-         "press": "", "date": "2022-06-15"},
-        {"news_id": "n2", "title": "두산 반도체 투자", "summary": "", "url": "",
-         "press": "", "date": "2022-06-15"},
-    ]
-    monkeypatch.setattr(agents_mod, "structured", lambda p, s: None)
-    out = agents_mod.news_agent(
-        {"raw_news": news, "company_name": "삼성전자", "ticker": "005930"}
-    )["news_result"]
-    assert out["article_count"] == 1
-    assert out["relevance_backend"] == "rule"
+    """전부 걸러지면 전량 복원하지 말 것 — 오염된 행이 정상처럼 보인다 (PR #22 블로커3)."""
+    news = [{"news_id": "n1", "title": "두산 반도체 투자", "summary": "1조원",
+             "url": "", "press": "", "date": "2022-06-15"}]
+    _patch_collectors(monkeypatch, news, _fin())
+    out = graph_mod.run_pipeline("005930", "2022-06-15", "삼성전자")
 
-
-def test_relevance_filter_never_drops_everything(monkeypatch: pytest.MonkeyPatch) -> None:
-    """필터가 전부 걸러내면 신뢰하지 않고 전량 사용 (조용한 무데이터 방지)."""
-    news = [{"news_id": "n1", "title": "기사", "summary": "", "url": "", "press": "",
-             "date": "2022-06-15"}]
-    labels = agents_mod._NewsLabels(
-        labels=[agents_mod._RelevanceLabel(idx=0, relevant=False)], key_events=[]
-    )
-    monkeypatch.setattr(agents_mod, "structured", lambda p, s: labels)
-    out = agents_mod.news_agent(
-        {"raw_news": news, "company_name": "삼성전자", "ticker": "005930"}
-    )["news_result"]
-    assert out["article_count"] == 1
-    assert "empty-fallback" in out["relevance_backend"]
+    assert out["article_count"] == 0        # 복원하지 않는다
+    assert out["article_count_raw"] == 1
+    assert not out["validation"]["ok"]      # 검증 실패로 드러난다
+    assert any("무데이터" in e for e in out["validation"]["errors"])
 
 
 def test_key_events_carry_source_news_ids(monkeypatch: pytest.MonkeyPatch) -> None:
     """HITL '근거·출처 항상 표시' + 환각 탐지."""
     news = [{"news_id": "n1", "title": "삼성전자 ASML 협력 논의", "summary": "반도체 장비",
              "url": "", "press": "", "date": "2022-06-15"}]
-    labels = agents_mod._NewsLabels(
-        labels=[agents_mod._RelevanceLabel(idx=0, relevant=True)],
-        key_events=["삼성전자 ASML 반도체 장비 협력", "완전히 무관한 날조 이벤트 xyzzy"],
+    monkeypatch.setattr(
+        agents_mod, "_extract_events",
+        lambda items, company: ["삼성전자 ASML 반도체 장비 협력", "날조 이벤트 xyzzy"],
     )
-    monkeypatch.setattr(agents_mod, "structured", lambda p, s: labels)
     out = agents_mod.news_agent(
         {"raw_news": news, "company_name": "삼성전자", "ticker": "005930"}
     )["news_result"]
 
     events = {e["event"]: e["news_ids"] for e in out["key_events"]}
     assert events["삼성전자 ASML 반도체 장비 협력"] == ["n1"]   # 출처 연결됨
-    assert events["완전히 무관한 날조 이벤트 xyzzy"] == []      # 출처 없음 → 환각 의심
+    assert events["날조 이벤트 xyzzy"] == []                    # 출처 없음 → 환각 의심
+    assert out["event_backend"] == "llm"
+
+
+def test_grounding_requires_two_token_overlap() -> None:
+    """회사명 하나만 겹쳐도 매칭되면 사실상 모든 기사가 후보가 된다 (Gemini #5).
+
+    실측: 이벤트 1개가 73건 중 38건과 1토큰 겹침 → >=2면 13건.
+    """
+    items = [
+        {"news_id": "n1", "title": "삼성전자 ASML 장비 협력", "summary": ""},
+        {"news_id": "n2", "title": "삼성전자 배당 확대", "summary": ""},  # '삼성전자'만 겹침
+    ]
+    ev = agents_mod._ground_event("삼성전자 ASML 협력", items)
+    assert ev.news_ids == ["n1"]  # n2는 1토큰만 겹쳐 제외
 
 
 # ── validation_agent (규칙 기반) ───────────────────────────────────
@@ -610,6 +641,92 @@ def test_valuation_missing_data_is_not_treated_as_loss() -> None:
     assert loss["roe"] is not None and loss["roe"] <= 0
     assert loss["per"] is None and loss["pbr"] is None
     assert metrics_mod.valuation_score(loss) == 3.0
+
+
+# ── 직전 기사 수집 (PR #22 추가 지적) ──────────────────────────────
+def test_published_at_sorts_by_time_not_press_code() -> None:
+    """news_id는 '{언론사코드}.{YYYYMMDDHHMMSS}{일련}'.
+
+    그대로 정렬하면 언론사 코드가 먼저 비교되어 시간순이 아니다.
+    """
+    early_big_press = {"news_id": "09999999.20220614090000001", "date": "2022-06-14"}
+    late_small_press = {"news_id": "02100101.20220614180000001", "date": "2022-06-14"}
+    # news_id 그대로면 02...(늦은 기사)가 앞 → 시간순 아님
+    assert late_small_press["news_id"] < early_big_press["news_id"]
+    # _published_at 을 쓰면 시간순
+    assert collectors_mod._published_at(early_big_press) < collectors_mod._published_at(
+        late_small_press
+    )
+
+
+def test_published_at_falls_back_to_date_for_generated_id() -> None:
+    assert collectors_mod._published_at(
+        {"news_id": "generated:abc123", "date": "2022-06-14"}
+    ) == "20220614"
+
+
+def test_collect_prior_news_returns_latest_first(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Tetlock의 '직전 10건'은 최신 10건이어야 한다 — 언론사 코드순 10건이 아니라."""
+    day = [
+        {"news_id": "09999999.20220614090000001", "title": "오전 기사",
+         "summary": "", "url": "", "press": "", "date": "2022-06-14"},
+        {"news_id": "02100101.20220614180000001", "title": "오후 기사",
+         "summary": "", "url": "", "press": "", "date": "2022-06-14"},
+    ]
+    monkeypatch.setattr(
+        collectors_mod.preprocess, "load_daily_news",
+        lambda q, d, dd, limit=None, ticker="": day if d == "2022-06-14" else [],
+    )
+    out = collectors_mod.collect_prior_news("005930", "삼성전자", "2022-06-15", 1)
+    assert [it["title"] for it in out] == ["오후 기사"]  # 최신 1건
+
+
+# ── 경로 규약 통일 (PR #22 블로커1) ────────────────────────────────
+def test_corpus_and_daily_loader_share_path_contract(tmp_path: Path) -> None:
+    """build_news_corpus와 load_daily_news가 같은 파일을 본다.
+
+    규약이 갈리면 한쪽만 파일을 못 찾고 조용히 폴백해 오염된 행이 나온다.
+    """
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    _write_bigkinds(
+        data_dir / "005930_삼성전자_20220101-20221231.xlsx",
+        [{"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
+          "제목": "삼성전자 기사", "본문": "본문", "URL": "", "분석제외 여부": ""}],
+    )
+    # 하루치 로더가 찾는다
+    assert pp.load_daily_news("삼성전자", "2022-06-15", data_dir=data_dir)
+    # 코퍼스 빌더도 같은 파일을 찾는다
+    assert pp.find_corpus_workbooks(data_dir, "005930") == [
+        data_dir / "005930_삼성전자_20220101-20221231.xlsx"
+    ]
+    report = pp.build_news_corpus("005930", tmp_path / "out.csv", raw_dir=data_dir)
+    assert report.deduplicated_rows == 1
+
+
+def test_corpus_workbooks_filter_by_ticker(tmp_path: Path) -> None:
+    """다른 종목 워크북이 섞여 들어오면 안 된다."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    for name in ("005930_삼성전자_20220101-20221231.xlsx",
+                 "000660_SK하이닉스_20220101-20221231.xlsx"):
+        _write_bigkinds(data_dir / name, [
+            {"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
+             "제목": "기사", "본문": "본문", "URL": "", "분석제외 여부": ""}])
+    found = pp.find_corpus_workbooks(data_dir, "005930")
+    assert [p.name for p in found] == ["005930_삼성전자_20220101-20221231.xlsx"]
+
+
+def test_corpus_workbooks_still_accept_legacy_newsresult(tmp_path: Path) -> None:
+    """레거시 NewsResult_*.xlsx 입력은 계속 동작해야 한다(하위 호환)."""
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    _write_bigkinds(raw / "NewsResult_20220101-20221231.xlsx", [
+        {"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
+         "제목": "기사", "본문": "본문", "URL": "", "분석제외 여부": ""}])
+    assert len(pp.find_corpus_workbooks(raw, "005930")) == 1
 
 
 # ── staleness (Tetlock 2011) ───────────────────────────────────────

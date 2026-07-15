@@ -63,7 +63,7 @@ class NewsAnalysis(BaseModel):
     article_count_dropped: int = 0                    # 상한에 걸려 버려진 관련 기사 수
     staleness: float = Field(0.0, ge=0, le=1)         # 직전 기사와의 중복률(Tetlock)
     backend: str = "none"  # 감성 산출 백엔드(kr-finbert / lexicon)
-    relevance_backend: str = "none"  # 관련성 필터 백엔드(llm / rule)
+    event_backend: str = "none"  # 핵심 이벤트 추출 백엔드(llm / rule) — 설명 전용
     reasoning: str = ""
 
 

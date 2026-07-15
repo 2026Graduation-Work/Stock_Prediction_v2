@@ -9,16 +9,19 @@ import unicodedata
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import pandas as pd
 
 TEXT_DIR = Path(__file__).resolve().parent
-DEFAULT_RAW_DIR = TEXT_DIR / "data" / "raw"
 DEFAULT_PROCESSED_DIR = TEXT_DIR / "data" / "processed"
-# 빅카인즈 원본을 회사·연도별로 저장하는 저장소 루트의 data/ 폴더.
-# (파일명 규약: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx)
+# 빅카인즈 원본 위치 — build_news_corpus(CSV 코퍼스)와 load_daily_news(하루치
+# point-in-time)가 **같은 디렉터리·같은 파일명 규약**을 본다. 규약이 갈리면 한쪽만
+# 파일을 못 찾고 조용히 폴백해 오염된 행이 나온다.
 DEFAULT_NEWS_DIR = TEXT_DIR.parents[2] / "data"
+# 레거시 입력. 파일명에 회사·기간 정보가 없어 종목 필터·기간 판정이 불가능하므로
+# 신규 데이터는 아래 워크북 규약을 쓸 것.
 INPUT_PATTERN = "NewsResult_*.xlsx"
 # 뉴스 워크북 파일명 규약 (신규 우선, 구버전 호환):
 #   신규 : {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
@@ -104,7 +107,27 @@ def _clean_text(value: object) -> str:
     return str(value).strip()
 
 
+@lru_cache(maxsize=4)
+def _read_workbook_cached(path: Path, mtime: float, size: int) -> pd.DataFrame:
+    """_read_workbook의 캐시 래퍼. mtime·size를 키에 넣어 파일이 바뀌면 무효화된다.
+
+    빅카인즈 워크북은 20~25MB라 파싱에 4초 넘게 걸리는데, 파이프라인 1회 실행에
+    collect_news + collect_prior_news가 같은 파일을 여러 번 읽는다(실측 8.4초).
+    반환 프레임을 호출자가 변형하면 캐시가 오염되므로 _read_workbook이 복사본을 준다.
+    """
+    return _read_workbook_uncached(path)
+
+
 def _read_workbook(path: Path) -> pd.DataFrame:
+    """빅카인즈 워크북 → 정규화 프레임. 같은 파일 재읽기는 캐시로 피한다."""
+    try:
+        stat = path.stat()
+        return _read_workbook_cached(path, stat.st_mtime, stat.st_size).copy()
+    except OSError:  # stat 실패 시 캐시 없이 직접
+        return _read_workbook_uncached(path)
+
+
+def _read_workbook_uncached(path: Path) -> pd.DataFrame:
     with warnings.catch_warnings():
         warnings.filterwarnings("ignore", message="Workbook contains no default style")
         frame = pd.read_excel(path, engine="openpyxl", dtype=object)
@@ -195,19 +218,61 @@ def _resolve_output_path(out: Path) -> Path:
     return out if out.is_absolute() else DEFAULT_PROCESSED_DIR / out
 
 
-def build_news_corpus(ticker: str, out: Path, raw_dir: Path = DEFAULT_RAW_DIR) -> PreprocessReport:
-    """Build the deterministic FinBERT input CSV and return its coverage report."""
+def find_corpus_workbooks(
+    raw_dir: Path, ticker: str = "", company_name: str = ""
+) -> list[Path]:
+    """해당 종목의 빅카인즈 워크북 목록 (하위 디렉터리 포함).
+
+    파일명 규약은 load_daily_news와 동일하다 — 두 소비자가 같은 파일을 본다:
+      정본  : {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
+      구버전: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
+      레거시: NewsResult_*.xlsx (파일명에 회사·기간 정보가 없어 종목 필터 불가)
+
+    규약 파일은 종목코드/회사명이 일치하는 것만 고르고, 레거시는 전부 포함한다
+    (파일명으로 종목을 구분할 수 없으므로 넣어둔 사람을 신뢰).
+    """
+    wanted_company = _normalize_company(company_name)
+    wanted_code = (ticker or "").strip()
+    found: list[Path] = []
+    for path in sorted(raw_dir.glob("**/*.xlsx")):
+        if path.name.startswith("~$"):
+            continue
+        if path.name.startswith("NewsResult_"):
+            found.append(path)
+            continue
+        parsed = _parse_workbook_name(path.name)
+        if parsed is None:
+            continue
+        code, company, _, _ = parsed
+        if (wanted_code and code == wanted_code) or (
+            wanted_company and _normalize_company(company) == wanted_company
+        ):
+            found.append(path)
+    return found
+
+
+def build_news_corpus(
+    ticker: str,
+    out: Path,
+    raw_dir: Path = DEFAULT_NEWS_DIR,
+    company_name: str = "",
+) -> PreprocessReport:
+    """Build the deterministic FinBERT input CSV and return its coverage report.
+
+    기본 입력 위치는 value_pipeline과 동일한 저장소 루트 data/ 다 — 두 소비자가
+    경로 규약을 공유해야 한 쪽만 파일을 못 찾고 조용히 폴백하는 사고가 없다.
+    """
     ticker = ticker.strip()
     if not ticker:
         raise ValueError("ticker는 빈 문자열일 수 없습니다.")
 
-    input_files = [
-        path
-        for path in sorted(raw_dir.glob(f"**/{INPUT_PATTERN}"))
-        if not path.name.startswith("~$")
-    ]
+    input_files = find_corpus_workbooks(raw_dir, ticker, company_name)
     if not input_files:
-        raise FileNotFoundError(f"입력 파일이 없습니다: {raw_dir / '**' / INPUT_PATTERN}")
+        raise FileNotFoundError(
+            f"입력 파일이 없습니다: {raw_dir} 에서 "
+            f"'{{종목코드}}_{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx'"
+            f"(종목코드={ticker}) 또는 '{INPUT_PATTERN}' 을 찾지 못했습니다."
+        )
 
     frames = [_read_workbook(path) for path in input_files]
     raw_rows = sum(len(frame) for frame in frames)
@@ -354,8 +419,10 @@ def load_daily_news(
         return []
 
     frame = _deduplicate(frame)
-    day_str = frame["date"].dt.strftime("%Y-%m-%d")
-    frame = frame.loc[day_str == date].sort_values(
+    # 전체 컬럼을 문자열로 변환(strftime)하지 않고 Timestamp로 직접 비교한다.
+    # 19,549행 워크북에서 문자열 변환은 순수 낭비다.
+    target = pd.Timestamp(date)
+    frame = frame.loc[frame["date"].dt.normalize() == target].sort_values(
         by="news_id", kind="stable", ignore_index=True
     )
 
@@ -390,17 +457,24 @@ def _build_parser() -> argparse.ArgumentParser:
         help="산출물 파일명 또는 절대 경로 (기본: data/processed/news_corpus.csv)",
     )
     parser.add_argument(
+        "--name",
+        default="",
+        help="회사명 (구버전 파일명 {회사명}_{기간}.xlsx 매칭용)",
+    )
+    parser.add_argument(
         "--raw-dir",
         type=Path,
-        default=DEFAULT_RAW_DIR,
-        help="NewsResult_*.xlsx를 재귀 탐색할 원본 디렉터리",
+        default=DEFAULT_NEWS_DIR,
+        help="빅카인즈 워크북을 재귀 탐색할 디렉터리 (기본: 저장소 루트 data/ — value_pipeline과 동일)",
     )
     return parser
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
-    report = build_news_corpus(ticker=args.ticker, out=args.out, raw_dir=args.raw_dir)
+    report = build_news_corpus(
+        ticker=args.ticker, out=args.out, raw_dir=args.raw_dir, company_name=args.name
+    )
     print_report(report)
     return 0
 

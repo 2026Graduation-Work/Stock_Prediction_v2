@@ -10,17 +10,24 @@
   자기검증은 실증적으로 성능을 떨어뜨리고(ICLR 2024), 판사 LLM은 저perplexity
   텍스트를 선호해 매끄러운 보도자료를 진짜 새 정보보다 높게 친다.
 
-## 왜 관련성 필터가 LLM의 자리인가 (실측)
+## 관련성 필터는 왜 규칙인가 (실측)
 
-2022-06-15 삼성전자(52주 신저가일) 30건 기준:
-    전체 30건 감성      = +0.0429  (긍정 — 틀림)
-    무관 8건 제외 22건  = -0.1230  (부정 — 맞음)
-'구미대-희망디딤돌 업무협약'(+1.000), '두산 반도체 투자'(+0.985), '미래에셋 ELW
-상장'(+0.976) 같은 기사가 FinBERT에서 만점 긍정을 받는다. 판정은 다 맞다.
-삼성전자 기사가 아닐 뿐이다. 관련성이 감성 부호를 뒤집는다.
+빅카인즈 키워드 검색이라 무관 기사가 섞이고, 이걸 거르면 감성 부호가 뒤집힌다.
+2022-06-15(삼성전자 52주 신저가일): 필터 없이 73건 = +0.0191(긍정, 틀림),
+'삼성' 필터 37건 = -0.0189(부정, 맞음). '구미대-희망디딤돌 업무협약'·'두산 반도체
+투자'·'미래에셋 ELW 상장' 같은 기사가 FinBERT에서 만점 긍정을 받는데, 판정은 다 맞다
+— 삼성전자 기사가 아닐 뿐이다.
 
-반면 본문 200자 중간 절단(82.4%)은 FinBERT 감성에 영향이 없다(raw vs trim r=0.9995).
-그래서 LLM을 요약이 아니라 관련성 필터에 쓴다.
+**필터는 필요하지만 LLM일 필요는 없다.** 2022년 6일 표본 측정:
+
+    필터없음 vs LLM 평균 절대차 : 0.1160
+    규칙     vs LLM 평균 절대차 : 0.0337  (상관 0.9901, Jaccard 0.87, 부호 불일치 0/6일)
+
+필터 유무는 3.4배 더 중요하고, 어떤 필터냐는 거의 차이가 없다. 그래서 관련성은
+결정론 규칙으로 하고 LLM은 점수 경로에서 완전히 뺀다 — 라벨이 채점 대상을 정하면
+그건 곧 점수를 정하는 것이라 AGENTS.md '점수 산출 100% 결정론' 위반이다.
+
+(본문 200자 중간 절단(82.4%)도 FinBERT 감성에 영향이 없다: raw vs 완전문장 트리밍 r=0.9995.)
 """
 from __future__ import annotations
 
@@ -41,19 +48,13 @@ from .sentiment import aggregate, score_texts
 
 
 # ── LLM 보조 출력 스키마 ────────────────────────────────────────
-# 주의: 이 스키마에 '점수' 필드를 추가하지 말 것. LLM 출력 계약에 점수가 없어야
-# 실수로 점수 경로에 다시 연결되지 않는다(관례가 아니라 구조로 강제).
-class _RelevanceLabel(BaseModel):
-    idx: int = Field(description="기사 번호")
-    relevant: bool = Field(description="이 기사가 해당 기업의 사업·실적·주가에 관한 것인가")
-
-
-class _NewsLabels(BaseModel):
-    labels: list[_RelevanceLabel] = Field(
-        default_factory=list, description="기사 번호별 관련성 판정. 모든 번호에 대해 하나씩."
-    )
+# 주의: 이 스키마들에 '점수'도 '어떤 기사를 쓸지 고르는 필드'도 추가하지 말 것.
+# 점수든 채점 대상 선택이든 LLM이 정하면 결과가 LLM에 의존한다. LLM 출력 계약에
+# 그런 필드가 없어야 실수로 점수 경로에 다시 연결되지 않는다(관례가 아니라 구조로 강제).
+# 여기 남은 것은 전부 '사람이 읽는 텍스트'이며 어떤 숫자에도 영향을 주지 않는다.
+class _NewsExtract(BaseModel):
     key_events: list[str] = Field(
-        default_factory=list, description="관련 기사에서 뽑은 그날의 핵심 이벤트 3~6개, 간결한 한국어 명사구"
+        default_factory=list, description="그날의 핵심 이벤트 3~6개, 간결한 한국어 명사구"
     )
 
 
@@ -70,37 +71,57 @@ def _text_of(item: dict) -> str:
 
 
 # ── News Agent ─────────────────────────────────────────────────
-def _label_relevance(items: list[dict], company: str) -> tuple[_NewsLabels | None, str]:
-    """LLM 배치 1콜로 기사별 관련성 + 핵심 이벤트. 실패 시 (None, 'rule')."""
-    if not items:
-        return None, "none"
-    listing = "\n".join(f"[{i}] {_text_of(it)[:150]}" for i, it in enumerate(items))
-    out = structured(
-        f"다음은 '{company}' 키워드로 수집한 하루치 뉴스다. 키워드 검색이라 "
-        f"해당 기업과 무관한 기사가 섞여 있다.\n\n{listing}\n\n"
-        f"각 기사가 '{company}'의 사업·실적·주가·경영에 관한 것인지 판정하라.\n"
-        f"- 관련 없음(relevant=false)의 예: 다른 기업이 주인공인 기사, 지수·시황 "
-        f"일반론, 주식 리딩방 광고, 연예·스포츠, '{company}'가 단순 언급만 된 기사\n"
-        f"- 관련 있음(relevant=true)의 예: 실적·수주·신제품·소송·규제·인사·투자 등 "
-        f"'{company}' 자체의 사업 관련 기사, '{company}' 주가에 대한 기사\n"
-        f"모든 기사 번호에 대해 판정을 하나씩 내고, 관련 있는 기사에서만 "
-        f"핵심 이벤트를 3~6개의 간결한 한국어 명사구로 추출하라.",
-        _NewsLabels,
-    )
-    if out is None:
-        return None, "rule"
-    return out, "llm"
+def relevance_key(company: str) -> str:
+    """회사명에서 관련성 판정용 키워드를 만든다.
 
-
-def _rule_relevance(items: list[dict], company: str) -> list[int]:
-    """LLM 없을 때 폴백: 제목에 회사명이 있는 기사만. 결정론."""
+    '삼성전자' → '삼성'. 제목에 '삼성전자'를 그대로 박는 기사는 폭락일엔 대부분
+    주가 기사라, 그것만 남기면 표본이 편향된다(실측: 2022-06-15에 10건만 남고
+    감성 -0.80). ASML·롤러블폰 기사는 '삼성'이라고만 쓴다.
+    법인격 접미사를 떼어 회사 그룹명을 키워드로 쓴다.
+    """
     key = (company or "").replace(" ", "")
+    for suffix in ("전자", "그룹", "주식회사", "(주)", "홀딩스"):
+        if len(key) > len(suffix) and key.endswith(suffix):
+            return key[: -len(suffix)]
+    return key
+
+
+def relevant_indices(items: list[dict], company: str) -> list[int]:
+    """해당 기업 관련 기사의 인덱스. 100% 결정론 — LLM을 쓰지 않는다.
+
+    제목+본문에 회사 키워드가 있으면 관련으로 본다. 빅카인즈 본문은 200자로
+    잘려 있어 스쳐 지나가는 언급이 적고, 실측상 LLM 판정과 거의 일치한다
+    (2022년 6일 표본: 상관 0.9901, Jaccard 0.87, 감성 부호 불일치 0/6일).
+
+    회사명이 비면 전량을 관련으로 본다 — 거를 근거가 없는데 임의로 거르면 안 된다.
+    """
+    key = relevance_key(company)
     if not key:
         return list(range(len(items)))
     return [
-        i for i, it in enumerate(items)
-        if key in str(it.get("title", "")).replace(" ", "")
+        i
+        for i, it in enumerate(items)
+        if key in f"{it.get('title', '')} {it.get('summary', '')}".replace(" ", "")
     ]
+
+
+def _extract_events(items: list[dict], company: str) -> list[str]:
+    """LLM 배치 1콜로 핵심 이벤트 추출. 설명 텍스트 전용 — 어떤 숫자에도 안 쓰인다.
+
+    LLM이 하는 일은 같은 사건을 다룬 기사들을 하나로 묶는 것이다
+    (예: ASML 관련 8건 → '이재용 부회장, ASML 반도체 장비 수급 논의' 1줄).
+    실패하면 빈 리스트 → 호출자가 규칙 폴백(감성 절댓값 상위 헤드라인)을 쓴다.
+    """
+    if not items:
+        return []
+    listing = "\n".join(f"- {_text_of(it)[:150]}" for it in items[:60])
+    out = structured(
+        f"다음은 '{company}' 관련 하루치 뉴스다.\n\n{listing}\n\n"
+        f"같은 사건을 다룬 기사들을 하나로 묶어, 그날의 핵심 이벤트를 3~6개의 "
+        f"간결한 한국어 명사구로 추출하라. 기사에 없는 내용을 지어내지 말 것.",
+        _NewsExtract,
+    )
+    return out.key_events[:6] if out is not None else []
 
 
 def news_agent(state: dict) -> dict:
@@ -108,32 +129,26 @@ def news_agent(state: dict) -> dict:
     company = state.get("company_name") or state.get("ticker") or ""
     raw_count = len(items)
 
-    labels, rel_backend = _label_relevance(items, company)
-    if labels is not None:
-        keep = {lb.idx for lb in labels.labels if lb.relevant and 0 <= lb.idx < raw_count}
-        llm_events = labels.key_events[:6]
-    else:
-        keep = set(_rule_relevance(items, company))
-        llm_events = []
-    # 관련 기사가 하나도 없으면 필터를 신뢰하지 않고 전량 사용(전부 거르는 사고 방지)
-    if not keep and items:
-        keep = set(range(raw_count))
-        rel_backend = f"{rel_backend}-empty-fallback"
-
-    relevant_all = [items[i] for i in sorted(keep)]
+    # 관련성 판정은 100% 결정론. 전부 걸러지면 그대로 0건으로 둔다 —
+    # 전량 복원하면 '무관 기사로 만든 감성'이 정상 행처럼 보인다.
+    # article_count=0 이면 validation_agent가 실패시킨다.
+    keep = relevant_indices(items, company)
+    relevant_all = [items[i] for i in keep]
     relevant = relevant_all[: SETTINGS.max_daily_articles]
     dropped = len(relevant_all) - len(relevant)
     texts = [_text_of(it) for it in relevant]
     scores, backend = score_texts(texts)
     mean, std = aggregate(scores)
 
-    # 영향력 점수는 LLM 유무와 무관하게 항상 결정론 규칙으로 산출한다.
+    # 영향력 점수는 결정론 규칙으로 산출한다.
     # (AGENTS.md: 점수 산출은 100% 결정론, LLM은 설명 텍스트 생성에만)
     impact = int(_clip(3 + min(4, len(texts) // 3) + round(abs(mean) * 3), 1, 10))
 
-    # 핵심 이벤트: LLM 문구를 실제 기사에 그라운딩해 출처 news_id를 붙인다.
+    # 핵심 이벤트(설명 전용). LLM 문구를 실제 기사에 그라운딩해 출처 news_id를 붙인다.
+    llm_events = _extract_events(relevant, company)
     if llm_events:
         key_events = [_ground_event(e, relevant) for e in llm_events]
+        event_backend = "llm"
     else:  # 규칙 기반 폴백: 감성 절댓값이 큰 헤드라인을 핵심 이벤트로
         ranked = sorted(
             zip(relevant, scores, strict=False), key=lambda x: abs(x[1]), reverse=True
@@ -143,6 +158,7 @@ def news_agent(state: dict) -> dict:
             for it, _ in ranked[:5]
             if it.get("title")
         ]
+        event_backend = "rule"
 
     prior = state.get("prior_news") or []
     stale = staleness.staleness_score(texts, [_text_of(p) for p in prior])
@@ -157,7 +173,7 @@ def news_agent(state: dict) -> dict:
         article_count_dropped=dropped,
         staleness=stale,
         backend=backend,
-        relevance_backend=rel_backend,
+        event_backend=event_backend,
         reasoning=(
             f"수집 {raw_count}건 중 관련 {len(texts)}건 분석"
             f"(감성 {mean:+.2f}, 분산 {std:.2f}, 신선도 {1 - stale:.2f}, 백엔드 {backend})."
@@ -166,11 +182,17 @@ def news_agent(state: dict) -> dict:
     return {"news_result": result.model_dump()}
 
 
+# 이벤트-기사 연결 최소 토큰 겹침. 1이면 '삼성전자' 하나만 겹쳐도 매칭돼
+# 사실상 모든 기사가 후보가 된다(실측: 이벤트 1개가 73건 중 38건과 1토큰 겹침 →
+# 2 이상은 13건). 회사명 하나로 엉뚱한 기사를 출처로 다는 것을 막는다.
+_MIN_GROUNDING_OVERLAP = 2
+
+
 def _ground_event(event: str, items: list[dict]) -> KeyEvent:
     """LLM이 쓴 이벤트 문구를 실제 기사에 연결해 출처 news_id를 붙인다.
 
-    토큰 겹침으로 가장 유사한 기사를 찾는다. 하나도 안 겹치면 news_ids=[] →
-    validation_agent가 '출처 없는 이벤트'로 잡아낸다(환각 탐지).
+    토큰 겹침이 _MIN_GROUNDING_OVERLAP 이상인 기사만 후보로 본다. 하나도 없으면
+    news_ids=[] → validation_agent가 '출처 없는 이벤트'로 잡아낸다(환각 탐지).
     """
     ev_tokens = staleness.tokenize(event)
     if not ev_tokens:
@@ -178,7 +200,7 @@ def _ground_event(event: str, items: list[dict]) -> KeyEvent:
     scored = []
     for it in items:
         overlap = len(ev_tokens & staleness.tokenize(_text_of(it)))
-        if overlap:
+        if overlap >= _MIN_GROUNDING_OVERLAP:
             scored.append((overlap, str(it.get("news_id", ""))))
     scored.sort(reverse=True)
     return KeyEvent(event=event, news_ids=[nid for _, nid in scored[:2] if nid])
@@ -308,7 +330,11 @@ def validation_agent(state: dict) -> dict:
 
     # 7) 결측 vs 0 구분
     if news.get("article_count", 0) == 0:
-        errors.append("관련 기사 0건 → news_sentiment=0.0은 '중립'이 아니라 '무데이터'")
+        raw = news.get("article_count_raw", 0)
+        errors.append(
+            f"관련 기사 0건(수집 {raw}건) → news_sentiment=0.0은 '중립'이 아니라 '무데이터'. "
+            f"{'관련성 필터가 전부 걸렀음 — 회사명 키워드 확인 필요' if raw else '그날 기사 자체가 없음'}"
+        )
     if all(m.get(k) is None for k in _PLAUSIBLE):
         errors.append("재무 지표가 전부 결측 → 점수가 기본값으로 채워짐")
 

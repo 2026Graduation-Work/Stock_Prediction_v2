@@ -57,19 +57,44 @@ def _filter_by_date(items: list[dict], date: str) -> list[dict]:
 def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict], str]:
     """해당 날짜 '하루치' 기사 전량과 출처 반환.
     각 항목: {news_id, title, summary, url, press, date}.
-    우선순위: 빅카인즈 엑셀(data/, preprocess) → 네이버 검색 OpenAPI(키 있으면) → HTML 크롤 → 샘플.
 
-    빅카인즈 경로는 상한 없이(limit=None) 전량을 돌려준다. news_id 정렬순 상위 N건은
-    관련성과 무관한 임의 표본이라, 상한은 관련성 라벨링 뒤에 news_agent가 적용한다.
-    (실측: 2022-06-15 73건 중 무관 기사 8건이 감성 부호를 -0.12 → +0.04로 뒤집었다.)
+    빅카인즈 엑셀(data/, preprocess)이 정본이다. 워크북을 찾았는데 그날 기사가
+    없으면 그대로 빈 리스트를 준다 — 네이버로 폴백하지 않는다.
+
+    네이버는 과거 날짜 조회가 불안정하고(OpenAPI는 최근 1,000건까지만) news_id도
+    없어 그라운딩이 안 된다. 백테스트 행마다 소스가 다르면 피처가 비교 불가능해진다.
+    그래서 워크북이 아예 없을 때(=오늘 날짜 조회 같은 실시간 용도)만 폴백한다.
+
+    빅카인즈 경로는 상한 없이(limit=None) 전량을 돌려준다 — 상한은 관련성 필터
+    뒤에 news_agent가 적용한다. news_id 정렬순 상위 N건은 임의 표본이기 때문이다.
     """
     query = company_name or ticker
+    workbook = None
     try:
-        items = preprocess.load_daily_news(query, date, DATA_DIR, limit=None, ticker=ticker)
-        if items:
-            return items, "bigkinds"
+        workbook = preprocess.find_news_workbook(query, date, DATA_DIR, ticker)
     except Exception as e:
-        warnings.warn(f"빅카인즈 엑셀 뉴스 로드 실패, 다음 소스로 폴백합니다: {e}", stacklevel=2)
+        warnings.warn(f"빅카인즈 워크북 탐색 실패: {e}", stacklevel=2)
+
+    if workbook is not None:
+        try:
+            items = preprocess.load_daily_news(
+                query, date, DATA_DIR, limit=None, ticker=ticker
+            )
+            # 워크북이 이 날짜를 커버하므로, 0건이어도 그것이 사실이다.
+            # 여기서 네이버로 폴백하면 point-in-time이 깨진다.
+            return items, "bigkinds"
+        except Exception as e:
+            warnings.warn(
+                f"빅카인즈 엑셀 뉴스 로드 실패({workbook.name}): {e}", stacklevel=2
+            )
+    else:
+        warnings.warn(
+            f"'{query}' {date}를 커버하는 빅카인즈 워크북이 {DATA_DIR}에 없습니다. "
+            f"기대 파일명: {{종목코드}}_{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx. "
+            f"네이버로 폴백하지만 과거 날짜는 신뢰할 수 없습니다.",
+            stacklevel=2,
+        )
+
     if SETTINGS.has_naver:
         try:
             items = _fetch_naver_news_api(query, date)
@@ -87,14 +112,32 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
     return _filter_by_date(sample, date)[:10], "sample"
 
 
+def _published_at(item: dict) -> str:
+    """정렬용 발행 시각 키. 빅카인즈 news_id는 '{언론사코드}.{YYYYMMDDHHMMSS}{일련}'.
+
+    news_id를 그대로 정렬하면 점 앞 언론사 코드가 먼저 비교되어 시간순이 아니라
+    언론사 코드순이 된다. 점 뒤를 써야 시간순이 된다.
+    포맷이 다르면(generated: 해시 등) 날짜로만 정렬한다.
+    """
+    nid = str(item.get("news_id", ""))
+    if "." in nid:
+        tail = nid.rsplit(".", 1)[1]
+        if tail[:8].isdigit():
+            return tail
+    return str(item.get("date", "")).replace("-", "")
+
+
 def collect_prior_news(
     ticker: str, company_name: str, date: str, count: int
 ) -> list[dict]:
-    """기준일 '이전' 기사를 최신순으로 최대 count건 반환 (staleness 비교용).
+    """기준일 '직전' 기사를 최신순으로 최대 count건 반환 (staleness 비교용).
 
     Tetlock(2011)의 staleness는 '직전 10건'과의 단어 중복률이므로 날짜가 아니라
     건수 기준으로 거슬러 올라간다. 기준일 당일은 포함하지 않는다(point-in-time).
     빅카인즈 엑셀만 지원 — 네이버 경로는 과거 조회가 불가능해 빈 리스트를 준다.
+
+    하루치를 다 모은 뒤 발행 시각 역순으로 잘라야 진짜 '직전 N건'이 된다.
+    load_daily_news가 news_id(=언론사 코드) 순으로 주므로 그대로 자르면 임의 표본이다.
     """
     query = company_name or ticker
     out: list[dict] = []
@@ -105,9 +148,11 @@ def collect_prior_news(
             items = preprocess.load_daily_news(
                 query, prev_day, DATA_DIR, limit=None, ticker=ticker
             )
-        except Exception:
+        except Exception as e:
+            warnings.warn(f"직전 뉴스 로드 실패({prev_day}): {e}", stacklevel=2)
             continue
-        out.extend(items)
+        # 그날 안에서 최신순으로 정렬한 뒤 누적 (날짜는 이미 최신 → 과거 순회)
+        out.extend(sorted(items, key=_published_at, reverse=True))
         if len(out) >= count:
             break
     return out[:count]
@@ -324,6 +369,8 @@ def _fetch_dart_financials(ticker: str, date: str) -> dict:
     # 발행주식수 — 재무제표와 같은 사업연도를 써야 EPS/BPS가 정합적이다.
     try:
         sh = dart.report(ticker, "주식총수", year)
+        if sh is None or len(sh) == 0:
+            raise RuntimeError("주식총수 보고서가 비어 있음")
         out["shares_outstanding"] = float(str(sh.iloc[0]["istc_totqy"]).replace(",", ""))
     except Exception as e:
         warnings.warn(
