@@ -50,6 +50,33 @@ export interface RecommendedStock {
   caution?: string; // 성향 대비 주의 문구. 있을 때만 카드 하단에 표시
 }
 
+// 예측 근거 출처 구분 (chart=차트 지표, news=뉴스 감성, financial=재무 지표)
+export type ReasonSource = "chart" | "news" | "financial";
+
+export interface PredictionReason {
+  title: string; // 예: 최근 20거래일 거래량이 평소의 2.8배
+  detail: string; // 기여도 수준 + 보조 설명
+  source: ReasonSource;
+  sourceLabel: string; // 칩 표기. 예: 차트 지표 (거래량)
+}
+
+// 과거 유사 신호 구간의 실현 수익률 분포 히스토그램 빈. [from, to) 단위 %
+export interface ReturnBin {
+  from: number;
+  to: number;
+  count: number;
+}
+
+export interface StockDetail extends RecommendedStock {
+  currentPrice: number; // 원
+  changePercent: number; // 전일 대비 %. +1.2 = +1.2%
+  asOf: string; // 데이터·예측 기준일 (ISO). 두 날짜는 항상 동일하게 유지
+  priceHistory: number[]; // 최근 60거래일 종가(원). 마지막 원소 = currentPrice
+  realizedReturns: ReturnBin[]; // similarCaseCount건의 H10 실현 수익률 분포
+  reasons: PredictionReason[]; // 기여도 순 Top 3
+  aiAdvice: string; // LLM 생성 설명(수치 번역만, 행동 제안 없음)
+}
+
 export type MarketCondition = "stable" | "caution" | "high_volatility";
 
 export interface MarketStatus {
