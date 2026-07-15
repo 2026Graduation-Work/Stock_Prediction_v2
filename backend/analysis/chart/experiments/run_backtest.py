@@ -5,8 +5,7 @@ import os
 import numpy as np
 import pandas as pd
 import yaml
-from backtest.engine import VectorBTEngine
-from backtest.engine import compute_custom_krx_composite
+from backtest.engine import VectorBTEngine, compute_custom_krx_composite
 from evaluation.backtest_metrics import calculate_trading_metrics
 from evaluation.baselines import (
     generate_ma_breakout_signals,

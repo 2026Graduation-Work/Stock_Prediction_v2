@@ -1,8 +1,8 @@
 import argparse
 import math
 import re
-from pathlib import Path
 import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -457,7 +457,7 @@ def run_factor_neutral_score(experiments: list[dict], panel: pd.DataFrame) -> pd
         merged = preds.merge(base, on=["Date", "Code"], how="inner")
         usable_cols = [c for c in xcols if merged[c].notna().sum() > 100]
         merged["neutral_score"] = merged.groupby("Date", group_keys=False).apply(
-            lambda g: cross_sectional_residuals(g, usable_cols)
+            lambda g, columns=usable_cols: cross_sectional_residuals(g, columns)
         )
         for score, series in [
             ("raw_prob", topk_forward_return(merged, "Prob", exp["top_n"], exp["prob_threshold"])),

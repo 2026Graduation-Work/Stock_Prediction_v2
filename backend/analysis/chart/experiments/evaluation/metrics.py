@@ -1,6 +1,7 @@
+from math import erf, sqrt
+
 import numpy as np
 import pandas as pd
-from math import erf, sqrt
 
 
 def _binary_classification_counts(y_true: pd.Series, y_pred: pd.Series) -> tuple[int, int, int, int]:

@@ -188,7 +188,7 @@ def render_horizon_final_analysis(results_dir: str) -> None:
     corr = pd.read_csv(paths["corr"])
     overlap = pd.read_csv(paths["overlap"])
 
-    invalid_bench = summary[summary["Benchmark Valid"] == False]
+    invalid_bench = summary[~summary["Benchmark Valid"]]
     if invalid_bench.empty:
         st.success("Benchmark_CustomKRX validity: all selected horizon results are valid.")
     else:

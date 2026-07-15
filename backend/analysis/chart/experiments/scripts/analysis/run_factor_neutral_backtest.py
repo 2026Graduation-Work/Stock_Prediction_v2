@@ -12,9 +12,15 @@ EXPERIMENTS_DIR = CURRENT_DIR.parents[1]
 if str(EXPERIMENTS_DIR) not in sys.path:
     sys.path.insert(0, str(EXPERIMENTS_DIR))
 
-from backtest.engine import VectorBTEngine, compute_custom_krx_composite
-from evaluation.backtest_metrics import calculate_trading_metrics
-from experiment_utils import build_fold_alignment, label_params_from_config, resolve_splits, test_date_bounds
+# These imports support direct execution via ``python run_factor_neutral_backtest.py``.
+from backtest.engine import VectorBTEngine, compute_custom_krx_composite  # noqa: E402, I001
+from evaluation.backtest_metrics import calculate_trading_metrics  # noqa: E402
+from experiment_utils import (  # noqa: E402
+    build_fold_alignment,
+    label_params_from_config,
+    resolve_splits,
+    test_date_bounds,
+)
 from run_factor_attribution import (
     CHART_ROOT,
     EXPERIMENTS_DIR,
@@ -25,9 +31,9 @@ from run_factor_attribution import (
     load_panel,
     markdown_table,
     normalize_code,
-)
-from train_src.loaders import load_parquet_data
-from train_src.swing_strategy import SwingStrategy
+)  # noqa: E402
+from train_src.loaders import load_parquet_data  # noqa: E402
+from train_src.swing_strategy import SwingStrategy  # noqa: E402
 
 
 DEFAULT_OUTPUT_DIR = EXPERIMENTS_DIR / "results" / "factor_neutral_backtest"

@@ -5,7 +5,6 @@ import os
 import numpy as np
 import pandas as pd
 import yaml
-
 from evaluation.metrics import (
     calculate_calibration_table,
     calculate_classification_metrics,

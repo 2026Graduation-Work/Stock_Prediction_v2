@@ -15,16 +15,17 @@ EXPERIMENTS_DIR = Path(__file__).resolve().parents[2]
 if str(EXPERIMENTS_DIR) not in sys.path:
     sys.path.insert(0, str(EXPERIMENTS_DIR))
 
-from evaluation.backtest_metrics import calculate_trading_metrics
-from experiment_utils import (
+# These imports support direct execution via ``python run_horizon_final_analysis.py``.
+from evaluation.backtest_metrics import calculate_trading_metrics  # noqa: E402, I001
+from experiment_utils import (  # noqa: E402
     find_processed_dir,
     generate_predictions_hash,
     label_params_from_config,
     load_predictions,
     resolve_splits,
     test_date_bounds,
-)
-from train_src.loaders import load_parquet_data
+)  # noqa: E402
+from train_src.loaders import load_parquet_data  # noqa: E402
 
 
 FINAL_EXPERIMENTS = {
