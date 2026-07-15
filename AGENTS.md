@@ -44,6 +44,9 @@
 ## 데이터 계약 (schema/)
 - profiling → analysis/platform: `profiling_output.schema.json` (v1.0 freeze)
 - chart → platform: `chart_output.schema.json` (v1.0 freeze)
+- text(가치투자) 출력 검증 절차: `backend/analysis/text/VALUE_PIPELINE_VALIDATION.md`
+  (위 아키텍처 원칙을 value_pipeline에 적용한 PASS/FAIL 기준·금지 패턴. 출력을
+  데이터셋에 넣기 전 필독. 규칙 본문이 아니라 검증 절차이므로 별도 문서로 둔다.)
 - 성향별 2모델: `profile_type`(stable/aggressive) ↔ chart `model_type` 매칭
 - 회피 태그 체계 통일: profiling `avoided_assets` == chart `risk_flags` enum
 - Supabase: 프론트가 DB 직접 조회(별도 API 서버 없음). 스키마 = 사실상 API 계약.
