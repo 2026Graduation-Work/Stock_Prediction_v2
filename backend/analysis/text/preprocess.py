@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
+import unicodedata
 import warnings
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -14,8 +16,26 @@ import pandas as pd
 TEXT_DIR = Path(__file__).resolve().parent
 DEFAULT_RAW_DIR = TEXT_DIR / "data" / "raw"
 DEFAULT_PROCESSED_DIR = TEXT_DIR / "data" / "processed"
+# 빅카인즈 원본을 회사·연도별로 저장하는 저장소 루트의 data/ 폴더.
+# (파일명 규약: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx)
+DEFAULT_NEWS_DIR = TEXT_DIR.parents[2] / "data"
 INPUT_PATTERN = "NewsResult_*.xlsx"
+# 뉴스 워크북 파일명 규약 (신규 우선, 구버전 호환):
+#   신규 : {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
+#          (예: 005930_삼성전자_20220101-20221231.xlsx)
+#   구버전: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
+#          (예: 삼성전자_20220101-20221231.xlsx)
+_NEWS_WORKBOOK_RE_CODE = re.compile(
+    r"(?P<code>[^_]+)_(?P<company>.+)_(?P<start>\d{8})-(?P<end>\d{8})\.xlsx$"
+)
+_NEWS_WORKBOOK_RE_PLAIN = re.compile(
+    r"(?P<company>.+)_(?P<start>\d{8})-(?P<end>\d{8})\.xlsx$"
+)
 OUTPUT_COLUMNS = ["news_id", "date", "title", "body", "press", "ticker"]
+# point-in-time 로더가 하루치로 반환하는 기사 최대 건수(감성 안정성용).
+DEFAULT_DAILY_LIMIT = 30
+# "분석제외 여부" 컬럼에서 제외로 간주하는 표기(소문자 비교).
+_EXCLUDE_TOKENS = {"y", "1", "true", "제외", "분석제외", "exclude", "o"}
 
 # BigKinds export headers have changed over time. Keep every supported spelling here.
 COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
@@ -25,6 +45,9 @@ COLUMN_ALIASES: dict[str, tuple[str, ...]] = {
     "body": ("본문", "뉴스 본문", "기사 본문", "내용"),
     "keywords": ("키워드", "뉴스 키워드", "특성추출(가중치순 상위 50개)"),
     "press": ("언론사", "매체명", "신문사", "뉴스 제공처"),
+    # 아래 두 개는 선택 컬럼(있으면 활용, 없으면 무시) — 필수 검증에서 제외됨.
+    "url": ("URL", "url", "주소", "링크"),
+    "exclude": ("분석제외 여부", "분석제외여부", "분석 제외 여부"),
 }
 
 
@@ -122,6 +145,19 @@ def _read_workbook(path: Path) -> pd.DataFrame:
             normalized.loc[empty_body, "body"] = frame.loc[empty_body, keyword_column].map(
                 _clean_text
             )
+
+    # 선택 컬럼: URL과 분석제외 여부(있으면 활용, 없으면 기본값).
+    url_column = columns["url"]
+    normalized["url"] = (
+        frame[url_column].map(_clean_text) if url_column is not None else ""
+    )
+    exclude_column = columns["exclude"]
+    if exclude_column is None:
+        normalized["exclude"] = False
+    else:
+        normalized["exclude"] = (
+            frame[exclude_column].map(_clean_text).str.lower().isin(_EXCLUDE_TOKENS)
+        )
 
     return normalized
 
@@ -224,6 +260,124 @@ def print_report(report: PreprocessReport) -> None:
         print("경고: 뉴스가 0건인 일자가 있습니다. 파이프라인은 계속 진행합니다.")
         print(f"일자 구멍: {', '.join(report.missing_dates)}")
     print(f"산출물: {report.output_path}")
+
+
+# ── Point-in-time 뉴스 로더 ────────────────────────────────────────
+# value_pipeline(News Agent)이 "특정 회사·특정 날짜 하루치" 뉴스를 빅카인즈
+# 원본에서 바로 뽑아 쓰기 위한 공개 API. build_news_corpus와 동일한 컬럼
+# 정규화(_read_workbook)·중복 제거(_deduplicate) 로직을 재사용해 전처리 규칙을
+# 한 곳에서 관리한다.
+
+
+def _normalize_company(name: str) -> str:
+    return unicodedata.normalize("NFC", (name or "").strip())
+
+
+def _parse_workbook_name(name: str) -> tuple[str, str, str, str] | None:
+    """파일명 → (종목코드, 회사명, 시작일, 종료일). 코드가 없는 구버전이면 코드는 ""."""
+    match = _NEWS_WORKBOOK_RE_CODE.fullmatch(name)
+    if match:
+        return (
+            match.group("code"),
+            match.group("company"),
+            match.group("start"),
+            match.group("end"),
+        )
+    match = _NEWS_WORKBOOK_RE_PLAIN.fullmatch(name)
+    if match:
+        return "", match.group("company"), match.group("start"), match.group("end")
+    return None
+
+
+def find_news_workbook(
+    company_name: str,
+    date: str,
+    data_dir: Path = DEFAULT_NEWS_DIR,
+    ticker: str = "",
+) -> Path | None:
+    """뉴스 워크북 중 date가 기간에 포함되고, 종목코드 또는 회사명이 일치하는 파일 반환.
+
+    파일명은 신규({코드}_{명}_{기간})·구버전({명}_{기간})을 모두 인식한다.
+    ticker(종목코드)가 주어지면 코드 일치를, 아니면 회사명(NFC) 일치를 사용한다.
+    """
+    target_day = date.replace("-", "")
+    wanted_company = _normalize_company(company_name)
+    wanted_code = (ticker or "").strip()
+    for path in sorted(Path(data_dir).glob("*.xlsx")):
+        if path.name.startswith("~$"):
+            continue
+        parsed = _parse_workbook_name(path.name)
+        if parsed is None:
+            continue
+        code, company, start, end = parsed
+        if not (start <= target_day <= end):
+            continue
+        code_match = bool(wanted_code) and code == wanted_code
+        name_match = bool(wanted_company) and _normalize_company(company) == wanted_company
+        if code_match or name_match:
+            return path
+    return None
+
+
+def load_daily_news(
+    company_name: str,
+    date: str,
+    data_dir: Path = DEFAULT_NEWS_DIR,
+    limit: int | None = DEFAULT_DAILY_LIMIT,
+    body_chars: int = 1000,
+    ticker: str = "",
+) -> list[dict]:
+    """해당 회사·날짜(YYYY-MM-DD) 하루치 뉴스를 표준 dict 리스트로 반환.
+
+    각 항목: {news_id, title, summary(=본문 일부), url, press, date}.
+    - _read_workbook로 빅카인즈 컬럼을 정규화하고,
+    - '분석제외 여부'가 켜진 기사를 제거한 뒤,
+    - _deduplicate로 중복(식별자/폴백키)을 정리하고,
+    - 해당 날짜만 남겨 news_id 순으로 상위 limit건을 돌려준다.
+    파일이 없으면 빈 리스트(→ 상위 호출자가 다음 소스로 폴백).
+
+    limit=None이면 그날 기사를 전부 돌려준다. news_id 정렬순 상위 N건은
+    관련성과 무관한 사실상 임의 표본이므로, 하루치를 전부 받아 관련성으로
+    거르는 호출자(news_agent)가 상한을 직접 적용한다.
+
+    news_id는 (date, title, press) 해시 폴백까지 포함해 100% 채워지므로
+    key_events의 출처 인용(그라운딩) 키로 쓸 수 있다.
+    """
+    path = find_news_workbook(company_name, date, data_dir, ticker)
+    if path is None:
+        return []
+
+    frame = _read_workbook(path)
+    if "exclude" in frame.columns:
+        frame = frame.loc[~frame["exclude"].fillna(False)]
+    if frame.empty:
+        return []
+
+    frame = _deduplicate(frame)
+    day_str = frame["date"].dt.strftime("%Y-%m-%d")
+    frame = frame.loc[day_str == date].sort_values(
+        by="news_id", kind="stable", ignore_index=True
+    )
+
+    items: list[dict] = []
+    for _, row in frame.iterrows():
+        title = str(row.get("title", "")).strip()
+        if not title:
+            continue
+        body = str(row.get("body", "")).strip()
+        items.append(
+            {
+                "news_id": str(row.get("news_id", "")).strip(),
+                "title": title,
+                "summary": body[:body_chars],
+                "url": str(row.get("url", "")).strip(),
+                "press": str(row.get("press", "")).strip(),
+                "date": date,
+            }
+        )
+        if limit is not None and len(items) >= limit:
+            break
+    return items
 
 
 def _build_parser() -> argparse.ArgumentParser:
