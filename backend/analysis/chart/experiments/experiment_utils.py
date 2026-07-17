@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+from pathlib import Path
 
 import pandas as pd
 
@@ -29,7 +30,13 @@ def split_identity(split: dict) -> dict:
 
 
 def resolve_splits(config: dict) -> list[dict]:
-    """Return canonical split dictionaries shared by train/evaluation/backtest tools."""
+    """Return canonical split dictionaries shared by train/evaluation/backtest tools.
+
+    Sliding and expanding strategies use non-overlapping test windows.  A
+    two-year window, for example, evaluates ``2020-01-08..2021-12-31`` and
+    then starts the next fold in 2022; this prevents the same OOS observation
+    from being evaluated in multiple folds.
+    """
     data_cfg = config.get("data", {})
     strategy = data_cfg.get("split_strategy", "single")
     embargo_days = data_cfg.get("embargo_days", 7)
@@ -48,8 +55,15 @@ def resolve_splits(config: dict) -> list[dict]:
         start_year = cfg.get("start_year", 2016)
         end_year = cfg.get("end_year", 2025)
 
+        if train_window_years < 1 or test_window_years < 1:
+            raise ValueError("sliding train_window_years/test_window_years must be positive integers")
+
         folds = []
-        for y in range(start_year + train_window_years, end_year - test_window_years + 1):
+        for y in range(
+            start_year + train_window_years,
+            end_year - test_window_years + 2,
+            test_window_years,
+        ):
             test_start = (
                 pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)
             ).strftime("%Y-%m-%d")
@@ -59,7 +73,7 @@ def resolve_splits(config: dict) -> list[dict]:
                     "train_start": f"{y - train_window_years}-01-01",
                     "train_end": f"{y - 1}-12-31",
                     "test_start": test_start,
-                    "test_end": f"{y}-12-31",
+                    "test_end": f"{y + test_window_years - 1}-12-31",
                 }
             )
         return folds
@@ -71,8 +85,15 @@ def resolve_splits(config: dict) -> list[dict]:
         start_year = cfg.get("start_year", 2016)
         end_year = cfg.get("end_year", 2025)
 
+        if initial_train_years < 1 or test_window_years < 1:
+            raise ValueError("expanding initial_train_years/test_window_years must be positive integers")
+
         folds = []
-        for y in range(start_year + initial_train_years, end_year - test_window_years + 1):
+        for y in range(
+            start_year + initial_train_years,
+            end_year - test_window_years + 2,
+            test_window_years,
+        ):
             test_start = (
                 pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)
             ).strftime("%Y-%m-%d")
@@ -82,7 +103,7 @@ def resolve_splits(config: dict) -> list[dict]:
                     "train_start": f"{start_year}-01-01",
                     "train_end": f"{y - 1}-12-31",
                     "test_start": test_start,
-                    "test_end": f"{y}-12-31",
+                    "test_end": f"{y + test_window_years - 1}-12-31",
                 }
             )
         return folds
@@ -146,6 +167,54 @@ def validate_embargo(splits: list[dict], embargo_days: int) -> bool:
     return True
 
 
+def _candidate_price_dirs(config: dict) -> list[Path]:
+    """Find the configured processed-data directory without relying on CWD."""
+    configured = Path(config.get("data", {}).get("price_dir", "data/processed"))
+    if configured.is_absolute():
+        return [configured]
+
+    module_experiments_dir = Path(__file__).resolve().parent
+    candidates = [
+        module_experiments_dir.parent / configured,
+        Path.cwd() / configured,
+        module_experiments_dir / configured,
+    ]
+    unique: list[Path] = []
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved not in unique:
+            unique.append(resolved)
+    return unique
+
+
+def data_fingerprint(config: dict) -> dict:
+    """Return a low-cost data-source fingerprint for cache invalidation.
+
+    The manifest hashes relative parquet names, byte sizes and nanosecond mtimes
+    rather than scanning every file's full content on each training run.  Set
+    ``data.version`` when replacing data while intentionally preserving those
+    metadata values (for example, restoring an archive verbatim).
+    """
+    configured_version = config.get("data", {}).get("version")
+    source_dir = next((path for path in _candidate_price_dirs(config) if path.is_dir()), None)
+    if source_dir is None:
+        return {"status": "missing", "configured_version": configured_version}
+
+    digest = hashlib.sha256()
+    count = 0
+    for file_path in sorted(source_dir.rglob("*.parquet")):
+        stat = file_path.stat()
+        digest.update(str(file_path.relative_to(source_dir)).encode())
+        digest.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode())
+        count += 1
+    return {
+        "status": "available",
+        "configured_version": configured_version,
+        "file_count": count,
+        "manifest_sha256": digest.hexdigest(),
+    }
+
+
 def _hash_payload(config: dict, resolved_splits: list[dict], include_model: bool) -> dict:
     data_cfg = config.get("data", {})
     payload = {
@@ -153,6 +222,7 @@ def _hash_payload(config: dict, resolved_splits: list[dict], include_model: bool
             "tickers": data_cfg.get("tickers", None),
             "universe": data_cfg.get("universe", None),
             "price_dir": data_cfg.get("price_dir", None),
+            "data_fingerprint": data_fingerprint(config),
             "start_date": data_cfg.get("start_date", None),
             "end_date": data_cfg.get("end_date", None),
             "split_strategy": data_cfg.get("split_strategy", "single"),
@@ -210,6 +280,15 @@ def cache_dir(anchor_file: str) -> str:
     path = os.path.join(experiments_dir(anchor_file), "cache")
     os.makedirs(path, exist_ok=True)
     return path
+
+
+def model_cache_dir(anchor_file: str) -> str:
+    """Return the LightGBM wrapper's model cache location.
+
+    Keep this path in one place so the dashboard reads the same models that
+    ``train.py`` writes through ``train_src.lgbm_wrapper.LGBMWrapper``.
+    """
+    return os.path.join(experiments_dir(anchor_file), "train_src", "cache", "models")
 
 
 def predictions_cache_path(config: dict, resolved_splits: list[dict], anchor_file: str) -> str:
@@ -365,3 +444,22 @@ def build_fold_alignment(
         status["is_exact_row_match"] = status["is_exact_fold_match"]
 
     return alignment_df, status
+
+
+def filter_to_test_fold_rows(frame: pd.DataFrame, splits: list[dict]) -> pd.DataFrame:
+    """Return only rows whose Date belongs to the union of configured test folds.
+
+    Evaluation labels are loaded with a right-side horizon buffer and may otherwise
+    include embargo dates between folds.  Those dates are not OOS predictions and
+    must not participate in exact key alignment or metrics.
+    """
+    if "Date" not in frame.columns:
+        raise ValueError("test fold filtering requires a Date column")
+
+    dates = pd.to_datetime(frame["Date"])
+    in_test_fold = pd.Series(False, index=frame.index)
+    for split in splits:
+        in_test_fold |= (dates >= pd.to_datetime(split["test_start"])) & (
+            dates <= pd.to_datetime(split["test_end"])
+        )
+    return frame.loc[in_test_fold].copy()

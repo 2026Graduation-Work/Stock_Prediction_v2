@@ -1,5 +1,6 @@
 #!/bin/bash
-# H=10 selection 후보 3개를 순차 학습·평가한다.
+# 하나의 로컬 config를 학습·분석한다. Git에 없는 과거 후보 config 이름을 참조하지 않는다.
+# 사용법: ./run_h10_selection.sh [configs/local.yaml]
 # Run from any directory. Override PYTHON_BIN when a specific virtualenv is needed.
 
 set -e
@@ -9,13 +10,13 @@ EXPERIMENTS_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 cd "$EXPERIMENTS_DIR"
 
-echo "Starting sequential H=10 selection experiments"
+CONFIG_PATH="${1:-configs/local.yaml}"
+if [[ ! -f "$CONFIG_PATH" ]]; then
+  echo "Config not found: $CONFIG_PATH" >&2
+  echo "Create one with: cp configs/base.yaml configs/local.yaml" >&2
+  exit 1
+fi
 
-for config in \
-  configs/tb_lgbm_h10_u225_d200_alpha158_current_sigma_selection2020_2022.yaml \
-  configs/tb_lgbm_h10_u250_d225_alpha158_current_sigma_selection2020_2022.yaml \
-  configs/tb_lgbm_h10_u275_d225_alpha158_current_sigma_selection2020_2022.yaml
-do
-  "$PYTHON_BIN" train.py --config "$config"
-  "$PYTHON_BIN" run_experiment_analysis.py --config "$config"
-done
+echo "Starting H=10 selection experiment: $CONFIG_PATH"
+"$PYTHON_BIN" train.py --config "$CONFIG_PATH"
+"$PYTHON_BIN" run_experiment_analysis.py --config "$CONFIG_PATH"

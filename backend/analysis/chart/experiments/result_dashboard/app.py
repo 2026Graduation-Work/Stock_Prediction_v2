@@ -1,7 +1,7 @@
 import calendar
-import hashlib
-import json
 import os
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,108 +9,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+EXPERIMENTS_DIR = Path(__file__).resolve().parents[1]
+if str(EXPERIMENTS_DIR) not in sys.path:
+    sys.path.insert(0, str(EXPERIMENTS_DIR))
+
+from experiment_utils import generate_predictions_hash, model_cache_dir, resolve_splits  # noqa: E402
+
 st.set_page_config(page_title="Quant Backtest Dashboard", layout="wide")
-
-
-def resolve_splits(config: dict) -> list:
-    """config['data']의 split_strategy 에 따라 폴드 목록을 계산하여 반환합니다."""
-    data_cfg = config.get("data", {})
-    strategy = data_cfg.get("split_strategy", "single")
-    embargo_days = data_cfg.get("embargo_days", 7)
-
-    if strategy == "single":
-        return data_cfg.get("splits", [])
-
-    elif strategy == "custom_blocks":
-        if "custom_blocks" in data_cfg:
-            return data_cfg["custom_blocks"]
-        else:
-            return [
-                {
-                    "train_start": "2016-01-01",
-                    "train_end": "2018-12-31",
-                    "test_start": "2019-01-08",
-                    "test_end": "2019-12-31",
-                },
-                {
-                    "train_start": "2018-01-01",
-                    "train_end": "2020-12-31",
-                    "test_start": "2021-01-08",
-                    "test_end": "2021-12-31",
-                },
-                {
-                    "train_start": "2021-01-01",
-                    "train_end": "2023-12-31",
-                    "test_start": "2024-01-08",
-                    "test_end": "2025-12-31",
-                },
-            ]
-
-    elif strategy == "sliding":
-        cfg = data_cfg.get("sliding", {})
-        tw = cfg.get("train_window_years", 3)
-        te = cfg.get("test_window_years", 1)
-        sy = cfg.get("start_year", 2016)
-        ey = cfg.get("end_year", 2025)
-
-        folds_info = []
-        for y in range(sy + tw, ey - te + 1):
-            ts = (pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)).strftime(
-                "%Y-%m-%d"
-            )
-            folds_info.append(
-                {
-                    "train_start": f"{y - tw}-01-01",
-                    "train_end": f"{y - 1}-12-31",
-                    "test_start": ts,
-                    "test_end": f"{y}-12-31",
-                }
-            )
-        return folds_info
-
-    elif strategy == "expanding":
-        cfg = data_cfg.get("expanding", {})
-        iy = cfg.get("initial_train_years", 5)
-        te = cfg.get("test_window_years", 1)
-        sy = cfg.get("start_year", 2016)
-        ey = cfg.get("end_year", 2025)
-
-        folds_info = []
-        for y in range(sy + iy, ey - te + 1):
-            ts = (pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)).strftime(
-                "%Y-%m-%d"
-            )
-            folds_info.append(
-                {
-                    "train_start": f"{sy}-01-01",
-                    "train_end": f"{y - 1}-12-31",
-                    "test_start": ts,
-                    "test_end": f"{y}-12-31",
-                }
-            )
-        return folds_info
-
-    else:
-        raise ValueError(f"지원하지 않는 split 전략: {strategy}")
-
-
-def generate_predictions_hash(config: dict, resolved_splits: list) -> str:
-    """예측 확률 및 모델 캐시용 해시: 데이터/피처/라벨 + 모델 하이퍼파라미터를 감지하여 생성합니다."""
-    hash_dict = {
-        "data": {
-            "tickers": config.get("data", {}).get("tickers", None),
-            "start_date": config.get("data", {}).get("start_date", None),
-            "end_date": config.get("data", {}).get("end_date", None),
-            "split_strategy": config.get("data", {}).get("split_strategy", "single"),
-            "embargo_days": config.get("data", {}).get("embargo_days", 7),
-            "splits": resolved_splits,
-        },
-        "features": config.get("features", {}),
-        "labels": config.get("labels", {}),
-        "model": config.get("model", {}),
-    }
-    hash_str = json.dumps(hash_dict, sort_keys=True)
-    return hashlib.md5(hash_str.encode()).hexdigest()[:8]
 
 
 # ==========================================
@@ -372,8 +277,9 @@ def main():
         return
 
     # ── [실험 설정 파싱 및 표기] ──
-    # 설정 파일을 다각도로 탐색 (core 폴더 또는 현재 CWD 기준)
+    # 실행 결과와 한 쌍인 snapshot을 최우선으로 사용한다. 없을 때만 로컬 템플릿을 탐색한다.
     config_candidates = [
+        os.path.join(exp_path, "config_snapshot.yaml"),
         os.path.abspath(os.path.join(results_dir, "..", "..", "core", "config.yaml")),
         os.path.abspath(os.path.join(results_dir, "..", "..", "core", "config.example.yaml")),
         os.path.abspath(os.path.join(os.getcwd(), "config.yaml")),
@@ -901,7 +807,7 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
     st.subheader("4. 🤖 AI 모델 분석: 피처 중요도 (Feature Importance)")
 
     # 모델 캐시 폴더 경로 지정
-    models_cache_dir = os.path.abspath(os.path.join(current_dir, "..", "cache", "models"))
+    models_cache_dir = model_cache_dir(__file__)
 
     if config:
         try:

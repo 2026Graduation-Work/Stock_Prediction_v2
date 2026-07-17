@@ -13,6 +13,7 @@ from evaluation.metrics import (
 from experiment_utils import (
     build_fold_alignment,
     find_processed_dir,
+    filter_to_test_fold_rows,
     generate_predictions_hash,
     label_params_from_config,
     load_predictions,
@@ -74,6 +75,7 @@ def main(config_path, predictions_path=None):
         training=False,  # Load all requested columns normally
     )
     actual_df["Date"] = pd.to_datetime(actual_df["Date"]).dt.tz_localize(None)
+    actual_df = filter_to_test_fold_rows(actual_df, splits)
 
     # Align predictions and actual labels
     alignment_df, alignment_status = build_fold_alignment(final_predictions, splits, eval_df=actual_df)

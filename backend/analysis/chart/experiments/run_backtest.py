@@ -16,7 +16,6 @@ from experiment_utils import (
     build_fold_alignment,
     find_processed_dir,
     generate_predictions_hash,
-    label_params_from_config,
     load_predictions,
     resolve_splits,
     result_dir,
@@ -95,7 +94,6 @@ def main(config_path, predictions_path=None):
         full_test_end,
         columns_only=price_cols,
         tickers=tickers_cfg,
-        label_params=label_params_from_config(config),
     )
     market_df["Date"] = pd.to_datetime(market_df["Date"]).dt.tz_localize(None)
 
@@ -106,9 +104,35 @@ def main(config_path, predictions_path=None):
             f"alignment={alignment_status}"
         )
 
+    # 가격 로딩은 라벨 생성을 하지 않는다. 라벨은 미래 horizon 가격이 필요한 반면
+    # 백테스트는 해당 날짜의 OHLC가 모두 필요하므로, label_params를 넘기면 마지막
+    # horizon 거래일의 가격과 prediction이 inner join에서 조용히 사라질 수 있다.
+    prediction_keys = final_predictions[["Date", "Code"]].copy()
+    prediction_keys["Date"] = pd.to_datetime(prediction_keys["Date"]).dt.tz_localize(None)
+    market_keys = market_df[["Date", "Code"]].drop_duplicates()
+    uncovered = prediction_keys.merge(market_keys, on=["Date", "Code"], how="left", indicator=True)
+    uncovered = uncovered[uncovered["_merge"] != "both"]
+    if not uncovered.empty:
+        examples = uncovered[["Date", "Code"]].head(5).to_dict("records")
+        raise ValueError(
+            "백테스트 가격 데이터에 대응하는 prediction 행이 없습니다. "
+            f"누락 {len(uncovered)}건, 예시={examples}"
+        )
+
     print("\n[1] 트레이딩 전략 매트릭스 변환 (Swing Strategy)...")
     strategy = SwingStrategy(config)
     entries, weights = strategy.generate_signals(final_predictions, market_df)
+    strategy_keys = pd.MultiIndex.from_product(
+        [entries.index, entries.columns], names=["Date", "Code"]
+    )
+    prediction_index = pd.MultiIndex.from_frame(prediction_keys)
+    missing_strategy_keys = prediction_index.difference(strategy_keys)
+    if len(missing_strategy_keys):
+        examples = [tuple(map(str, key)) for key in missing_strategy_keys[:5]]
+        raise ValueError(
+            "전략 시그널 행렬에서 prediction key가 누락되었습니다. "
+            f"누락 {len(missing_strategy_keys)}건, 예시={examples}"
+        )
 
     print("\n[2] VectorBT 퀀트 시뮬레이터 가동 (Backtest Engine)...")
     bt_engine = VectorBTEngine(config)

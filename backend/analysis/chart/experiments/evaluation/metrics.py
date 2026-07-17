@@ -39,10 +39,15 @@ def _pr_auc_score_binary(y_true: pd.Series, y_prob: pd.Series) -> float:
     if n_pos == 0:
         return np.nan
 
-    order = np.argsort(-y_prob.to_numpy(), kind="mergesort")
-    sorted_true = y_true.to_numpy()[order]
-    tp_cum = np.cumsum(sorted_true == 1)
-    fp_cum = np.cumsum(sorted_true == 0)
+    # A threshold applies to every observation with the same score at once.
+    # Processing tied scores row-by-row makes the curve (and its area) depend on
+    # an incidental parquet/DataFrame row order.
+    ranked = pd.DataFrame({"score": y_prob, "target": y_true}).groupby(
+        "score", sort=False, dropna=False
+    )["target"].agg(["sum", "count"])
+    ranked = ranked.sort_index(ascending=False, kind="stable")
+    tp_cum = ranked["sum"].cumsum().to_numpy(dtype=float)
+    fp_cum = (ranked["count"] - ranked["sum"]).cumsum().to_numpy(dtype=float)
     precision = tp_cum / np.maximum(tp_cum + fp_cum, 1)
     recall = tp_cum / n_pos
 

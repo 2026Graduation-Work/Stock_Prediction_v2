@@ -66,13 +66,17 @@ def _evaluate_validation(
 
     X_val = val_df[feature_cols]
     val_probs = model_wrapper.predict(X_val)
-    val_eval_cols = ["Date", "Y_Label"]
-    if "Code" in val_df.columns:
-        val_eval_cols.insert(1, "Code")
+    required_metadata = {"Date", "Code", "Close", "Trading_Halt", "Y_Label"}
+    missing_metadata = sorted(required_metadata - set(val_df.columns))
+    if missing_metadata:
+        raise ValueError(
+            "검증 데이터에 실제 거래 가능 여부 판단용 메타데이터가 없습니다: "
+            f"{missing_metadata}"
+        )
+
+    val_eval_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"]
     val_eval_df = val_df[val_eval_cols].copy()
     val_eval_df["Prob"] = val_probs
-    val_eval_df["Close"] = val_df.get("Close", 10.0)
-    val_eval_df["Trading_Halt"] = val_df.get("Trading_Halt", 0)
 
     daily_ic = val_eval_df.groupby("Date").apply(_get_spearman).dropna()
     n_days = len(daily_ic)
@@ -207,8 +211,7 @@ def _load_validation_df(
         val_end,
         tickers=tickers_cfg,
         label_params=label_params,
-        training=True,
-        keep_date=True,
+        training=False,
     )
     val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols
     return val_df[[c for c in val_cols if c in val_df.columns]].copy()
@@ -416,8 +419,7 @@ def main(config_path):
                         train_end,
                         tickers=tickers_cfg,
                         label_params=label_params,
-                        training=True,
-                        keep_date=True,
+                        training=False,
                     )
 
                     val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols

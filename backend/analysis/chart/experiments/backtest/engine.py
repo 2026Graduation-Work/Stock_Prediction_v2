@@ -360,7 +360,10 @@ class VectorBTEngine:
         self.up_mult = self.bt_cfg.get("up_mult", 3.5)
         self.down_mult = self.bt_cfg.get("down_mult", 2.0)
         self.hard_sl_mult = self.bt_cfg.get("hard_sl_mult", 2.5)
-        self.holding_days = config.get("labels", {}).get("horizon", 5)
+        # 라벨 horizon은 학습 타깃 정의이고, 실제 보유 기간은 별도 실험 변수다.
+        self.holding_days = self.bt_cfg.get(
+            "max_holding_days", config.get("labels", {}).get("horizon", 5)
+        )
 
     def run(self, entries: pd.DataFrame, weights: pd.DataFrame, price_df: pd.DataFrame, generate_report: bool = True):
         print(

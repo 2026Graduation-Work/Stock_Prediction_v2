@@ -32,6 +32,10 @@ cp experiments/configs/base.yaml experiments/configs/local.yaml
 # local.yaml에서 기간, horizon, barrier, 모델·전략 파라미터를 수정
 ```
 
+데이터를 갱신하면 `data.version`도 증가시킨다. 학습 캐시 키는 parquet 파일명·크기·수정시각
+manifest와 이 버전을 포함하므로, 일반적인 데이터 갱신은 기존 모델/예측 캐시를 재사용하지 않는다.
+내용을 바꾸면서 파일 메타데이터를 의도적으로 보존한 경우에도 `data.version`을 반드시 바꾼다.
+
 `core/config.example.yaml`은 서비스 추론용 로컬 설정 템플릿입니다. 필요할 때만
 `core/config.yaml`으로 복사해 사용하며, 이 파일도 Git에 올리지 않습니다.
 
@@ -49,6 +53,15 @@ python experiments/run_experiment_analysis.py --config experiments/configs/local
 
 # 결과 대시보드
 streamlit run experiments/result_dashboard/app.py
+```
+
+fresh checkout에서 로컬 설정 하나로 순차 실행하려면 다음 보조 스크립트를 쓴다. 과거의
+개별 실험 config 파일은 Git으로 공유하지 않으므로 스크립트가 직접 참조하지 않는다.
+
+```bash
+bash experiments/scripts/batch/run_sequential_eval.sh experiments/configs/local.yaml
+# 또는 학습+분석만 실행
+bash experiments/scripts/batch/run_h10_selection.sh experiments/configs/local.yaml
 ```
 
 개별 실행 결과는 `experiments/results/`에 로컬 보관합니다. Git에는

@@ -107,3 +107,39 @@ def test_backtest_does_not_fill_pre_listing_prices_from_the_future(monkeypatch) 
     result = engine.VectorBTEngine({}).run(entries, weights, price_df, generate_report=False)
     assert result is not None
     assert not captured["entries"].iloc[0]
+
+
+def test_backtest_uses_max_holding_days_instead_of_label_horizon(monkeypatch) -> None:
+    dates = pd.date_range("2024-01-02", periods=2, freq="B")
+    entries = pd.DataFrame({"000001": [True, False]}, index=dates)
+    weights = pd.DataFrame({"000001": [1.0, 0.0]}, index=dates)
+    price_df = pd.DataFrame(
+        {
+            "Date": dates,
+            "Code": ["000001", "000001"],
+            "Open": [100.0, 101.0],
+            "High": [101.0, 102.0],
+            "Low": [99.0, 100.0],
+            "Close": [100.0, 101.0],
+            "Trading_Halt": [0, 0],
+            "Sigma": [0.01, 0.01],
+        }
+    )
+    captured = {}
+
+    def capture_exits(**kwargs):
+        captured["holding_days"] = kwargs["holding_days"]
+        return pd.Series(False, index=dates), pd.Series(float("nan"), index=dates)
+
+    class FakePortfolio:
+        @staticmethod
+        def from_signals(**kwargs):
+            return object()
+
+    monkeypatch.setattr(engine, "calculate_rule_exits", capture_exits)
+    monkeypatch.setattr(engine.vbt, "Portfolio", FakePortfolio)
+
+    engine.VectorBTEngine(
+        {"labels": {"horizon": 5}, "backtest": {"max_holding_days": 10}}
+    ).run(entries, weights, price_df, generate_report=False)
+    assert captured["holding_days"] == 10
