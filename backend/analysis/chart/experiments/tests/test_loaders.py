@@ -1,3 +1,5 @@
+# ruff: noqa: I001
+
 import pandas as pd
 
 from experiments.train_src import loaders

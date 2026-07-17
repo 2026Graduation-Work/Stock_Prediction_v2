@@ -1,3 +1,5 @@
+# ruff: noqa: I001
+
 import calendar
 import os
 import sys
