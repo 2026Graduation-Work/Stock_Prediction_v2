@@ -19,12 +19,12 @@ data:
     train_window_years: 3
     test_window_years: 1
     start_year: 2016
-    end_year: 2027
+    end_year: 2026
   expanding:
     initial_train_years: 5
     test_window_years: 1
     start_year: 2016
-    end_year: 2027
+    end_year: 2026
 
 features:
   set_name: "alpha158"

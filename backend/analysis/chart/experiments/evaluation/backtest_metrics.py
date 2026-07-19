@@ -48,10 +48,13 @@ def calculate_trading_metrics(daily_returns: pd.Series, trades_df: pd.DataFrame 
         metrics["sortino_ratio"] = np.nan
 
     # Max Drawdown (MDD)
-    cum_returns = (1.0 + daily_returns).cumprod()
-    running_max = cum_returns.cummax()
-    drawdowns = (cum_returns - running_max) / running_max
-    mdd = drawdowns.min()
+    # Include the initial equity (1.0). Without it, a loss on day one becomes
+    # the first running maximum and is incorrectly reported as zero drawdown.
+    cum_returns = (1.0 + daily_returns).cumprod().to_numpy(dtype=float)
+    equity = np.concatenate(([1.0], cum_returns))
+    running_max = np.maximum.accumulate(equity)
+    drawdowns = (equity - running_max) / running_max
+    mdd = np.nanmin(drawdowns)
     metrics["max_drawdown"] = float(mdd)
 
     # 2. 거래 기록 기반 지표 (trades_df가 제공되었을 때)

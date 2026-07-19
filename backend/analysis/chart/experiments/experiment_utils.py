@@ -5,6 +5,8 @@ from pathlib import Path
 
 import pandas as pd
 
+CACHE_SCHEMA_VERSION = 2
+
 
 def _normalize_split(split: dict, fold_id: int) -> dict:
     normalized = {
@@ -29,6 +31,43 @@ def split_identity(split: dict) -> dict:
     }
 
 
+def _bound_splits_to_data_range(splits: list[dict], data_cfg: dict) -> list[dict]:
+    """Clip generated folds to the configured data range and drop empty folds."""
+    data_start = pd.to_datetime(data_cfg.get("start_date"), errors="coerce")
+    data_end = pd.to_datetime(data_cfg.get("end_date"), errors="coerce")
+    bounded = []
+
+    for split in splits:
+        normalized = _normalize_split(split, len(bounded))
+        train_start = pd.to_datetime(normalized["train_start"])
+        train_end = pd.to_datetime(normalized["train_end"])
+        test_start = pd.to_datetime(normalized["test_start"])
+        test_end = pd.to_datetime(normalized["test_end"])
+
+        if pd.notna(data_start):
+            train_start = max(train_start, data_start)
+            test_start = max(test_start, data_start)
+        if pd.notna(data_end):
+            train_end = min(train_end, data_end)
+            test_end = min(test_end, data_end)
+
+        if train_start > train_end or test_start > test_end:
+            continue
+
+        normalized.update(
+            {
+                "fold_id": len(bounded),
+                "train_start": train_start.strftime("%Y-%m-%d"),
+                "train_end": train_end.strftime("%Y-%m-%d"),
+                "test_start": test_start.strftime("%Y-%m-%d"),
+                "test_end": test_end.strftime("%Y-%m-%d"),
+            }
+        )
+        bounded.append(normalized)
+
+    return bounded
+
+
 def resolve_splits(config: dict) -> list[dict]:
     """Return canonical split dictionaries shared by train/evaluation/backtest tools.
 
@@ -42,11 +81,12 @@ def resolve_splits(config: dict) -> list[dict]:
     embargo_days = data_cfg.get("embargo_days", 7)
 
     if strategy == "single":
-        return [_normalize_split(split, idx) for idx, split in enumerate(data_cfg.get("splits", []))]
+        splits = data_cfg.get("splits", [])
+        return _bound_splits_to_data_range(splits, data_cfg)
 
     if strategy == "custom_blocks":
         blocks = data_cfg.get("custom_blocks", [])
-        return [_normalize_split(split, idx) for idx, split in enumerate(blocks)]
+        return _bound_splits_to_data_range(blocks, data_cfg)
 
     if strategy == "sliding":
         cfg = data_cfg.get("sliding", {})
@@ -76,7 +116,7 @@ def resolve_splits(config: dict) -> list[dict]:
                     "test_end": f"{y + test_window_years - 1}-12-31",
                 }
             )
-        return folds
+        return _bound_splits_to_data_range(folds, data_cfg)
 
     if strategy == "expanding":
         cfg = data_cfg.get("expanding", {})
@@ -106,7 +146,7 @@ def resolve_splits(config: dict) -> list[dict]:
                     "test_end": f"{y + test_window_years - 1}-12-31",
                 }
             )
-        return folds
+        return _bound_splits_to_data_range(folds, data_cfg)
 
     if strategy == "regime":
         regimes = [
@@ -147,7 +187,7 @@ def resolve_splits(config: dict) -> list[dict]:
                 "test_end": "2024-12-31",
             },
         ]
-        return [_normalize_split(split, idx) for idx, split in enumerate(regimes)]
+        return _bound_splits_to_data_range(regimes, data_cfg)
 
     raise ValueError(f"지원하지 않는 split 전략: {strategy}")
 
@@ -218,6 +258,7 @@ def data_fingerprint(config: dict) -> dict:
 def _hash_payload(config: dict, resolved_splits: list[dict], include_model: bool) -> dict:
     data_cfg = config.get("data", {})
     payload = {
+        "cache_schema_version": CACHE_SCHEMA_VERSION,
         "data": {
             "tickers": data_cfg.get("tickers", None),
             "universe": data_cfg.get("universe", None),

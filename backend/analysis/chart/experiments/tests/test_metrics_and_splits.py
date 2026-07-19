@@ -68,3 +68,14 @@ def test_data_fingerprint_changes_cache_hash_when_parquet_manifest_changes(tmp_p
 
     assert data_fingerprint(config) != before_fingerprint
     assert generate_dataset_hash(config, splits) != before_hash
+
+
+def test_generated_folds_do_not_extend_past_configured_data_end() -> None:
+    config = _window_config("sliding")
+    config["data"]["end_date"] = "2020-12-31"
+
+    folds = resolve_splits(config)
+
+    assert [(fold["test_start"], fold["test_end"]) for fold in folds] == [
+        ("2019-01-07", "2020-12-31")
+    ]

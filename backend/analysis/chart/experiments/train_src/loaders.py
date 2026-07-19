@@ -103,8 +103,13 @@ def apply_dynamic_sigma_barrier_labeling(
     y_label[fail_mask] = -1
 
     y_label_series = pd.Series(y_label, index=df.index)
-    if n > horizon:
-        y_label_series.iloc[-horizon:] = np.nan
+    # Dynamic labels may scan beyond ``horizon`` calendar rows to obtain the
+    # requested number of trading days. Rows inside that incomplete tail must
+    # not be silently treated as neutral.
+    if n > max_search_days:
+        y_label_series.iloc[-max_search_days:] = np.nan
+    else:
+        y_label_series[:] = np.nan
 
     return y_label_series
 
@@ -114,8 +119,9 @@ def load_parquet_data(
     start_date: str = None,
     end_date: str = None,
     columns_only: list = None,
-    tickers: str = None,
+    tickers: str | list[str] | tuple[str, ...] = None,
     label_params: dict = None,
+    label_observation_end: str = None,
     training: bool = False,
     keep_date: bool = False,
 ) -> pd.DataFrame:
@@ -126,24 +132,27 @@ def load_parquet_data(
     files = glob.glob(os.path.join(data_dir, "*.parquet"))
 
     if tickers == "KOSPI_TOP200":
-        try:
-            import FinanceDataReader as fdr
+        raise ValueError(
+            "KOSPI_TOP200 실시간 조회는 시점에 따라 유니버스가 달라져 재현할 수 없습니다. "
+            "실험 시점의 6자리 종목 코드 목록을 data.tickers에 명시하세요."
+        )
 
-            print("[*] KOSPI TOP 200 종목 필터링 중...")
-            kospi = fdr.StockListing("KOSPI")
-            kospi = kospi.sort_values(by="Marcap", ascending=False)
-            top_200_codes = set(kospi["Code"].head(200).tolist())
-
-            filtered_files = []
-            for f in files:
-                basename = os.path.basename(f)
-                code = basename.split(".")[0]
-                if code in top_200_codes:
-                    filtered_files.append(f)
-            files = filtered_files
-            print(f"[*] KOSPI TOP 200 매칭된 파일 수: {len(files)}개")
-        except Exception as e:
-            print(f"[!] KOSPI TOP 200 필터링 실패 (전체 로드로 대체): {e}")
+    if tickers:
+        requested_codes = (
+            {part.strip().zfill(6) for part in tickers.split(",") if part.strip()}
+            if isinstance(tickers, str)
+            else {str(code).strip().zfill(6) for code in tickers}
+        )
+        files = [
+            path
+            for path in files
+            if os.path.basename(path).split(".")[0].zfill(6) in requested_codes
+        ]
+        if not files:
+            raise ValueError(
+                "data.tickers와 일치하는 parquet 파일이 없습니다: "
+                f"{sorted(requested_codes)}"
+            )
 
     print(f"총 {len(files)}개 종목 데이터 로드 중... (날짜 필터: {start_date} ~ {end_date})")
 
@@ -184,9 +193,21 @@ def load_parquet_data(
             # 다시 제한한다. dynamic barrier는 거래정지일을 건너뛸 수 있어 더 넉넉한
             # 탐색 범위를 사용한다.
             requested_end = pd.to_datetime(end_date) if end_date is not None else None
+            observation_end = (
+                pd.to_datetime(label_observation_end)
+                if label_observation_end is not None
+                else None
+            )
             if requested_end is not None:
                 if label_params is None:
                     temp_df = temp_df[temp_df["Date"] <= requested_end]
+                elif observation_end is not None:
+                    if observation_end < requested_end:
+                        raise ValueError(
+                            "label_observation_end는 end_date보다 빠를 수 없습니다: "
+                            f"{observation_end.date()} < {requested_end.date()}"
+                        )
+                    temp_df = temp_df[temp_df["Date"] <= observation_end]
                 else:
                     horizon = int(label_params["horizon"])
                     label_type = label_params.get("type", "fixed")
