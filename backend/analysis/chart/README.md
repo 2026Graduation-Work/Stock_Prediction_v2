@@ -118,18 +118,25 @@ features:
       path: "data/external/financial.parquet"
       apply_period: "until_next_update"
       columns: ["financial_health_score", "roe", "debt_ratio"]
-      missing: {policy: "error", add_indicator: true}
+      # 최근 공시값은 최대 120개 거래일까지만 유지한다.
+      missing: {policy: "error", add_indicator: true, max_staleness_trading_days: 120}
 ```
 
-- `one_day`: `AvailableDate`와 같은 거래일에만 값을 붙인다. 예: 5월 3일 뉴스
-  감성은 5월 3일 행에만 사용한다.
+- `one_day`: `AvailableDate`와 같은 거래일에만 값을 붙인다. `AvailableDate`가
+  주말·휴일이면 해당 종목 패널의 다음 거래일에 붙인다. 예: 주말에 공개된 뉴스는
+  다음 개장일 행에만 사용한다.
 - `until_next_update`: `AvailableDate`부터 다음 값이 공개되기 전까지 가장 최근
-  값을 유지한다. 예: 5월 16일 재무 점수는 다음 공시값이 나오기 전까지 사용한다.
+  값을 유지한다. `missing.max_staleness_trading_days`를 반드시 지정하며, 이 기간이
+  지나면 오래된 값은 결측으로 처리한다. 예: 5월 16일 재무 점수는 다음 공시값 또는
+  최대 유효기간 전까지만 사용한다.
 - 두 방식 모두 `AvailableDate`보다 이른 날짜에는 절대 값을 붙이지 않는다.
 - `base_columns`에는 사용할 Alpha158 컬럼 목록을 넣을 수 있다. `Date`, OHLCV,
   `Sigma`, `Trading_Halt` 등 라벨 생성에 필요한 가격 메타데이터는 자동으로 남는다.
 - `missing.policy`는 `zero`, `forward_fill`, `drop`, `error` 중 하나다. `add_indicator`
   를 켜면 해당 값이 원래 비어 있었는지를 나타내는 피처도 함께 만든다.
+- `forward_fill`과 `until_next_update`에는 `max_staleness_trading_days`가 필요하다.
+  이는 값이 유지될 수 있는 최대 **거래일 행 수**다. 예를 들어 분기 재무 피처는
+  `120`처럼 설정해 오래된 공시값의 무제한 사용을 막는다.
 - 외부 파일 안에서 `(Code, Date, AvailableDate)`가 중복되면 안 되며, 숫자형
   피처만 넣는다. 같은 `(Code, AvailableDate)`에 두 값이 있어도 안 된다.
   `Y_Label`, 미래 수익률, 미래 가격은 넣을 수 없다.

@@ -26,6 +26,17 @@ def _base_panel() -> pd.DataFrame:
     )
 
 
+def _two_code_base_panel() -> pd.DataFrame:
+    dates = pd.date_range("2024-01-05", periods=4, freq="B")
+    return pd.concat(
+        [
+            pd.DataFrame({"Date": dates, "Code": "005930", "Close": 70000.0}),
+            pd.DataFrame({"Date": dates, "Code": "000660", "Close": 120000.0}),
+        ],
+        ignore_index=True,
+    )
+
+
 def _source_config(path: Path, **overrides: object) -> dict:
     config = {
         "name": "news",
@@ -74,12 +85,106 @@ def test_until_next_update_never_uses_future_value(tmp_path: Path) -> None:
         name="financial",
         apply_period="until_next_update",
         columns=["financial_health_score"],
+        missing={"policy": "zero", "add_indicator": True, "max_staleness_trading_days": 120},
     )
     panel, _ = assemble_feature_panel(_base_panel(), load_feature_sources([config]))
 
     # 1/2에는 1/3 공개값을 아직 알 수 없고, 1/5부터 새 재무점수로 바뀐다.
     assert panel["financial_health_score"].tolist() == [0.0, 8.0, 8.0, 6.5]
     assert panel["financial__financial_health_score__missing"].tolist() == [1, 0, 0, 0]
+
+
+def test_one_day_weekend_available_date_maps_to_next_trading_day(tmp_path: Path) -> None:
+    source_path = tmp_path / "weekend_news.parquet"
+    pd.DataFrame(
+        {
+            "Date": ["2024-01-05"],
+            "Code": ["005930"],
+            "AvailableDate": ["2024-01-07"],
+            "news_sentiment": [0.7],
+        }
+    ).to_parquet(source_path, index=False)
+
+    base = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2024-01-05", "2024-01-08", "2024-01-09"]),
+            "Code": ["005930"] * 3,
+            "Close": [70000.0, 70100.0, 70200.0],
+        }
+    )
+    panel, _ = assemble_feature_panel(base, load_feature_sources([_source_config(source_path)]))
+
+    assert panel["news_sentiment"].tolist() == [0.0, 0.7, 0.0]
+
+
+def test_until_next_update_vectorized_join_keeps_codes_separate(tmp_path: Path) -> None:
+    source_path = tmp_path / "financial_multi.parquet"
+    pd.DataFrame(
+        {
+            "Date": ["2024-01-05", "2024-01-05"],
+            "Code": ["005930", "000660"],
+            "AvailableDate": ["2024-01-08", "2024-01-09"],
+            "financial_health_score": [8.0, 3.0],
+        }
+    ).to_parquet(source_path, index=False)
+    config = _source_config(
+        source_path,
+        name="financial",
+        apply_period="until_next_update",
+        columns=["financial_health_score"],
+        missing={"policy": "zero", "max_staleness_trading_days": 120},
+    )
+
+    panel, _ = assemble_feature_panel(_two_code_base_panel(), load_feature_sources([config]))
+    values = panel.pivot(index="Date", columns="Code", values="financial_health_score")
+
+    assert values["005930"].tolist() == [0.0, 8.0, 8.0, 8.0]
+    assert values["000660"].tolist() == [0.0, 0.0, 3.0, 3.0]
+
+
+def test_until_next_update_expires_stale_value(tmp_path: Path) -> None:
+    source_path = tmp_path / "stale_financial.parquet"
+    pd.DataFrame(
+        {
+            "Date": ["2024-01-02"],
+            "Code": ["005930"],
+            "AvailableDate": ["2024-01-02"],
+            "financial_health_score": [8.0],
+        }
+    ).to_parquet(source_path, index=False)
+    config = _source_config(
+        source_path,
+        name="financial",
+        apply_period="until_next_update",
+        columns=["financial_health_score"],
+        missing={"policy": "zero", "max_staleness_trading_days": 1},
+    )
+
+    panel, _ = assemble_feature_panel(_base_panel(), load_feature_sources([config]))
+
+    assert panel["financial_health_score"].tolist() == [8.0, 8.0, 0.0, 0.0]
+
+
+def test_forward_fill_requires_and_respects_staleness_limit(tmp_path: Path) -> None:
+    source_path = tmp_path / "sparse_news.parquet"
+    pd.DataFrame(
+        {
+            "Date": ["2024-01-02"],
+            "Code": ["005930"],
+            "AvailableDate": ["2024-01-03"],
+            "news_sentiment": [0.7],
+        }
+    ).to_parquet(source_path, index=False)
+    config = _source_config(
+        source_path,
+        missing={"policy": "forward_fill", "max_staleness_trading_days": 1},
+    )
+
+    panel, _ = assemble_feature_panel(_base_panel(), load_feature_sources([config]))
+
+    assert pd.isna(panel.loc[0, "news_sentiment"])
+    assert panel.loc[1:2, "news_sentiment"].tolist() == [0.7, 0.7]
+    assert pd.isna(panel.loc[3, "news_sentiment"])
 
 
 def test_rejects_duplicate_available_date_for_one_code(tmp_path: Path) -> None:

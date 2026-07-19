@@ -54,6 +54,7 @@ class FeatureSourceSpec:
     columns: tuple[str, ...]
     missing_policy: str
     add_indicator: bool
+    max_staleness_trading_days: int | None
 
 
 @dataclass
@@ -73,7 +74,7 @@ def _resolve_chart_path(value: str | Path) -> Path:
 
 
 def _normalize_date(series: pd.Series, column: str, source_name: str) -> pd.Series:
-    normalized = pd.to_datetime(series, errors="coerce")
+    normalized = pd.to_datetime(series, errors="coerce", format="mixed")
     if getattr(normalized.dt, "tz", None) is not None:
         normalized = normalized.dt.tz_localize(None)
     if normalized.isna().any():
@@ -140,6 +141,24 @@ def _parse_source_spec(source_config: dict[str, Any]) -> FeatureSourceSpec:
             f"{name}: missing.policy는 {sorted(SUPPORTED_MISSING_POLICIES)} 중 하나여야 합니다."
         )
 
+    max_staleness = missing_config.get("max_staleness_trading_days")
+    if max_staleness is not None and (
+        isinstance(max_staleness, bool) or not isinstance(max_staleness, int) or max_staleness < 0
+    ):
+        raise FeatureContractError(
+            f"{name}: missing.max_staleness_trading_days는 0 이상의 정수여야 합니다."
+        )
+    if apply_period == "until_next_update" and max_staleness is None:
+        raise FeatureContractError(
+            f"{name}: until_next_update는 오래된 값 사용을 막기 위해 "
+            "missing.max_staleness_trading_days를 지정해야 합니다."
+        )
+    if missing_policy == "forward_fill" and max_staleness is None:
+        raise FeatureContractError(
+            f"{name}: forward_fill은 오래된 값 사용을 막기 위해 "
+            "missing.max_staleness_trading_days를 지정해야 합니다."
+        )
+
     return FeatureSourceSpec(
         name=name,
         path=_resolve_chart_path(source_config["path"]),
@@ -147,6 +166,7 @@ def _parse_source_spec(source_config: dict[str, Any]) -> FeatureSourceSpec:
         columns=columns,
         missing_policy=missing_policy,
         add_indicator=bool(missing_config.get("add_indicator", False)),
+        max_staleness_trading_days=max_staleness,
     )
 
 
@@ -227,36 +247,88 @@ def load_feature_sources(source_configs: list[dict[str, Any]]) -> list[LoadedFea
     return loaded
 
 
-def _join_one_day(base: pd.DataFrame, source: LoadedFeatureSource) -> pd.DataFrame:
-    payload = source.frame[["Code", "AvailableDate", *source.spec.columns]].rename(
-        columns={"AvailableDate": "Date"}
+def _panel_trading_days(base: pd.DataFrame) -> pd.DataFrame:
+    """종목별 패널 행에 거래일 순번을 부여한다."""
+    trading_days = base[["Code", "Date"]].drop_duplicates().sort_values(
+        ["Code", "Date"], kind="stable"
     )
+    trading_days["_trading_day_index"] = trading_days.groupby(
+        "Code", observed=True
+    ).cumcount()
+    return trading_days
+
+
+def _map_to_next_panel_day(
+    base: pd.DataFrame, source: LoadedFeatureSource
+) -> pd.DataFrame:
+    """외부 AvailableDate를 해당 종목의 첫 패널 거래일에 맞춘다.
+
+    외부 시스템이 주말·휴일을 AvailableDate로 기록해도 다음 개장일에만 사용할 수
+    있게 한다. 패널 범위 뒤의 값은 아직 학습 데이터에서 사용할 수 없으므로 제외한다.
+    """
+    codes = base["Code"].unique()
+    filtered = source.frame.loc[source.frame["Code"].isin(codes)].copy()
+    if filtered.empty:
+        return filtered.assign(_effective_date=pd.NaT, _effective_trading_day_index=pd.NA)
+
+    trading_days = _panel_trading_days(base).rename(
+        columns={"Date": "_effective_date", "_trading_day_index": "_effective_trading_day_index"}
+    )
+    left = filtered.sort_values(["AvailableDate", "Code"], kind="stable")
+    right = trading_days.sort_values(["_effective_date", "Code"], kind="stable")
+    mapped = pd.merge_asof(
+        left,
+        right,
+        left_on="AvailableDate",
+        right_on="_effective_date",
+        by="Code",
+        direction="forward",
+        allow_exact_matches=True,
+    )
+    return mapped.loc[mapped["_effective_date"].notna()].copy()
+
+
+def _join_one_day(base: pd.DataFrame, source: LoadedFeatureSource) -> pd.DataFrame:
+    mapped = _map_to_next_panel_day(base, source)
+    payload = mapped[["Code", "_effective_date", *source.spec.columns]].rename(
+        columns={"_effective_date": "Date"}
+    )
+    duplicate_effective_date = payload.duplicated(["Code", "Date"])
+    if duplicate_effective_date.any():
+        sample = payload.loc[duplicate_effective_date, ["Code", "Date"]].head(3)
+        raise FeatureContractError(
+            f"{source.spec.name}: 비거래일을 다음 거래일로 매핑한 뒤 같은 Code/Date에 "
+            f"여러 값이 생겼습니다. 외부 데이터를 일별로 집계하세요: {sample.to_dict('records')}"
+        )
     return base.merge(payload, on=["Code", "Date"], how="left", validate="many_to_one")
 
 
 def _join_until_next_update(base: pd.DataFrame, source: LoadedFeatureSource) -> pd.DataFrame:
-    pieces: list[pd.DataFrame] = []
-    for code, base_group in base.groupby("Code", observed=True, sort=False):
-        left = base_group.assign(_panel_row=base_group.index).sort_values("Date", kind="stable")
-        right = source.frame.loc[source.frame["Code"] == code, ["AvailableDate", *source.spec.columns]]
-        if right.empty:
-            missing_values = left[["_panel_row"]].copy()
-            for column in source.spec.columns:
-                missing_values[column] = float("nan")
-            pieces.append(missing_values)
-            continue
+    trading_days = _panel_trading_days(base)
+    left = base[["Code", "Date"]].merge(
+        trading_days, on=["Code", "Date"], how="left", validate="one_to_one"
+    )
+    left["_panel_row"] = base.index
+    mapped = _map_to_next_panel_day(base, source)
+    right = mapped[
+        ["Code", "_effective_date", "_effective_trading_day_index", *source.spec.columns]
+    ]
 
-        joined = pd.merge_asof(
-            left[["_panel_row", "Date"]],
-            right.sort_values("AvailableDate", kind="stable"),
-            left_on="Date",
-            right_on="AvailableDate",
-            direction="backward",
-            allow_exact_matches=True,
-        )
-        pieces.append(joined[["_panel_row", *source.spec.columns]])
+    joined = pd.merge_asof(
+        left.sort_values(["Date", "Code"], kind="stable"),
+        right.sort_values(["_effective_date", "Code"], kind="stable"),
+        left_on="Date",
+        right_on="_effective_date",
+        by="Code",
+        direction="backward",
+        allow_exact_matches=True,
+    )
+    max_staleness = source.spec.max_staleness_trading_days
+    if max_staleness is not None:
+        age = joined["_trading_day_index"] - joined["_effective_trading_day_index"]
+        joined.loc[age > max_staleness, list(source.spec.columns)] = float("nan")
 
-    values = pd.concat(pieces, ignore_index=True).set_index("_panel_row")
+    values = joined.set_index("_panel_row")
     result = base.copy()
     for column in source.spec.columns:
         result[column] = values[column].reindex(result.index)
@@ -278,7 +350,12 @@ def _apply_missing_policy(panel: pd.DataFrame, source: LoadedFeatureSource) -> p
     if policy == "zero":
         panel[columns] = panel[columns].fillna(0.0)
     elif policy == "forward_fill":
-        panel[columns] = panel.groupby("Code", observed=True)[columns].ffill()
+        # until_next_update는 as-of join 자체가 직전 공개값을 전달한다. 여기서 다시
+        # ffill하면 staleness 제한으로 비운 값을 되살릴 수 있으므로 one_day에만 적용한다.
+        if source.spec.apply_period == "one_day":
+            panel[columns] = panel.groupby("Code", observed=True)[columns].ffill(
+                limit=source.spec.max_staleness_trading_days
+            )
     elif policy == "drop":
         panel = panel.loc[~original_missing.any(axis=1)].copy()
     elif policy == "error" and original_missing.any().any():
@@ -349,6 +426,7 @@ def assemble_feature_panel(base: pd.DataFrame, sources: list[LoadedFeatureSource
         report["sources"][source.spec.name] = {
             "apply_period": source.spec.apply_period,
             "missing_policy": source.spec.missing_policy,
+            "max_staleness_trading_days": source.spec.max_staleness_trading_days,
             "feature_columns": list(source.spec.columns),
             "missing_rate_before_policy": {
                 key: float(value) for key, value in missing_before_policy.items()
@@ -419,6 +497,7 @@ def build_feature_store(
                 "columns": list(source.spec.columns),
                 "missing_policy": source.spec.missing_policy,
                 "add_indicator": source.spec.add_indicator,
+                "max_staleness_trading_days": source.spec.max_staleness_trading_days,
             }
             for source in sources
         ],
