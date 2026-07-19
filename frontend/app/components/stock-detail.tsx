@@ -15,7 +15,12 @@ import {
   RISK_GRADE_META,
   SIGNAL_META,
 } from "@/lib/display";
-import type { InvestorProfileSummary, RiskGrade, StockDetail } from "@/lib/types";
+import type {
+  InvestorProfileSummary,
+  MarketStatus,
+  RiskGrade,
+  StockDetail,
+} from "@/lib/types";
 
 // 수익률 밴드 바: 0%가 바 중앙(50%), 수익률 1%p당 5% 이동 (stock-card와 동일 규칙)
 const BAND_SCALE = 5;
@@ -55,9 +60,14 @@ function Card({
 interface StockDetailViewProps {
   detail: StockDetail;
   profile: InvestorProfileSummary;
+  marketStatus: MarketStatus;
 }
 
-export default function StockDetailView({ detail, profile }: StockDetailViewProps) {
+export default function StockDetailView({
+  detail,
+  profile,
+  marketStatus,
+}: StockDetailViewProps) {
   const [query, setQuery] = useState("");
   const [choice, setChoice] = useState<"watch" | "reduce" | "drop" | null>(null);
 
@@ -86,7 +96,12 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
 
   return (
     <div className="w-full pb-[72px]">
-      <SiteHeader query={query} onQueryChange={setQuery} profile={profile} />
+      <SiteHeader
+        query={query}
+        onQueryChange={setQuery}
+        profile={profile}
+        marketStatus={marketStatus}
+      />
 
       <div className="mx-auto box-border flex w-full max-w-[1104px] flex-col gap-4 px-8 pb-6 pt-5">
         <Link href="/" className="self-start text-[13px] text-muted hover:text-brand">

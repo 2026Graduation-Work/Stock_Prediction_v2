@@ -1,8 +1,10 @@
 import Link from "next/link";
-import type { InvestorProfileSummary } from "@/lib/types";
+import MarketStatusBar from "./market-status-bar";
+import type { InvestorProfileSummary, MarketStatus } from "@/lib/types";
 
 interface SiteHeaderProps {
   profile: InvestorProfileSummary;
+  marketStatus: MarketStatus;
   query?: string;
   onQueryChange?: (value: string) => void;
   activePage?: "dashboard" | "performance";
@@ -18,14 +20,15 @@ export default function SiteHeader({
   query,
   onQueryChange,
   profile,
+  marketStatus,
   activePage = "dashboard",
   sectionLabel,
 }: SiteHeaderProps) {
   const hasSearch = onQueryChange !== undefined;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-line bg-white">
-      <div className="mx-auto box-border flex h-16 w-full max-w-[1440px] items-center gap-4 px-6 lg:px-8">
+    <header className="sticky top-0 z-50 border-b border-line bg-white shadow-[0_1px_2px_rgba(16,24,40,0.03)]">
+      <div className="mx-auto box-border flex h-[60px] w-full max-w-[1440px] items-center gap-4 px-6 lg:px-8">
         <Link
           href="/"
           className="flex flex-none items-center gap-2.5 text-ink hover:no-underline"
@@ -57,16 +60,13 @@ export default function SiteHeader({
         </nav>
 
         {hasSearch ? (
-          <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex min-w-0 flex-1 items-center">
             <input
               value={query ?? ""}
               onChange={(event) => onQueryChange?.(event.target.value)}
               placeholder="종목명 또는 코드 검색"
-              className="box-border h-[38px] w-full min-w-[180px] max-w-[260px] rounded-[10px] border border-edge bg-field px-3.5 text-sm text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white xl:max-w-[330px]"
+              className="box-border h-9 w-full min-w-[170px] max-w-[260px] rounded-[8px] border border-edge bg-field px-3.5 text-[13px] text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white"
             />
-            <span className="hidden whitespace-nowrap text-xs text-faint xl:inline">
-              추천 목록 밖 종목도 조회할 수 있어요
-            </span>
           </div>
         ) : (
           <div className="min-w-0 flex-1 truncate text-[13px] font-semibold text-muted">
@@ -74,14 +74,14 @@ export default function SiteHeader({
           </div>
         )}
 
-        <div className="flex-1" />
         <div className="flex flex-none items-center gap-2.5">
-          <div className="flex h-[34px] items-center gap-2 rounded-full border border-line bg-field pl-2 pr-3">
+          <div className="flex h-[34px] items-center gap-2 rounded-[8px] border border-line bg-field pl-2 pr-3">
             <div className="grid size-[22px] place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand">
               {profile.avatarLabel}
             </div>
-            <span className="whitespace-nowrap text-[12px] font-semibold xl:text-[13px]">
-              {profile.displayName} · {profile.profileTypeLabel}
+            <span className="whitespace-nowrap text-[12px] font-semibold">
+              {profile.displayName}
+              <span className="hidden xl:inline"> · {profile.profileTypeLabel}</span>
             </span>
           </div>
           <button
@@ -92,6 +92,7 @@ export default function SiteHeader({
           </button>
         </div>
       </div>
+      <MarketStatusBar status={marketStatus} />
     </header>
   );
 }

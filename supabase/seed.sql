@@ -460,11 +460,24 @@ insert into public.market_status (
   status_date,
   condition,
   volatility_score,
-  volume_score
+  volume_score,
+  index_quotes
 )
-values ('2026-07-07', 'caution', 61, 48)
+values (
+  '2026-07-07',
+  'caution',
+  61,
+  48,
+  '[
+    {"symbol":"KOSPI","label":"KOSPI","value":2790.30,"change":31.00,"change_percent":1.12},
+    {"symbol":"KOSDAQ","label":"KOSDAQ","value":829.43,"change":4.55,"change_percent":0.55},
+    {"symbol":"KOSPI200","label":"KOSPI 200","value":371.90,"change":4.28,"change_percent":1.16},
+    {"symbol":"USD/KRW","label":"원/달러","value":1220.00,"change":-2.00,"change_percent":-0.16}
+  ]'::jsonb
+)
 on conflict (status_date) do update set
   condition = excluded.condition,
   volatility_score = excluded.volatility_score,
   volume_score = excluded.volume_score,
+  index_quotes = excluded.index_quotes,
   updated_at = now();

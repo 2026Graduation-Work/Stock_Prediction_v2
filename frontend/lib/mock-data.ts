@@ -15,6 +15,36 @@ export const marketStatus: MarketStatus = {
   condition: "caution",
   volatilityScore: 61,
   volumeScore: 48,
+  indexQuotes: [
+    {
+      symbol: "KOSPI",
+      label: "KOSPI",
+      value: 2790.3,
+      change: 31,
+      changePercent: 1.12,
+    },
+    {
+      symbol: "KOSDAQ",
+      label: "KOSDAQ",
+      value: 829.43,
+      change: 4.55,
+      changePercent: 0.55,
+    },
+    {
+      symbol: "KOSPI200",
+      label: "KOSPI 200",
+      value: 371.9,
+      change: 4.28,
+      changePercent: 1.16,
+    },
+    {
+      symbol: "USD/KRW",
+      label: "원/달러",
+      value: 1220,
+      change: -2,
+      changePercent: -0.16,
+    },
+  ],
 };
 
 export const investorProfile: InvestorProfileSummary = {
@@ -87,10 +117,34 @@ export const avoidanceNotice = {
 };
 
 export const portfolioHoldings: PortfolioHolding[] = [
-  { code: "005930", name: "삼성전자", signalLight: "positive" },
-  { code: "035720", name: "카카오", signalLight: "negative" },
-  { code: "068270", name: "셀트리온", signalLight: "neutral" },
-  { code: "005380", name: "현대차", signalLight: "strong_positive" },
+  {
+    code: "005930",
+    name: "삼성전자",
+    signalLight: "positive",
+    quantity: 15,
+    avgBuyPrice: 71_200,
+  },
+  {
+    code: "035720",
+    name: "카카오",
+    signalLight: "negative",
+    quantity: 8,
+    avgBuyPrice: 48_500,
+  },
+  {
+    code: "068270",
+    name: "셀트리온",
+    signalLight: "neutral",
+    quantity: 3,
+    avgBuyPrice: 182_000,
+  },
+  {
+    code: "005380",
+    name: "현대차",
+    signalLight: "strong_positive",
+    quantity: 5,
+    avgBuyPrice: 235_000,
+  },
 ];
 
 // 결정론적 60거래일 종가 시리즈(같은 입력 → 같은 출력).
