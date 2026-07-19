@@ -82,7 +82,7 @@ export default function StockDetailView({
     detail.changePercent > 0 ? "#c93b34" : detail.changePercent < 0 ? "#2f5fd0" : "#667085";
   const changeArrow = detail.changePercent > 0 ? "▲" : detail.changePercent < 0 ? "▼" : "";
   const belowTolerance = detail.riskGrade < MIN_SAFE_GRADE;
-  const hasAiAdvice = detail.aiAdvice.trim().length > 0;
+  const hasAiAdvice = Boolean(detail.aiAdvice?.trim());
   const horizons = [
     ["단기 H5 · 5거래일", detail.horizonAgreement.h5],
     ["중기 H10 · 10거래일", detail.horizonAgreement.h10],
