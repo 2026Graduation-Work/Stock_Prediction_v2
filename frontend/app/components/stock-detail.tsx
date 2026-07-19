@@ -72,6 +72,7 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
     detail.changePercent > 0 ? "#c93b34" : detail.changePercent < 0 ? "#2f5fd0" : "#667085";
   const changeArrow = detail.changePercent > 0 ? "▲" : detail.changePercent < 0 ? "▼" : "";
   const belowTolerance = detail.riskGrade < MIN_SAFE_GRADE;
+  const hasAiAdvice = detail.aiAdvice.trim().length > 0;
   const horizons = [
     ["단기 H5 · 5거래일", detail.horizonAgreement.h5],
     ["중기 H10 · 10거래일", detail.horizonAgreement.h10],
@@ -358,19 +359,23 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
         </Card>
 
         {/* AI 신호 해설 — LLM은 수치 번역만. 행동 제안은 아래 HITL 3버튼이 담당 */}
-        <Card className="flex flex-col gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="text-[15px] font-extrabold">AI 신호 해설</span>
-            <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
-              설명 전용 · 매매 조언 아님
-            </span>
-          </div>
-          <p className="m-0 text-[14.5px] leading-[1.7] text-[#38404e]">{detail.aiAdvice}</p>
-          <p className="m-0 text-xs leading-5 text-muted">
-            AI가 생성한 설명은 부정확할 수 있습니다. 근거 수치와 출처를 확인한 뒤 최종 판단해
-            주세요.
-          </p>
-        </Card>
+        {hasAiAdvice && (
+          <Card className="flex flex-col gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[15px] font-extrabold">AI 신호 해설</span>
+              <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
+                설명 전용 · 매매 조언 아님
+              </span>
+            </div>
+            <p className="m-0 text-[14.5px] leading-[1.7] text-[#38404e]">
+              {detail.aiAdvice}
+            </p>
+            <p className="m-0 text-xs leading-5 text-muted">
+              AI가 생성한 설명은 부정확할 수 있습니다. 근거 수치와 출처를 확인한 뒤 최종 판단해
+              주세요.
+            </p>
+          </Card>
+        )}
 
         {/* 대응 선택지 (HITL) */}
         <Card className="flex flex-col gap-3">
