@@ -105,7 +105,7 @@ export default function Dashboard({
   const noResult = keyword && visibleStocks.length === 0 && visibleAlerts.length === 0;
 
   return (
-    <div className="w-full pb-[72px]">
+    <div className="w-full">
       <SiteHeader
         query={query}
         onQueryChange={setQuery}
@@ -200,7 +200,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      <DisclaimerFooter />
+      <DisclaimerFooter fixed={false} />
     </div>
   );
 }

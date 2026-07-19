@@ -95,7 +95,7 @@ export default function StockDetailView({
   } as const;
 
   return (
-    <div className="w-full pb-[72px]">
+    <div className="w-full">
       <SiteHeader
         query={query}
         onQueryChange={setQuery}
@@ -426,7 +426,7 @@ export default function StockDetailView({
         </Card>
       </div>
 
-      <DisclaimerFooter />
+      <DisclaimerFooter fixed={false} />
     </div>
   );
 }
