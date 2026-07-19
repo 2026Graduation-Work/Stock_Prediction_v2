@@ -80,6 +80,19 @@ venv/
 !**/experiments/results/exp_001_base_lgbm/
 **/experiments/results/exp_001_base_lgbm/*.html
 
+# ---------- 차트 실험 산출물 ----------
+# 재현에 필요한 코드와 기본 템플릿만 공유한다. 개별 실행에서 생성되는
+# 예측·학습 캐시, 결과와 실험 조합 설정은 로컬 또는 별도 스토리지에 보관한다.
+backend/analysis/chart/experiments/cache/
+backend/analysis/chart/experiments/train_src/cache/
+backend/analysis/chart/experiments/results/*
+!backend/analysis/chart/experiments/results/
+!backend/analysis/chart/experiments/results/README.md
+backend/analysis/chart/experiments/experiment_run_log.txt
+backend/analysis/chart/experiments/configs/*
+!backend/analysis/chart/experiments/configs/
+!backend/analysis/chart/experiments/configs/base.yaml
+
 # 차트 분석 블록의 샘플 데이터 및 배포 모델 추적 허용 (협업용 가이드)
 # 상위 디렉토리가 ignore되면 하위 negation이 무효라 디렉토리부터 unignore한다.
 !backend/analysis/chart/data/
