@@ -40,27 +40,45 @@ export function SignalDots({ active }: { active: RecommendedStock["signalLight"]
   );
 }
 
-export default function StockCard({ stock }: { stock: RecommendedStock }) {
+export default function StockCard({
+  stock,
+  variant = "recommendation",
+}: {
+  stock: RecommendedStock;
+  variant?: "recommendation" | "holding";
+}) {
   const signal = SIGNAL_META[stock.signalLight];
   const grade = RISK_GRADE_META[stock.riskGrade];
   const topPercent = Math.round((1 - stock.rankPercentile) * 100);
   const bandLeft = clamp(50 + stock.returnBand.low * BAND_SCALE, 2, 94);
   const bandRight = clamp(50 + stock.returnBand.high * BAND_SCALE, bandLeft + 2, 98);
   const horizons = [
-    ["H5", stock.horizonAgreement.h5],
-    ["H10", stock.horizonAgreement.h10],
-    ["H20", stock.horizonAgreement.h20],
+    ["H5 · 5거래일", stock.horizonAgreement.h5],
+    ["H10 · 10거래일", stock.horizonAgreement.h10],
+    ["H20 · 20거래일", stock.horizonAgreement.h20],
   ] as const;
+  const isHolding = variant === "holding";
 
   return (
-    <article className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-white px-6 py-5 transition-shadow hover:border-[#c9d2e3] hover:shadow-[0_2px_12px_rgba(16,24,40,0.05)]">
-      <div className="flex items-center gap-2.5">
-        <span className="text-lg font-extrabold tracking-tight">{stock.name}</span>
-        <span className="text-[13px] text-faint">
+    <article
+      className={`flex flex-col gap-3.5 rounded-[14px] border border-line px-6 py-5 transition-shadow hover:border-[#c9d2e3] hover:shadow-[0_2px_12px_rgba(16,24,40,0.05)] ${
+        isHolding ? "border-l-4 border-l-[#98a2b3] bg-[#fbfcfe]" : "bg-white"
+      }`}
+    >
+      <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
+        <span className="whitespace-nowrap text-lg font-extrabold tracking-tight">
+          {stock.name}
+        </span>
+        {isHolding && (
+          <span className="inline-flex h-[22px] items-center whitespace-nowrap rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
+            보유 알림
+          </span>
+        )}
+        <span className="whitespace-nowrap text-[13px] text-faint">
           {stock.code} · {stock.market}
         </span>
         <span
-          className="inline-flex h-[22px] items-center rounded-md px-2 text-[11.5px] font-bold"
+          className="inline-flex h-[22px] items-center whitespace-nowrap rounded-md px-2 text-[11.5px] font-bold"
           style={{ backgroundColor: grade.bg, color: grade.text }}
         >
           위험등급 {stock.riskGrade} · {grade.label}
@@ -68,12 +86,12 @@ export default function StockCard({ stock }: { stock: RecommendedStock }) {
         {stock.riskFlags.map((flag) => (
           <span
             key={flag}
-            className="inline-flex h-[22px] items-center rounded-md bg-[#fdf1e3] px-2 text-[11.5px] font-bold text-[#b45814]"
+            className="inline-flex h-[22px] items-center whitespace-nowrap rounded-md bg-[#fdf1e3] px-2 text-[11.5px] font-bold text-[#b45814]"
           >
             {RISK_FLAG_LABEL[flag]}
           </span>
         ))}
-        <div className="ml-auto flex items-center gap-3">
+        <div className="flex w-full items-center justify-end gap-3 xl:ml-auto xl:w-auto">
           <SignalDots active={stock.signalLight} />
           <span className="text-[13px] font-bold" style={{ color: signal.text }}>
             {signal.label} · 신호 강도 상위 {topPercent}%
@@ -114,8 +132,8 @@ export default function StockCard({ stock }: { stock: RecommendedStock }) {
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs text-muted">단기·중기 신호 일치</span>
-          <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted">기간별 신호 일치</span>
+          <div className="flex flex-wrap items-center gap-1.5">
             {horizons.map(([label, direction]) => {
               const meta = HORIZON_META[direction];
               return (

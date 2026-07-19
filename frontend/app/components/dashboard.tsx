@@ -168,7 +168,7 @@ export default function Dashboard({
                   />
                 </div>
                 {visibleAlerts.map((stock) => (
-                  <StockCard key={stock.code} stock={stock} />
+                  <StockCard key={stock.code} stock={stock} variant="holding" />
                 ))}
               </>
             )}
