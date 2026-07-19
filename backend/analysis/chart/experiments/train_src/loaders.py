@@ -202,11 +202,6 @@ def load_parquet_data(
                 if label_params is None:
                     temp_df = temp_df[temp_df["Date"] <= requested_end]
                 elif observation_end is not None:
-                    if observation_end < requested_end:
-                        raise ValueError(
-                            "label_observation_end는 end_date보다 빠를 수 없습니다: "
-                            f"{observation_end.date()} < {requested_end.date()}"
-                        )
                     temp_df = temp_df[temp_df["Date"] <= observation_end]
                 else:
                     horizon = int(label_params["horizon"])

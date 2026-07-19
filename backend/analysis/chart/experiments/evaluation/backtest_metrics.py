@@ -50,11 +50,13 @@ def calculate_trading_metrics(daily_returns: pd.Series, trades_df: pd.DataFrame 
     # Max Drawdown (MDD)
     # Include the initial equity (1.0). Without it, a loss on day one becomes
     # the first running maximum and is incorrectly reported as zero drawdown.
-    cum_returns = (1.0 + daily_returns).cumprod().to_numpy(dtype=float)
-    equity = np.concatenate(([1.0], cum_returns))
-    running_max = np.maximum.accumulate(equity)
+    cum_returns = (1.0 + daily_returns).cumprod()
+    equity = pd.concat(
+        [pd.Series([1.0], dtype=float), cum_returns], ignore_index=True
+    )
+    running_max = equity.cummax()
     drawdowns = (equity - running_max) / running_max
-    mdd = np.nanmin(drawdowns)
+    mdd = drawdowns.min()
     metrics["max_drawdown"] = float(mdd)
 
     # 2. 거래 기록 기반 지표 (trades_df가 제공되었을 때)
