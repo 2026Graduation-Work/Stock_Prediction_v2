@@ -89,6 +89,7 @@ export interface MarketIndexQuote {
 
 export interface MarketStatus {
   date: string; // ISO date (YYYY-MM-DD)
+  source: "mock" | "supabase";
   condition: MarketCondition;
   volatilityScore: number; // 0~100
   volumeScore: number; // 0~100

@@ -12,6 +12,7 @@ import type {
 
 export const marketStatus: MarketStatus = {
   date: "2026-07-07",
+  source: "mock",
   condition: "caution",
   volatilityScore: 61,
   volumeScore: 48,

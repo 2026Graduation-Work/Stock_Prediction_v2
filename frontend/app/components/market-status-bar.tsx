@@ -44,7 +44,14 @@ export default function MarketStatusBar({ status }: { status: MarketStatus }) {
     <section aria-label="시장 지수와 시장 상태" className="border-t border-line bg-field">
       <div className="mx-auto grid h-[50px] w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:px-8">
         <div className="hidden min-w-[110px] flex-col lg:flex">
-          <span className="text-[10px] font-semibold text-muted">시장 브리핑</span>
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold text-muted">
+            시장 브리핑
+            {status.source === "mock" && (
+              <span className="rounded-[3px] bg-brand-soft px-1 py-0.5 text-[8.5px] font-extrabold text-brand">
+                샘플
+              </span>
+            )}
+          </span>
           <span className="text-[11px] font-bold tabular-nums">
             {status.date.replaceAll("-", ".")} 기준
           </span>

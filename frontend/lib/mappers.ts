@@ -104,6 +104,7 @@ const MARKET_CONDITIONS: MarketCondition[] = ["stable", "caution", "high_volatil
 export function mapMarketStatus(row: MarketStatusRow): MarketStatus {
   return {
     date: row.status_date,
+    source: "supabase",
     condition: includes(MARKET_CONDITIONS, row.condition) ? row.condition : "caution",
     volatilityScore: row.volatility_score,
     volumeScore: row.volume_score,

@@ -84,12 +84,12 @@ export default function SiteHeader({
               <span className="hidden xl:inline"> · {profile.profileTypeLabel}</span>
             </span>
           </div>
-          <button
-            type="button"
-            className="h-[34px] whitespace-nowrap rounded-[10px] border border-edge bg-white px-3.5 text-[13px] font-semibold text-body hover:border-ghost hover:bg-field"
+          <Link
+            href="/survey"
+            className="inline-flex h-[34px] items-center whitespace-nowrap rounded-[8px] border border-edge bg-white px-3.5 text-[13px] font-semibold text-body hover:border-ghost hover:bg-field hover:no-underline"
           >
             설정
-          </button>
+          </Link>
         </div>
       </div>
       <MarketStatusBar status={marketStatus} />
