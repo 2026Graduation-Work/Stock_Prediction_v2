@@ -27,14 +27,19 @@ SNS 데이터는 현재 연구 범위에서 제외한다.
 
 ## 빅카인즈 뉴스 전처리
 
-1. `NewsResult_*.xlsx` 파일을 `backend/analysis/text/data/raw/` 아래에 둔다. 하위 디렉터리도
-   재귀 탐색하며, 파일명에 적힌 기간은 커버리지 계산에 사용하지 않는다.
+1. 종목별로 `backend/analysis/text/data/raw/<6자리 종목코드>/` 디렉터리를 만들고 해당
+   종목의 `NewsResult_*.xlsx` 파일을 둔다. 예: 삼성전자는 `data/raw/005930/`.
+   같은 종목의 분할 파일은 모두 재귀 탐색하며, 파일명에 적힌 기간은 커버리지 계산에
+   사용하지 않는다.
 2. `pip install -r analysis/text/requirements-preprocess.txt`로 의존성을 설치한다.
 3. 저장소의 `backend/` 디렉터리에서 실행한다.
 
 ```bash
 python -m analysis.text.preprocess --ticker 005930 --out news_corpus.csv
 ```
+
+`--ticker`와 같은 이름의 종목 디렉터리가 있으면 그 디렉터리만 읽으므로 다른 종목 뉴스가
+한 CSV에 섞이지 않는다. 기존처럼 `raw/` 바로 아래에 파일을 둔 단일 종목 구조도 지원한다.
 
 상대 `--out` 경로는 `backend/analysis/text/data/processed/`를 기준으로 해석한다. 결과 CSV는
 `news_id,date,title,body,press,ticker` 컬럼으로 고정되며, 실제 수록 기간과 뉴스가 0건인 날짜는

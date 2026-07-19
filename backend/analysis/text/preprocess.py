@@ -159,19 +159,41 @@ def _resolve_output_path(out: Path) -> Path:
     return out if out.is_absolute() else DEFAULT_PROCESSED_DIR / out
 
 
+def _resolve_ticker_raw_dir(raw_dir: Path, ticker: str) -> Path:
+    """Prefer a ticker-specific folder while preserving legacy flat inputs."""
+    ticker_dir = raw_dir / ticker
+    if ticker_dir.is_dir():
+        return ticker_dir
+
+    ticker_directories = [
+        path
+        for path in raw_dir.iterdir()
+        if path.is_dir() and len(path.name) == 6 and path.name.isdigit()
+    ] if raw_dir.is_dir() else []
+    if ticker_directories:
+        available = ", ".join(sorted(path.name for path in ticker_directories))
+        raise FileNotFoundError(
+            f"{ticker} 종목 원본 디렉터리가 없습니다: {ticker_dir}. "
+            f"현재 종목 디렉터리: {available}"
+        )
+
+    return raw_dir
+
+
 def build_news_corpus(ticker: str, out: Path, raw_dir: Path = DEFAULT_RAW_DIR) -> PreprocessReport:
     """Build the deterministic FinBERT input CSV and return its coverage report."""
     ticker = ticker.strip()
     if not ticker:
         raise ValueError("ticker는 빈 문자열일 수 없습니다.")
 
+    input_dir = _resolve_ticker_raw_dir(raw_dir, ticker)
     input_files = [
         path
-        for path in sorted(raw_dir.glob(f"**/{INPUT_PATTERN}"))
+        for path in sorted(input_dir.glob(f"**/{INPUT_PATTERN}"))
         if not path.name.startswith("~$")
     ]
     if not input_files:
-        raise FileNotFoundError(f"입력 파일이 없습니다: {raw_dir / '**' / INPUT_PATTERN}")
+        raise FileNotFoundError(f"입력 파일이 없습니다: {input_dir / '**' / INPUT_PATTERN}")
 
     frames = [_read_workbook(path) for path in input_files]
     raw_rows = sum(len(frame) for frame in frames)
