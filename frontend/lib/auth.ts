@@ -164,6 +164,8 @@ export async function signOut(): Promise<void> {
 }
 
 export function subscribeToAuthChanges(onChange: () => void): () => void {
+  if (typeof window === "undefined") return () => undefined;
+
   const onStorage = (event: StorageEvent) => {
     if (
       event.key === DEMO_SESSION_STORAGE_KEY ||
@@ -179,9 +181,11 @@ export function subscribeToAuthChanges(onChange: () => void): () => void {
   window.addEventListener(PROFILE_UPDATED_EVENT, onUpdated);
 
   const client = getSupabaseClient();
-  const subscription = client?.auth.onAuthStateChange(() => {
-    window.setTimeout(onChange, 0);
-  }).data.subscription;
+  const subscription = client
+    ? client.auth.onAuthStateChange(() => {
+        window.setTimeout(onChange, 0);
+      }).data.subscription
+    : null;
 
   return () => {
     window.removeEventListener("storage", onStorage);
