@@ -69,8 +69,10 @@ python -m experiments.comparison.runner --config experiments/comparison/config.y
 - `four_run_metrics.csv`, `volatile_subsample_metrics.csv`, `comparison_deltas.csv`
 - `predictions/*.parquet`: OOS 예측 감사 자료
 
-`comparison_results.json`은 `frontend/artifacts/performance/`에 전달한다. 실제 artifact가
-없을 때는 샘플 배지를 유지하고, 구조 또는 B-A 델타가 틀리면 빌드를 실패시킨다.
+`comparison_results.json`은 `frontend/artifacts/performance/`에 전달한다. PR #31의
+`frontend/lib/performance-data.ts`가 빌드 시 이 파일을 읽어 화면 데이터로 변환한다.
+실제 artifact가 없을 때만 샘플 배지를 유지하고, 파일이 있는데 구조 또는 B-A 델타가
+틀리면 빌드를 실패시킨다.
 
 ### 3. 결론 작성 규칙
 
@@ -99,6 +101,8 @@ python -m experiments.comparison.runner --config experiments/comparison/config.y
 
 ### 3. 성능 화면
 
+- PR #31의 artifact 로더를 통해 `comparison_results.json`을 읽으며, 화면 컴포넌트는
+  mock 또는 실제 데이터 출처와 무관하게 같은 뷰모델을 받는다.
 - 샘플일 때 `샘플 데이터`와 중립적 placeholder를 표시한다.
 - 실제 결과일 때만 러너 결과 배지를 표시하고 B-A를 결정적으로 요약한다.
 - y축은 ML 지표 0~1처럼 고정하고, 개선·저하·동일을 같은 규칙으로 표현한다.
@@ -117,7 +121,7 @@ python -m experiments.comparison.runner --config experiments/comparison/config.y
 - 종목별 BigKinds 원본과 실제 수록 기간
 - `Date`·`Code` 키를 지킨 일별 `news_sentiment` 산출물
 - 뉴스가 없는 거래일의 처리 규칙과 FinBERT 모델 버전
-- #22의 실제 `data/raw/<code>/NewsResult_*.xlsx` 경로 반영 및 silent fallback 제거
+- #22의 실제 `data/raw/{code}/NewsResult_*.xlsx` 경로 반영 및 silent fallback 제거
 
 ### DB·배포 담당
 
