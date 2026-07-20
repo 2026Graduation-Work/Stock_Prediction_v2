@@ -100,7 +100,7 @@ def test_example_config_resolves_tracked_baseline_model() -> None:
 
     baseline, treatment = resolve_feature_sets(config, config_path.parent)
 
-    assert baseline
+    assert len(baseline) == 161
     assert treatment == ["synthetic_psychology_index", "news_sentiment"]
 
 
