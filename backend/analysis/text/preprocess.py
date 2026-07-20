@@ -19,14 +19,14 @@ DEFAULT_PROCESSED_DIR = TEXT_DIR / "data" / "processed"
 # 빅카인즈 원본 위치 — build_news_corpus(CSV 코퍼스)와 load_daily_news(하루치
 # point-in-time)가 **같은 디렉터리·같은 파일명 규약**을 본다. 규약이 갈리면 한쪽만
 # 파일을 못 찾고 조용히 폴백해 오염된 행이 나온다.
-DEFAULT_NEWS_DIR = TEXT_DIR.parents[2] / "data"
-# 레거시 입력. 파일명에 회사·기간 정보가 없어 종목 필터·기간 판정이 불가능하므로
-# 신규 데이터는 아래 워크북 규약을 쓸 것.
+DEFAULT_NEWS_DIR = TEXT_DIR / "data" / "raw"
+# 빅카인즈 원본 파일명. 기간은 다운로드 요청값일 뿐 실제 커버리지가 아니므로
+# 종목별 디렉터리와 엑셀 일자 컬럼을 정본으로 사용한다.
 INPUT_PATTERN = "NewsResult_*.xlsx"
-# 뉴스 워크북 파일명 규약 (신규 우선, 구버전 호환):
-#   신규 : {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
+# 이름을 바꿔 보관한 워크북도 하위 호환한다:
+#   코드형: {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
 #          (예: 005930_삼성전자_20220101-20221231.xlsx)
-#   구버전: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
+#   이름형: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
 #          (예: 삼성전자_20220101-20221231.xlsx)
 _NEWS_WORKBOOK_RE_CODE = re.compile(
     r"(?P<code>[^_]+)_(?P<company>.+)_(?P<start>\d{8})-(?P<end>\d{8})\.xlsx$"
@@ -224,12 +224,13 @@ def find_corpus_workbooks(
     """해당 종목의 빅카인즈 워크북 목록 (하위 디렉터리 포함).
 
     파일명 규약은 load_daily_news와 동일하다 — 두 소비자가 같은 파일을 본다:
-      정본  : {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
-      구버전: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
-      레거시: NewsResult_*.xlsx (파일명에 회사·기간 정보가 없어 종목 필터 불가)
+      정본  : raw/{종목코드}/NewsResult_*.xlsx
+      호환  : {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
+      호환  : {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
 
-    규약 파일은 종목코드/회사명이 일치하는 것만 고르고, 레거시는 전부 포함한다
-    (파일명으로 종목을 구분할 수 없으므로 넣어둔 사람을 신뢰).
+    이름을 바꾼 파일은 종목코드/회사명이 일치하는 것만 고른다. NewsResult 파일은
+    `raw/{종목코드}/NewsResult_*.xlsx`처럼 6자리 디렉터리에 있으면 해당 종목만,
+    종목을 알 수 없는 루트/일반 디렉터리에 있으면 하위 호환을 위해 포함한다.
     """
     wanted_company = _normalize_company(company_name)
     wanted_code = (ticker or "").strip()
@@ -238,15 +239,21 @@ def find_corpus_workbooks(
         if path.name.startswith("~$"):
             continue
         if path.name.startswith("NewsResult_"):
-            found.append(path)
+            directory_codes = {
+                match.group("code")
+                for part in path.relative_to(raw_dir).parts[:-1]
+                if (match := re.fullmatch(r"(?P<code>\d{6})(?:[_-].*)?", part))
+            }
+            if not wanted_code or not directory_codes or wanted_code in directory_codes:
+                found.append(path)
             continue
         parsed = _parse_workbook_name(path.name)
         if parsed is None:
             continue
         code, company, _, _ = parsed
-        if (wanted_code and code == wanted_code) or (
-            wanted_company and _normalize_company(company) == wanted_company
-        ):
+        code_match = bool(wanted_code) and code == wanted_code
+        name_match = bool(wanted_company) and _normalize_company(company) == wanted_company
+        if code_match or (not code and name_match) or (not wanted_code and name_match):
             found.append(path)
     return found
 
@@ -259,7 +266,7 @@ def build_news_corpus(
 ) -> PreprocessReport:
     """Build the deterministic FinBERT input CSV and return its coverage report.
 
-    기본 입력 위치는 value_pipeline과 동일한 저장소 루트 data/ 다 — 두 소비자가
+    기본 입력 위치는 value_pipeline과 동일한 `analysis/text/data/raw/`다 — 두 소비자가
     경로 규약을 공유해야 한 쪽만 파일을 못 찾고 조용히 폴백하는 사고가 없다.
     """
     ticker = ticker.strip()
@@ -354,34 +361,63 @@ def _parse_workbook_name(name: str) -> tuple[str, str, str, str] | None:
     return None
 
 
+@lru_cache(maxsize=64)
+def _workbook_date_bounds_cached(
+    path: Path, mtime: float, size: int
+) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    """파일명 대신 실제 수록 일자의 경계를 캐시한다."""
+    del mtime, size
+    dates = _read_workbook(path)["date"].dropna()
+    if dates.empty:
+        return None
+    return dates.min().normalize(), dates.max().normalize()
+
+
+def _workbook_date_bounds(path: Path) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    try:
+        stat = path.stat()
+        return _workbook_date_bounds_cached(path, stat.st_mtime, stat.st_size)
+    except OSError:
+        dates = _read_workbook(path)["date"].dropna()
+        if dates.empty:
+            return None
+        return dates.min().normalize(), dates.max().normalize()
+
+
+def find_news_workbooks(
+    company_name: str,
+    date: str,
+    data_dir: Path = DEFAULT_NEWS_DIR,
+    ticker: str = "",
+) -> list[Path]:
+    """실제 수록 기간이 date를 포함하는 해당 종목 워크북을 모두 반환한다.
+
+    빅카인즈 파일명 기간은 다운로드 상한 때문에 실제 수록 기간과 다를 수 있다.
+    따라서 파일명은 후보 탐색에만 쓰고, 커버리지는 정규화한 일자 컬럼의 min/max로
+    판정한다. 여러 파일이 겹치면 호출자가 파일 간 중복을 제거한다.
+    """
+    target = pd.Timestamp(date).normalize()
+    candidates = find_corpus_workbooks(Path(data_dir), ticker, company_name)
+    covered: list[Path] = []
+    for path in candidates:
+        bounds = _workbook_date_bounds(path)
+        if bounds is not None and bounds[0] <= target <= bounds[1]:
+            covered.append(path)
+    return covered
+
+
 def find_news_workbook(
     company_name: str,
     date: str,
     data_dir: Path = DEFAULT_NEWS_DIR,
     ticker: str = "",
 ) -> Path | None:
-    """뉴스 워크북 중 date가 기간에 포함되고, 종목코드 또는 회사명이 일치하는 파일 반환.
+    """실제 수록 기간이 date를 포함하는 첫 워크북을 반환하는 호환 API.
 
-    파일명은 신규({코드}_{명}_{기간})·구버전({명}_{기간})을 모두 인식한다.
-    ticker(종목코드)가 주어지면 코드 일치를, 아니면 회사명(NFC) 일치를 사용한다.
+    겹치는 모든 파일이 필요한 소비자는 find_news_workbooks를 사용한다.
     """
-    target_day = date.replace("-", "")
-    wanted_company = _normalize_company(company_name)
-    wanted_code = (ticker or "").strip()
-    for path in sorted(Path(data_dir).glob("*.xlsx")):
-        if path.name.startswith("~$"):
-            continue
-        parsed = _parse_workbook_name(path.name)
-        if parsed is None:
-            continue
-        code, company, start, end = parsed
-        if not (start <= target_day <= end):
-            continue
-        code_match = bool(wanted_code) and code == wanted_code
-        name_match = bool(wanted_company) and _normalize_company(company) == wanted_company
-        if code_match or name_match:
-            return path
-    return None
+    paths = find_news_workbooks(company_name, date, data_dir, ticker)
+    return paths[0] if paths else None
 
 
 def load_daily_news(
@@ -408,23 +444,25 @@ def load_daily_news(
     news_id는 (date, title, press) 해시 폴백까지 포함해 100% 채워지므로
     key_events의 출처 인용(그라운딩) 키로 쓸 수 있다.
     """
-    path = find_news_workbook(company_name, date, data_dir, ticker)
-    if path is None:
+    paths = find_news_workbooks(company_name, date, data_dir, ticker)
+    if not paths:
         return []
 
-    frame = _read_workbook(path)
-    if "exclude" in frame.columns:
-        frame = frame.loc[~frame["exclude"].fillna(False)]
-    if frame.empty:
+    target = pd.Timestamp(date).normalize()
+    frames: list[pd.DataFrame] = []
+    for path in paths:
+        frame = _read_workbook(path)
+        if "exclude" in frame.columns:
+            frame = frame.loc[~frame["exclude"].fillna(False)]
+        frame = frame.loc[frame["date"].dt.normalize() == target]
+        if not frame.empty:
+            frames.append(frame)
+    if not frames:
         return []
 
+    frame = pd.concat(frames, ignore_index=True)
     frame = _deduplicate(frame)
-    # 전체 컬럼을 문자열로 변환(strftime)하지 않고 Timestamp로 직접 비교한다.
-    # 19,549행 워크북에서 문자열 변환은 순수 낭비다.
-    target = pd.Timestamp(date)
-    frame = frame.loc[frame["date"].dt.normalize() == target].sort_values(
-        by="news_id", kind="stable", ignore_index=True
-    )
+    frame = frame.sort_values(by="news_id", kind="stable", ignore_index=True)
 
     items: list[dict] = []
     for _, row in frame.iterrows():
@@ -465,7 +503,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--raw-dir",
         type=Path,
         default=DEFAULT_NEWS_DIR,
-        help="빅카인즈 워크북을 재귀 탐색할 디렉터리 (기본: 저장소 루트 data/ — value_pipeline과 동일)",
+        help="빅카인즈 워크북을 재귀 탐색할 디렉터리 (기본: analysis/text/data/raw/)",
     )
     return parser
 

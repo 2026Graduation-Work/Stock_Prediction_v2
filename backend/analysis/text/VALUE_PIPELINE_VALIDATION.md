@@ -132,12 +132,13 @@ confidence = clip(0.5 + 0.125*real_sources - 0.15*news_sentiment_std
 폴백해 오염된 행이 나온다(PR #22 블로커1).
 
 ```
-<repo>/data/{종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx   ← 정본
-<repo>/data/{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx              ← 구버전(호환)
-NewsResult_*.xlsx                                            ← 레거시(종목 필터 불가)
+<repo>/backend/analysis/text/data/raw/{종목코드}/NewsResult_*.xlsx  ← 정본
+<repo>/backend/analysis/text/data/raw/{종목코드}_{회사명}_{기간}.xlsx ← 구버전(호환)
+<repo>/backend/analysis/text/data/raw/{회사명}_{기간}.xlsx            ← 구버전(호환)
 ```
 
-워크북을 **찾았는데** 그날 기사가 0건이면 그것이 사실이므로 네이버로 폴백하지 않는다.
+파일명의 기간은 신뢰하지 않고 실제 일자 컬럼의 min/max로 커버리지를 판정한다. 워크북이 실제로
+날짜를 **커버하는데** 그날 기사가 0건이면 그것이 사실이므로 네이버로 폴백하지 않는다. 커버하는
 워크북 자체가 없을 때만 폴백하며, 이때 경고가 뜬다 — 백테스트 중 이 경고가 보이면 FAIL이다.
 
 ### 2.6 값 범위
@@ -360,7 +361,7 @@ CI엔 `.env`가 없어 헤르메틱성을 못 잡는다.
 | 2.2 결정론 | `test_llm_text_cannot_change_any_score`, `test_scores_identical_with_and_without_llm`, `test_run_pipeline_is_deterministic`, `test_relevance_is_deterministic_without_llm` |
 | 2.3 point-in-time | `test_select_fiscal_year_is_point_in_time`, `test_select_fiscal_year_does_not_depend_on_today`, `test_fetch_dart_financials_uses_point_in_time_fiscal_year`, `test_validation_catches_lookahead_fiscal_year`, `test_validation_catches_misaligned_news_date` |
 | 2.4 자기감사 | `test_row_is_self_auditing` |
-| 2.5 출처 | `test_key_events_carry_source_news_ids`, `test_grounding_requires_two_token_overlap`, `test_load_daily_news_emits_news_id_for_grounding`, `test_validation_warns_on_ungrounded_event`, `test_corpus_and_daily_loader_share_path_contract`, `test_corpus_workbooks_filter_by_ticker` |
+| 2.5 출처 | `test_key_events_carry_source_news_ids`, `test_grounding_requires_two_token_overlap`, `test_load_daily_news_emits_news_id_for_grounding`, `test_validation_warns_on_ungrounded_event`, `test_corpus_and_daily_loader_share_path_contract`, `test_nested_newsresult_is_shared_and_scoped_by_ticker`, `test_newsresult_coverage_uses_actual_dates_not_filename`, `test_daily_loader_merges_and_deduplicates_overlapping_files` |
 | 2.8 결측 vs 0 | `test_validation_catches_zero_articles`, `test_zero_relevant_articles_fails_validation_not_restored`, `test_valuation_missing_data_is_not_treated_as_loss`, `test_collect_financials_raises_when_no_data` |
 | 2.9 validation | `test_validation_passes_on_consistent_data`, `test_validation_catches_accounting_identity_violation`, `test_validation_catches_implausible_metric`, `test_validation_result_reaches_output` |
 | 3.1 LLM 점수 개입 | `test_llm_schemas_have_no_score_or_selection_field`, `test_scores_identical_with_and_without_llm` |
@@ -374,9 +375,10 @@ CI엔 `.env`가 없어 헤르메틱성을 못 잡는다.
 발표·리뷰에서 먼저 밝힐 것. 숨기면 신뢰를 잃고, 밝히면 오히려 점수를 얻는다.
 
 1. **빅카인즈 20,000행 export 상한.** 삼성전자는 연 20,000건을 넘는 해가 많아 1년 단위로
-   받으면 **최신순 정렬 때문에 연초가 잘린다.** 2022 파일(19,549건)만 우연히 온전하다.
-   6개월 단위로 나눠 받을 것. `find_news_workbook`은 **파일명만** 보고 판단하므로
-   잘린 파일도 커버한다고 주장한다 — 파일을 새로 받으면 실제 최소/최대 일자를 직접 확인할 것.
+   받으면 **최신순 정렬 때문에 연초가 잘린다.** 현재 2025 파일도 이름과 달리 실제로는
+   2025-10-29~2025-12-31만 수록되어 있다. 로더는 실제 min/max를 사용하고 겹친 파일을
+   병합·dedup하지만, 없는 기간을 복원할 수는 없다. 기간을 나눠 다시 받아 coverage report로
+   전체 실험 기간이 이어지는지 확인할 것.
 2. **DART 정정공시.** DART는 해당 사업연도의 *최신 정정본*을 반환하므로, 기준일 이후 제출된
    정정공시는 여전히 새어든다. `select_fiscal_year`는 보고서 **연도**만 통제한다(2차 오차).
 3. **LLM 메모리제이션.** 3.1 참조. 점수 경로에서 LLM을 완전히 뺐으므로 **피처에는 노출이

@@ -7,6 +7,9 @@ from analysis.text.preprocess import (
     BigKindsSchemaError,
     _read_workbook,
     build_news_corpus,
+    find_corpus_workbooks,
+    find_news_workbook,
+    load_daily_news,
     print_report,
 )
 
@@ -177,3 +180,62 @@ def test_fails_with_clear_error_when_required_column_is_missing(tmp_path: Path) 
     assert "NewsResult_missing_press.xlsx" in message
     assert "press" in message
     assert "언론사" in message
+
+
+def test_nested_newsresult_is_shared_and_scoped_by_ticker(tmp_path: Path) -> None:
+    """실제 배치 경로의 NewsResult를 corpus와 daily 로더가 함께 찾아야 한다."""
+    raw_dir = tmp_path / "raw"
+    ticker_dir = raw_dir / "005930"
+    ticker_dir.mkdir(parents=True)
+    workbook = ticker_dir / "NewsResult_20220101-20221231.xlsx"
+    _write_workbook(workbook, [
+        {"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
+         "제목": "중첩 경로 기사", "본문": "본문", "URL": "", "분석제외 여부": ""},
+    ])
+
+    assert find_corpus_workbooks(raw_dir, "005930", "삼성전자") == [workbook]
+    assert find_news_workbook(
+        "삼성전자", "2022-06-15", raw_dir, ticker="005930"
+    ) == workbook
+    assert [item["news_id"] for item in load_daily_news(
+        "삼성전자", "2022-06-15", raw_dir, ticker="005930"
+    )] == ["n1"]
+    assert find_corpus_workbooks(raw_dir, "000660", "SK하이닉스") == []
+
+
+def test_newsresult_coverage_uses_actual_dates_not_filename(tmp_path: Path) -> None:
+    """상한으로 잘린 파일의 과장된 파일명 기간을 커버리지로 신뢰하지 않는다."""
+    ticker_dir = tmp_path / "raw" / "005930"
+    ticker_dir.mkdir(parents=True)
+    workbook = ticker_dir / "NewsResult_20220101-20221231.xlsx"
+    _write_workbook(workbook, [
+        {"뉴스 식별자": "n1", "일자": 20220103, "언론사": "매일경제",
+         "제목": "실제 첫날", "본문": "본문"},
+        {"뉴스 식별자": "n2", "일자": 20220331, "언론사": "한국경제",
+         "제목": "상한에서 잘린 마지막 날", "본문": "본문"},
+    ])
+
+    assert find_news_workbook(
+        "삼성전자", "2022-03-15", tmp_path / "raw", ticker="005930"
+    ) == workbook
+    assert find_news_workbook(
+        "삼성전자", "2022-06-15", tmp_path / "raw", ticker="005930"
+    ) is None
+
+
+def test_daily_loader_merges_and_deduplicates_overlapping_files(tmp_path: Path) -> None:
+    ticker_dir = tmp_path / "raw" / "005930"
+    ticker_dir.mkdir(parents=True)
+    common = {"일자": 20220615, "언론사": "매일경제", "본문": "본문"}
+    _write_workbook(ticker_dir / "NewsResult_part1.xlsx", [
+        {**common, "뉴스 식별자": "n1", "제목": "중복 기사"},
+    ])
+    _write_workbook(ticker_dir / "NewsResult_part2.xlsx", [
+        {**common, "뉴스 식별자": "n1", "제목": "중복 기사"},
+        {**common, "뉴스 식별자": "n2", "제목": "추가 기사"},
+    ])
+
+    items = load_daily_news(
+        "삼성전자", "2022-06-15", tmp_path / "raw", limit=None, ticker="005930"
+    )
+    assert [item["news_id"] for item in items] == ["n1", "n2"]

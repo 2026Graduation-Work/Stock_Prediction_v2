@@ -1,6 +1,6 @@
 """데이터 수집기 (무료 소스 우선).
 
-뉴스   : 빅카인즈 엑셀(data/, preprocess) → 네이버 검색 OpenAPI(키 있으면)
+뉴스   : 빅카인즈 엑셀(data/raw/, preprocess) → 네이버 검색 OpenAPI(키 있으면)
          → HTML 크롤(키 없을 때)
 시세   : FinanceDataReader                   (키 불필요)
 재무제표: OpenDartReader / Open DART API      (무료 키 필요)
@@ -33,7 +33,7 @@ except (ImportError, ValueError):  # text/ 디렉터리에서 top-level 실행�
     import preprocess
 
 SAMPLE_DIR = Path(__file__).parent / "sample_data"
-DATA_DIR = Path(__file__).resolve().parents[4] / "data"
+DATA_DIR = preprocess.DEFAULT_NEWS_DIR
 
 
 class FinancialsUnavailableError(RuntimeError):
@@ -58,7 +58,7 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
     """해당 날짜 '하루치' 기사 전량과 출처 반환.
     각 항목: {news_id, title, summary, url, press, date}.
 
-    빅카인즈 엑셀(data/, preprocess)이 정본이다. 워크북을 찾았는데 그날 기사가
+    빅카인즈 엑셀(data/raw/, preprocess)이 정본이다. 워크북을 찾았는데 그날 기사가
     없으면 그대로 빈 리스트를 준다 — 네이버로 폴백하지 않는다.
 
     네이버는 과거 날짜 조회가 불안정하고(OpenAPI는 최근 1,000건까지만) news_id도
@@ -90,7 +90,7 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
     else:
         warnings.warn(
             f"'{query}' {date}를 커버하는 빅카인즈 워크북이 {DATA_DIR}에 없습니다. "
-            f"기대 파일명: {{종목코드}}_{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx. "
+            f"기대 위치: data/raw/{{종목코드}}/NewsResult_*.xlsx. "
             f"네이버로 폴백하지만 과거 날짜는 신뢰할 수 없습니다.",
             stacklevel=2,
         )

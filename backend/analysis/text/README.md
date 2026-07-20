@@ -10,7 +10,7 @@
 
 ## 입력 데이터
 
-- 뉴스 — 빅카인즈 수동 다운로드 엑셀(`data/{종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx`) 우선,
+- 뉴스 — 빅카인즈 수동 다운로드 엑셀(`data/raw/{종목코드}/NewsResult_*.xlsx`) 우선,
   없으면 네이버 검색 OpenAPI / HTML 크롤로 폴백 (한국어)
 - 재무제표 — DART OpenAPI (`DART_API_KEY` 필수)
 - profiling 블록의 사용자 컨텍스트 JSON
@@ -37,8 +37,8 @@
 
 ## 빅카인즈 뉴스 전처리
 
-1. `NewsResult_*.xlsx` 파일을 `backend/analysis/text/data/raw/` 아래에 둔다. 하위 디렉터리도
-   재귀 탐색하며, 파일명에 적힌 기간은 커버리지 계산에 사용하지 않는다.
+1. `NewsResult_*.xlsx` 파일을 `backend/analysis/text/data/raw/{종목코드}/` 아래에 둔다.
+   하위 디렉터리를 재귀 탐색하며, 파일명에 적힌 기간은 커버리지 계산에 사용하지 않는다.
 2. `pip install -r analysis/text/requirements.txt`로 의존성을 설치한다.
 3. 저장소의 `backend/` 디렉터리에서 실행한다.
 
