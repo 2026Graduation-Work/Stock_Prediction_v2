@@ -23,7 +23,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dev --port 3100",
+    command: process.env.CI
+      ? "pnpm start --port 3100"
+      : "pnpm dev --port 3100",
     url: "http://localhost:3100/login",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,

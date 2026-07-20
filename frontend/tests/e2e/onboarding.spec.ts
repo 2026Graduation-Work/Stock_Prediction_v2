@@ -71,6 +71,13 @@ async function assertNoHorizontalOverflow(
   height: number,
 ): Promise<void> {
   await page.setViewportSize({ width, height });
+  await page.waitForFunction(
+    () =>
+      document.documentElement.scrollWidth <=
+      document.documentElement.clientWidth,
+    undefined,
+    { timeout: 2_000 },
+  );
   const dimensions = await page.evaluate(() => ({
     viewport: document.documentElement.clientWidth,
     content: document.documentElement.scrollWidth,
