@@ -177,3 +177,33 @@ def test_fails_with_clear_error_when_required_column_is_missing(tmp_path: Path) 
     assert "NewsResult_missing_press.xlsx" in message
     assert "press" in message
     assert "언론사" in message
+
+
+def test_reads_only_the_requested_ticker_directory(tmp_path: Path) -> None:
+    raw_dir = tmp_path / "raw"
+    samsung_dir = raw_dir / "005930"
+    kakao_dir = raw_dir / "035720"
+    samsung_dir.mkdir(parents=True)
+    kakao_dir.mkdir()
+    base_row = {
+        "일자": 20250101,
+        "제목": "종목 기사",
+        "본문": "본문",
+        "언론사": "테스트일보",
+    }
+    _write_workbook(
+        samsung_dir / "NewsResult_20250101-20250131.xlsx",
+        [{**base_row, "뉴스 식별자": "samsung-news"}],
+    )
+    _write_workbook(
+        kakao_dir / "NewsResult_20250101-20250131.xlsx",
+        [{**base_row, "뉴스 식별자": "kakao-news"}],
+    )
+
+    output_path = tmp_path / "news_corpus.csv"
+    report = build_news_corpus("005930", output_path, raw_dir)
+    result = pd.read_csv(output_path, dtype={"ticker": str})
+
+    assert report.input_files == 1
+    assert result["news_id"].tolist() == ["samsung-news"]
+    assert result["ticker"].tolist() == ["005930"]
