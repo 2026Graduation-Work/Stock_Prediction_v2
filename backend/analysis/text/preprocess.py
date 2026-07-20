@@ -427,6 +427,7 @@ def load_daily_news(
     limit: int | None = DEFAULT_DAILY_LIMIT,
     body_chars: int = 1000,
     ticker: str = "",
+    workbooks: Sequence[Path] | None = None,
 ) -> list[dict]:
     """해당 회사·날짜(YYYY-MM-DD) 하루치 뉴스를 표준 dict 리스트로 반환.
 
@@ -441,10 +442,17 @@ def load_daily_news(
     관련성과 무관한 사실상 임의 표본이므로, 하루치를 전부 받아 관련성으로
     거르는 호출자(news_agent)가 상한을 직접 적용한다.
 
+    workbooks는 같은 요청에서 이미 find_news_workbooks로 찾은 목록을 재사용할 때
+    넘긴다. 파일 목록 자체를 전역 캐시하지 않아 실행 중 새 원본을 추가해도 반영된다.
+
     news_id는 (date, title, press) 해시 폴백까지 포함해 100% 채워지므로
     key_events의 출처 인용(그라운딩) 키로 쓸 수 있다.
     """
-    paths = find_news_workbooks(company_name, date, data_dir, ticker)
+    paths = (
+        list(workbooks)
+        if workbooks is not None
+        else find_news_workbooks(company_name, date, data_dir, ticker)
+    )
     if not paths:
         return []
 
@@ -454,7 +462,7 @@ def load_daily_news(
         frame = _read_workbook(path)
         if "exclude" in frame.columns:
             frame = frame.loc[~frame["exclude"].fillna(False)]
-        frame = frame.loc[frame["date"].dt.normalize() == target]
+        frame = frame.loc[frame["date"] == target]
         if not frame.empty:
             frames.append(frame)
     if not frames:

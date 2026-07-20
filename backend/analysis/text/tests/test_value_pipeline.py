@@ -644,6 +644,28 @@ def test_valuation_missing_data_is_not_treated_as_loss() -> None:
 
 
 # ── 직전 기사 수집 (PR #22 추가 지적) ──────────────────────────────
+def test_collect_news_reuses_single_workbook_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    workbook = Path("005930/NewsResult_20220101-20221231.xlsx")
+    scans: list[tuple] = []
+
+    def find_workbooks(*args):
+        scans.append(args)
+        return [workbook]
+
+    def load_news(*args, **kwargs):
+        assert kwargs["workbooks"] == [workbook]
+        return [{"news_id": "n1", "title": "기사", "date": "2022-06-15"}]
+
+    monkeypatch.setattr(collectors_mod.preprocess, "find_news_workbooks", find_workbooks)
+    monkeypatch.setattr(collectors_mod.preprocess, "load_daily_news", load_news)
+
+    items, source = collectors_mod.collect_news("005930", "삼성전자", "2022-06-15")
+
+    assert source == "bigkinds"
+    assert [item["news_id"] for item in items] == ["n1"]
+    assert len(scans) == 1
+
+
 def test_published_at_sorts_by_time_not_press_code() -> None:
     """news_id는 '{언론사코드}.{YYYYMMDDHHMMSS}{일련}'.
 

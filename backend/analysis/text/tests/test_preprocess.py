@@ -239,3 +239,29 @@ def test_daily_loader_merges_and_deduplicates_overlapping_files(tmp_path: Path) 
         "삼성전자", "2022-06-15", tmp_path / "raw", limit=None, ticker="005930"
     )
     assert [item["news_id"] for item in items] == ["n1", "n2"]
+
+
+def test_daily_loader_reuses_pre_resolved_workbooks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    ticker_dir = tmp_path / "raw" / "005930"
+    ticker_dir.mkdir(parents=True)
+    workbook = ticker_dir / "NewsResult_part1.xlsx"
+    _write_workbook(workbook, [
+        {"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
+         "제목": "한 번 찾은 파일", "본문": "본문"},
+    ])
+    monkeypatch.setattr(
+        "analysis.text.preprocess.find_news_workbooks",
+        lambda *args, **kwargs: pytest.fail("워크북 디렉터리를 다시 탐색했습니다."),
+    )
+
+    items = load_daily_news(
+        "삼성전자",
+        "2022-06-15",
+        tmp_path / "raw",
+        ticker="005930",
+        workbooks=[workbook],
+    )
+
+    assert [item["news_id"] for item in items] == ["n1"]

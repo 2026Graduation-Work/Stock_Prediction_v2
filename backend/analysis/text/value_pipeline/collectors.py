@@ -69,23 +69,29 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
     뒤에 news_agent가 적용한다. news_id 정렬순 상위 N건은 임의 표본이기 때문이다.
     """
     query = company_name or ticker
-    workbook = None
+    workbooks = []
     try:
-        workbook = preprocess.find_news_workbook(query, date, DATA_DIR, ticker)
+        workbooks = preprocess.find_news_workbooks(query, date, DATA_DIR, ticker)
     except Exception as e:
         warnings.warn(f"빅카인즈 워크북 탐색 실패: {e}", stacklevel=2)
 
-    if workbook is not None:
+    if workbooks:
         try:
             items = preprocess.load_daily_news(
-                query, date, DATA_DIR, limit=None, ticker=ticker
+                query,
+                date,
+                DATA_DIR,
+                limit=None,
+                ticker=ticker,
+                workbooks=workbooks,
             )
             # 워크북이 이 날짜를 커버하므로, 0건이어도 그것이 사실이다.
             # 여기서 네이버로 폴백하면 point-in-time이 깨진다.
             return items, "bigkinds"
         except Exception as e:
             warnings.warn(
-                f"빅카인즈 엑셀 뉴스 로드 실패({workbook.name}): {e}", stacklevel=2
+                f"빅카인즈 엑셀 뉴스 로드 실패({workbooks[0].name} 외): {e}",
+                stacklevel=2,
             )
     else:
         warnings.warn(
