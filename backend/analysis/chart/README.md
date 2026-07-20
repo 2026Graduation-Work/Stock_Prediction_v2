@@ -143,7 +143,8 @@ features:
   대소문자와 앞뒤 공백에 관계없이 `target*`, `*_label`, `future_*`, `next_*`와
   키 컬럼 `Date`, `Code`, `AvailableDate`는 피처로 넣을 수 없다.
 - `base_columns: "*"`도 금지 컬럼을 허용한다는 뜻이 아니다. 기존 processed
-  패널에 target·미래 수익률 계열이 하나라도 있으면 builder가 즉시 실패한다.
+  패널에 학습·평가용 정식 라벨 `Y_Label`을 제외한 target·미래 수익률 계열이
+  하나라도 있으면 builder가 즉시 실패한다. `Y_Label`도 외부 source로 주입할 수는 없다.
 
 외부 피처를 준비한 뒤 feature store를 한 번 생성한다. 이 과정은 원본
 `data/processed/`를 수정하지 않는다.

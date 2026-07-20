@@ -16,6 +16,8 @@ from typing import Any
 import pandas as pd
 
 REQUIRED_COLUMNS = ("Date", "Code", "AvailableDate")
+RESERVED_SOURCE_COLUMNS = frozenset({"date", "code", "availabledate"})
+ALLOWED_BASE_TARGET_COLUMNS = frozenset({"y_label"})
 SUPPORTED_APPLY_PERIODS = {"one_day", "until_next_update"}
 SUPPORTED_MISSING_POLICIES = {"zero", "forward_fill", "drop", "error"}
 FORBIDDEN_FEATURE_COLUMNS = {
@@ -130,8 +132,7 @@ def _is_target_like_column(column: object) -> bool:
 
 def _is_forbidden_source_column(column: object) -> bool:
     canonical = _canonical_column(column)
-    reserved = {_canonical_column(required) for required in REQUIRED_COLUMNS}
-    return canonical in reserved or _is_target_like_column(canonical)
+    return canonical in RESERVED_SOURCE_COLUMNS or _is_target_like_column(canonical)
 
 
 def _parse_source_spec(source_config: dict[str, Any]) -> FeatureSourceSpec:
@@ -404,7 +405,10 @@ def _apply_missing_policy(panel: pd.DataFrame, source: LoadedFeatureSource) -> p
 def _select_base_columns(base: pd.DataFrame, features_config: dict[str, Any]) -> pd.DataFrame:
     """학습에 필요한 가격 메타데이터를 보존하면서 Alpha158 컬럼을 설정으로 좁힌다."""
     forbidden_base = sorted(
-        str(column) for column in base.columns if _is_target_like_column(column)
+        str(column)
+        for column in base.columns
+        if _is_target_like_column(column)
+        and _canonical_column(column) not in ALLOWED_BASE_TARGET_COLUMNS
     )
     if forbidden_base:
         raise FeatureContractError(

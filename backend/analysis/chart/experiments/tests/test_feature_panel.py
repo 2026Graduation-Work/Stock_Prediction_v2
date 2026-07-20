@@ -251,6 +251,15 @@ def test_rejects_target_like_columns_in_base_panel(base_columns: object) -> None
         _select_base_columns(base, {"base_columns": base_columns})
 
 
+def test_allows_training_y_label_in_base_panel() -> None:
+    base = _base_panel()
+    base["Y_Label"] = [2, 0, 2, 1]
+
+    selected = _select_base_columns(base, {"base_columns": "*"})
+
+    assert selected["Y_Label"].tolist() == [2, 0, 2, 1]
+
+
 def test_mixed_date_formats_follow_declared_pandas_contract(tmp_path: Path) -> None:
     source_path = tmp_path / "mixed_dates.parquet"
     pd.DataFrame(
