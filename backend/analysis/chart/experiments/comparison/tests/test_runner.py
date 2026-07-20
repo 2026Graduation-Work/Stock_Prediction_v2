@@ -4,7 +4,14 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from experiments.comparison.runner import ComparisonConfigError, run_comparison
+import yaml
+from experiments.comparison.runner import (
+    ComparisonConfigError,
+    resolve_feature_sets,
+    run_comparison,
+)
+
+CHART_DIR = Path(__file__).resolve().parents[3]
 
 
 def _fixture(seed: int = 7) -> pd.DataFrame:
@@ -85,6 +92,16 @@ def _config(input_path: Path, output_path: Path) -> dict:
         },
         "output_dir": str(output_path),
     }
+
+
+def test_example_config_resolves_tracked_baseline_model() -> None:
+    config_path = CHART_DIR / "experiments" / "comparison" / "config.example.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    baseline, treatment = resolve_feature_sets(config, config_path.parent)
+
+    assert baseline
+    assert treatment == ["synthetic_psychology_index", "news_sentiment"]
 
 
 def test_runs_four_models_and_writes_both_required_tables(tmp_path: Path) -> None:

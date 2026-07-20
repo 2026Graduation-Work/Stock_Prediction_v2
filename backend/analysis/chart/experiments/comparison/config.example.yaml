@@ -14,7 +14,7 @@ data:
 
 features:
   # v1 baseline 모델이 실제 사용한 Alpha158 컬럼을 읽어 목록 드리프트를 막는다.
-  baseline_model_file: ../cache/models/65dc5055_fold0_model.txt
+  baseline_model_file: ../../core/models/65dc5055_fold0_model.txt
   treatment:
     - synthetic_psychology_index
     - news_sentiment
