@@ -136,10 +136,14 @@ features:
   를 켜면 해당 값이 원래 비어 있었는지를 나타내는 피처도 함께 만든다.
 - `forward_fill`과 `until_next_update`에는 `max_staleness_trading_days`가 필요하다.
   이는 값이 유지될 수 있는 최대 **거래일 행 수**다. 예를 들어 분기 재무 피처는
-  `120`처럼 설정해 오래된 공시값의 무제한 사용을 막는다.
+  `120`처럼 설정해 오래된 공시값의 무제한 사용을 막는다. 전달은 입력 Parquet의
+  행 순서가 아니라 종목별 날짜 오름차순에서만 수행한다.
 - 외부 파일 안에서 `(Code, Date, AvailableDate)`가 중복되면 안 되며, 숫자형
   피처만 넣는다. 같은 `(Code, AvailableDate)`에 두 값이 있어도 안 된다.
-  `Y_Label`, 미래 수익률, 미래 가격은 넣을 수 없다.
+  대소문자와 앞뒤 공백에 관계없이 `target*`, `*_label`, `future_*`, `next_*`와
+  키 컬럼 `Date`, `Code`, `AvailableDate`는 피처로 넣을 수 없다.
+- `base_columns: "*"`도 금지 컬럼을 허용한다는 뜻이 아니다. 기존 processed
+  패널에 target·미래 수익률 계열이 하나라도 있으면 builder가 즉시 실패한다.
 
 외부 피처를 준비한 뒤 feature store를 한 번 생성한다. 이 과정은 원본
 `data/processed/`를 수정하지 않는다.
