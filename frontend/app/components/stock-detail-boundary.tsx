@@ -54,6 +54,7 @@ export default function StockDetailBoundary({
   }, [code, onboardingState.mode, onboardingState.userId, requestVersion]);
 
   const currentResult =
+    onboardingState.mode === "supabase" &&
     authenticatedResult &&
     authenticatedResult.userId === onboardingState.userId &&
     authenticatedResult.code === code

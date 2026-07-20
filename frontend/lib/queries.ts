@@ -410,8 +410,7 @@ async function queryStockDetail(
     .from("prediction_features")
     .select(PREDICTION_FEATURE_COLUMNS)
     .eq("prediction_id", prediction.id)
-    .order("display_order", { ascending: true })
-    .limit(3);
+    .order("display_order", { ascending: true });
   assertQuery(featureError, "상세 화면 예측 근거 조회");
 
   return {
