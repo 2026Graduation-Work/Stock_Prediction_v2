@@ -4,7 +4,7 @@
 
 설계 원칙 (AGENTS.md '정량/정성 분리')
 - 수치 피처(감성·재무점수·영향력·시그널·신뢰도)는 결정론적으로 계산 → 재현성·설명가능성.
-- LLM은 '라벨·분류·추출·설명'만: 뉴스 관련성 판정, 핵심 이벤트 추출, 자연어 근거.
+- LLM은 핵심 이벤트 추출과 자연어 근거 설명만 담당한다. 뉴스 관련성도 규칙으로 판정한다.
   LLM 출력은 llm.structured가 content-hash로 동결하므로 재실행 시 결정론이 유지된다.
 - validation_agent는 규칙 기반이다. LLM 크리틱은 쓰지 않는다 —
   자기검증은 실증적으로 성능을 떨어뜨리고(ICLR 2024), 판사 LLM은 저perplexity
@@ -59,7 +59,47 @@ class _NewsExtract(BaseModel):
 
 
 class _Reason(BaseModel):
-    reasoning: str = Field("", description="가치투자 판단 근거 2~3문장, 한국어")
+    reasoning: str = Field(
+        "",
+        description="수치와 핵심 이벤트의 관계를 설명하는 한국어 2~3문장, 행동 제안 금지",
+    )
+
+
+_BEHAVIOR_ADVICE_MARKERS = (
+    "매수를 권",
+    "매도를 권",
+    "보유를 권",
+    "관망을 권",
+    "매수하는 것이",
+    "매도하는 것이",
+    "보유하는 것이",
+    "관망하는 것이",
+    "매수를 고려",
+    "매도를 고려",
+    "보유를 고려",
+    "관망을 고려",
+    "신규 진입",
+    "진입을 고려",
+    "진입하는 것이",
+    "청산을 고려",
+    "청산하는 것이",
+    "비중을 늘",
+    "비중을 줄",
+    "비중을 확대",
+    "비중을 축소",
+    "비중을 조절",
+    "비중을 점검",
+    "포지션을 유지",
+    "포지션을 확대",
+    "포지션을 축소",
+    "손절",
+    "익절",
+)
+
+
+def _contains_behavior_advice(reasoning: str) -> bool:
+    normalized = " ".join((reasoning or "").split())
+    return any(marker in normalized for marker in _BEHAVIOR_ADVICE_MARKERS)
 
 
 def _clip(v: float, lo: float, hi: float) -> float:
@@ -409,16 +449,19 @@ def synthesis_agent(state: dict) -> dict:
         f"- 뉴스감성 {news_sent:+.2f}(영향력 {impact}/10)\n"
         f"- 종합점수 {composite:.2f}/10 → 시그널 {signal}\n"
         f"핵심이벤트: {', '.join(events)}\n"
-        f"위 수치와 일관되게 가치투자 판단 근거를 2~3문장으로 써라.",
+        "위 수치와 핵심 이벤트의 관계만 2~3문장으로 설명하라. "
+        "매수·매도·보유·관망·진입·청산·비중·손절·익절 등 독자의 행동을 "
+        "권하거나 제안하지 말고, 시그널을 행동 지시로 풀어 쓰지 마라.",
         _Reason,
     )
-    if reason_obj is not None and reason_obj.reasoning:
-        reasoning = reason_obj.reasoning
+    candidate_reasoning = reason_obj.reasoning.strip() if reason_obj is not None else ""
+    if candidate_reasoning and not _contains_behavior_advice(candidate_reasoning):
+        reasoning = candidate_reasoning
     else:
         reasoning = (
             f"밸류에이션 {valuation}/10·재무건전성 {health}/10에 뉴스감성 {news_sent:+.2f}"
-            f"(영향력 {impact}/10)를 반영한 종합점수 {composite:.1f}/10으로 "
-            f"'{signal}' 판단."
+            f"(영향력 {impact}/10)를 반영한 종합점수는 {composite:.1f}/10이며, "
+            f"결정론적 구간 라벨은 '{signal}'이다."
         )
 
     out = ValueSignal(

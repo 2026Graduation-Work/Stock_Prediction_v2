@@ -235,6 +235,15 @@ in-sample에만 존재하는 신호라 백테스트를 좋아 보이게 만들�
 고르는 필드'도 두지 말 것.** LLM 출력 계약에 그런 필드가 없으면 실수로 다시 연결할 수 없다.
 확인: `test_llm_schemas_have_no_score_or_selection_field`, `test_scores_identical_with_and_without_llm`
 
+### 3.1.1 LLM 설명이 행동을 제안
+
+`reasoning`은 수치와 핵심 이벤트의 관계만 번역한다. 매수·매도·보유·관망·진입·청산,
+비중 조절, 손절·익절을 권하거나 제안하면 HITL 원칙 위반이다. 프롬프트 금지에만 의존하지 않고
+`_contains_behavior_advice`가 명시 패턴을 검출하면 결정적 수치 템플릿으로 대체한다. 기사 사실인
+"외국인 매도 압력"처럼 사용자의 행동을 제안하지 않는 문장은 허용한다.
+
+확인: `test_synthesis_rejects_behavior_advice`, `test_synthesis_allows_factual_action_word`
+
 ### 3.2 `today()` 기반 회계연도
 
 `dt.date.today()`가 재무·뉴스 선택에 등장하면 룩어헤드다. 기준일 `date`에서 파생할 것.
@@ -363,7 +372,7 @@ CI엔 `.env`가 없어 헤르메틱성을 못 잡는다.
 | 2.5 출처 | `test_key_events_carry_source_news_ids`, `test_grounding_requires_two_token_overlap`, `test_load_daily_news_emits_news_id_for_grounding`, `test_validation_warns_on_ungrounded_event`, `test_corpus_and_daily_loader_share_path_contract`, `test_corpus_workbooks_filter_by_ticker` |
 | 2.8 결측 vs 0 | `test_validation_catches_zero_articles`, `test_zero_relevant_articles_fails_validation_not_restored`, `test_valuation_missing_data_is_not_treated_as_loss`, `test_collect_financials_raises_when_no_data` |
 | 2.9 validation | `test_validation_passes_on_consistent_data`, `test_validation_catches_accounting_identity_violation`, `test_validation_catches_implausible_metric`, `test_validation_result_reaches_output` |
-| 3.1 LLM 점수 개입 | `test_llm_schemas_have_no_score_or_selection_field`, `test_scores_identical_with_and_without_llm` |
+| 3.1 LLM 점수·행동 개입 | `test_llm_schemas_have_no_score_or_selection_field`, `test_scores_identical_with_and_without_llm`, `test_synthesis_rejects_behavior_advice`, `test_synthesis_allows_factual_action_word` |
 | 4.1 관련성 필터 | `test_relevance_key_strips_corporate_suffix`, `test_relevance_filter_excludes_unrelated_articles`, `test_relevance_filter_matches_body_not_just_title`, `test_relevance_filter_keeps_all_when_company_unknown` |
 | 4.3 staleness | `test_staleness_identical_article_is_fully_stale`, `test_staleness_new_article_is_fresh`, `test_staleness_is_deterministic`, `test_published_at_sorts_by_time_not_press_code`, `test_collect_prior_news_returns_latest_first` |
 

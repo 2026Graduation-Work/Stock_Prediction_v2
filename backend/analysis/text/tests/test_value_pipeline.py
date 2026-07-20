@@ -335,6 +335,67 @@ def test_scores_identical_with_and_without_llm(monkeypatch: pytest.MonkeyPatch) 
         assert off[k] == on[k], f"{k}가 LLM 유무로 달라짐 — LLM이 점수 경로에 있음"
 
 
+def _synthesis_state() -> dict:
+    return {
+        "ticker": "005930",
+        "date": "2022-06-15",
+        "company_name": "삼성전자",
+        "news_result": {
+            "news_sentiment": -0.1,
+            "news_impact_score": 6,
+            "news_sentiment_std": 0.2,
+            "staleness": 0.1,
+            "key_events": [],
+            "article_count": 1,
+            "article_count_raw": 1,
+        },
+        "financial_result": {
+            "valuation_score": 5.0,
+            "financial_health_score": 8.0,
+            "metrics": {},
+            "fiscal_year": 2021,
+        },
+        "news_source": "bigkinds",
+        "financial_source": "dart",
+        "validation": {"ok": True, "errors": [], "warnings": []},
+    }
+
+
+def test_synthesis_rejects_behavior_advice(monkeypatch: pytest.MonkeyPatch) -> None:
+    """LLM 설명이 사용자 행동을 제안하면 결정론적 수치 템플릿으로 대체한다."""
+    seen: dict[str, str] = {}
+    unsafe = "현재는 관망하며 보유 포지션을 유지하는 것이 합리적입니다."
+
+    def fake_structured(prompt, schema):
+        seen["prompt"] = prompt
+        assert schema is agents_mod._Reason
+        return agents_mod._Reason(reasoning=unsafe)
+
+    monkeypatch.setattr(agents_mod, "structured", fake_structured)
+    result = agents_mod.synthesis_agent(_synthesis_state())["final"]
+
+    assert result["reasoning"] != unsafe
+    assert "결정론적 구간 라벨" in result["reasoning"]
+    assert "행동을 권하거나 제안하지 말고" in seen["prompt"]
+
+
+def test_synthesis_allows_factual_action_word(monkeypatch: pytest.MonkeyPatch) -> None:
+    """기사 속 매도처럼 투자자 행동 지시가 아닌 사실 서술은 보존한다."""
+    factual = (
+        "외국인 매도 압력은 뉴스 감성을 낮췄고 "
+        "재무건전성 점수는 이를 일부 상쇄했습니다."
+    )
+    monkeypatch.setattr(
+        agents_mod,
+        "structured",
+        lambda prompt, schema: agents_mod._Reason(reasoning=factual),
+    )
+
+    result = agents_mod.synthesis_agent(_synthesis_state())["final"]
+
+    assert result["reasoning"] == factual
+
+
 def test_run_pipeline_is_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:
     news = [{"news_id": "n1", "title": "삼성전자 흑자 확대", "summary": "",
              "url": "", "press": "", "date": "2022-06-15"}]
