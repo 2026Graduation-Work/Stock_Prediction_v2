@@ -107,11 +107,11 @@ export default function Dashboard(initialData: DashboardData) {
     marketStatus,
     profile,
     maxRiskTier,
-    stocks,
-    holdingAlerts,
-    holdings,
-    excludedStocks,
-    avoidedLabels,
+    stocks = [],
+    holdingAlerts = [],
+    holdings = [],
+    excludedStocks = [],
+    avoidedLabels = [],
   } = currentData;
   const loadingAuthenticatedData =
     onboardingState.mode === "supabase" && !authenticatedData && !dataError;
@@ -138,7 +138,12 @@ export default function Dashboard(initialData: DashboardData) {
   const visibleStocks = keyword ? stocks.filter(matches) : stocks;
   const visibleAlerts = keyword ? holdingAlerts.filter(matches) : holdingAlerts;
   const noResult = keyword && visibleStocks.length === 0 && visibleAlerts.length === 0;
-  const riskTierLabel = maxRiskTier === 5 ? "5등급" : `${maxRiskTier}~5등급`;
+  const safeMaxRiskTier =
+    Number.isInteger(maxRiskTier) && maxRiskTier >= 1 && maxRiskTier <= 5
+      ? maxRiskTier
+      : 4;
+  const riskTierLabel =
+    safeMaxRiskTier === 5 ? "5등급" : `${safeMaxRiskTier}~5등급`;
 
   function retryAuthenticatedData() {
     setAuthenticatedResult(null);

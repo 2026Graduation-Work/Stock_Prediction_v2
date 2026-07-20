@@ -63,6 +63,11 @@ interface ProfileSettings {
   avoided: Set<string>;
 }
 
+interface ProfileQueryContext {
+  settings: ProfileSettings;
+  result: ProfileQueryResult;
+}
+
 const PREDICTION_COLUMNS =
   "stock_code,prediction_date,signal_light,rank_percentile,return_low,return_high,return_ci_level,bucket_hit_rate,similar_case_count,horizon_h5,horizon_h10,horizon_h20,horizon_agreement,caution,display_order" as const;
 
@@ -108,24 +113,26 @@ export async function getAuthenticatedDashboardData(): Promise<DashboardData> {
   assertQuery(appUserError, "대시보드 사용자 확인");
   if (!appUser) throw new Error("연결된 서비스 사용자 정보가 없습니다.");
 
-  const [currentMarketStatus, stocks, currentHoldingAlerts, holdings, profileResult] =
-    await Promise.all([
-      queryMarketStatus(client),
-      queryRecommendedStocks(client, appUser.id),
-      queryHoldingAlerts(client, appUser.id),
-      queryPortfolio(client, appUser.id),
-      queryProfile(client, appUser.id),
-    ]);
+  const [currentMarketStatus, profileContext, holdingRows] = await Promise.all([
+    queryMarketStatus(client),
+    loadProfileQueryContext(client, appUser.id),
+    loadHoldings(client, appUser.id),
+  ]);
+  const [stocks, currentHoldingAlerts, holdings] = await Promise.all([
+    queryRecommendedStocks(client, appUser.id, profileContext.settings),
+    queryHoldingAlerts(client, appUser.id, profileContext.settings, holdingRows),
+    queryPortfolio(client, appUser.id, profileContext.settings, holdingRows),
+  ]);
 
   return {
     marketStatus: currentMarketStatus,
     stocks,
     holdingAlerts: currentHoldingAlerts,
     holdings,
-    profile: profileResult.profile,
-    maxRiskTier: profileResult.maxRiskTier,
-    avoidedLabels: profileResult.avoidedLabels,
-    excludedStocks: profileResult.excludedStocks,
+    profile: profileContext.result.profile,
+    maxRiskTier: profileContext.result.maxRiskTier,
+    avoidedLabels: profileContext.result.avoidedLabels,
+    excludedStocks: profileContext.result.excludedStocks,
   };
 }
 
@@ -185,8 +192,9 @@ async function queryMarketStatus(client: SupabaseClient): Promise<MarketStatus> 
 async function queryRecommendedStocks(
   client: SupabaseClient,
   userId: string,
+  profileSettings?: ProfileSettings,
 ): Promise<RecommendedStock[]> {
-  const settings = await loadProfileSettings(client, userId);
+  const settings = profileSettings ?? (await loadProfileSettings(client, userId));
   const { data, error } = await client
     .from("predictions")
     .select(PREDICTION_COLUMNS)
@@ -219,9 +227,13 @@ async function queryRecommendedStocks(
 async function queryHoldingAlerts(
   client: SupabaseClient,
   userId: string,
+  profileSettings?: ProfileSettings,
+  portfolioRows?: PortfolioHoldingRow[],
 ): Promise<RecommendedStock[]> {
-  const settings = await loadProfileSettings(client, userId);
-  const holdings = await loadHoldings(client, userId);
+  const [settings, holdings] = await Promise.all([
+    profileSettings ?? loadProfileSettings(client, userId),
+    portfolioRows ?? loadHoldings(client, userId),
+  ]);
   if (!holdings.length) return [];
 
   const { data, error } = await client
@@ -252,9 +264,13 @@ async function queryHoldingAlerts(
 async function queryPortfolio(
   client: SupabaseClient,
   userId: string,
+  profileSettings?: ProfileSettings,
+  portfolioRows?: PortfolioHoldingRow[],
 ): Promise<PortfolioHolding[]> {
-  const settings = await loadProfileSettings(client, userId);
-  const holdings = await loadHoldings(client, userId);
+  const [settings, holdings] = await Promise.all([
+    profileSettings ?? loadProfileSettings(client, userId),
+    portfolioRows ?? loadHoldings(client, userId),
+  ]);
   if (!holdings.length) return [];
 
   const codes = holdings.map(({ stock_code }) => stock_code);
@@ -288,7 +304,14 @@ async function queryProfile(
   client: SupabaseClient,
   userId: string,
 ): Promise<ProfileQueryResult> {
-  const [userResult, profileResult, avoidedResult, stocks] = await Promise.all([
+  return (await loadProfileQueryContext(client, userId)).result;
+}
+
+async function loadProfileQueryContext(
+  client: SupabaseClient,
+  userId: string,
+): Promise<ProfileQueryContext> {
+  const [userResult, profileResult, avoidedResult] = await Promise.all([
     client
       .from("users")
       .select("id,display_name,avatar_label")
@@ -306,7 +329,6 @@ async function queryProfile(
       .select("asset_type")
       .eq("user_id", userId)
       .eq("is_active", true),
-    loadStocks(client),
   ]);
   assertQuery(userResult.error, "사용자 조회");
   assertQuery(profileResult.error, "IPS 프로필 조회");
@@ -316,14 +338,16 @@ async function queryProfile(
   }
 
   const avoidedRows = (avoidedResult.data ?? []) as AvoidedAssetRow[];
+  const profile = profileResult.data as IpsProfileRow;
+  const stocks = await loadAvoidedStocks(client, avoidedRows);
   return {
-    profile: mapProfileSummary(
-      userResult.data as UserRow,
-      profileResult.data as IpsProfileRow,
-    ),
-    maxRiskTier: (profileResult.data as IpsProfileRow).max_risk_tier,
-    avoidedLabels: mapAvoidedAssetLabels(avoidedRows),
-    excludedStocks: mapExcludedStocks(stocks, avoidedRows),
+    settings: toProfileSettings(profile, avoidedRows),
+    result: {
+      profile: mapProfileSummary(userResult.data as UserRow, profile),
+      maxRiskTier: profile.max_risk_tier,
+      avoidedLabels: mapAvoidedAssetLabels(avoidedRows),
+      excludedStocks: mapExcludedStocks(stocks, avoidedRows),
+    },
   };
 }
 
@@ -347,16 +371,37 @@ async function loadProfileSettings(
   assertQuery(avoidedResult.error, "추천 회피 설정 조회");
   if (!profileResult.data) throw new Error("추천에 사용할 IPS 프로필이 없습니다.");
 
-  const profile = profileResult.data as ProfileSettingsRow;
+  return toProfileSettings(
+    profileResult.data as ProfileSettingsRow,
+    (avoidedResult.data ?? []) as AvoidedAssetRow[],
+  );
+}
+
+function toProfileSettings(
+  profile: ProfileSettingsRow,
+  avoidedRows: AvoidedAssetRow[],
+): ProfileSettings {
   return {
     profileType: profile.profile_type,
     maxRiskTier: profile.max_risk_tier,
-    avoided: new Set(
-      ((avoidedResult.data ?? []) as AvoidedAssetRow[]).map(
-        ({ asset_type }) => asset_type,
-      ),
-    ),
+    avoided: new Set(avoidedRows.map(({ asset_type }) => asset_type)),
   };
+}
+
+async function loadAvoidedStocks(
+  client: SupabaseClient,
+  avoidedRows: AvoidedAssetRow[],
+): Promise<StockRow[]> {
+  const avoidedTypes = avoidedRows.map(({ asset_type }) => asset_type);
+  if (!avoidedTypes.length) return [];
+
+  const { data, error } = await client
+    .from("stocks")
+    .select(STOCK_COLUMNS)
+    .eq("is_active", true)
+    .overlaps("risk_flags", avoidedTypes);
+  assertQuery(error, "회피 대상 종목 조회");
+  return (data ?? []) as StockRow[];
 }
 
 async function loadStocks(
