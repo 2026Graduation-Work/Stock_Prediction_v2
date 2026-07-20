@@ -364,7 +364,7 @@ def _synthesis_state() -> dict:
 def test_synthesis_rejects_behavior_advice(monkeypatch: pytest.MonkeyPatch) -> None:
     """LLM 설명이 사용자 행동을 제안하면 결정론적 수치 템플릿으로 대체한다."""
     seen: dict[str, str] = {}
-    unsafe = "현재는 관망하며 보유 포지션을 유지하는 것이 합리적입니다."
+    unsafe = "현재는 관망하며 보유 포지션 \n 을 유지하는 것이 합리적입니다."
 
     def fake_structured(prompt, schema):
         seen["prompt"] = prompt
@@ -377,6 +377,7 @@ def test_synthesis_rejects_behavior_advice(monkeypatch: pytest.MonkeyPatch) -> N
     assert result["reasoning"] != unsafe
     assert "결정론적 구간 라벨" in result["reasoning"]
     assert "행동을 권하거나 제안하지 말고" in seen["prompt"]
+    assert agents_mod._contains_behavior_advice("신규진입을 고려할 수 있습니다.")
 
 
 def test_synthesis_allows_factual_action_word(monkeypatch: pytest.MonkeyPatch) -> None:

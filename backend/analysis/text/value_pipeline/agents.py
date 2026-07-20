@@ -98,8 +98,10 @@ _BEHAVIOR_ADVICE_MARKERS = (
 
 
 def _contains_behavior_advice(reasoning: str) -> bool:
-    normalized = " ".join((reasoning or "").split())
-    return any(marker in normalized for marker in _BEHAVIOR_ADVICE_MARKERS)
+    normalized = "".join((reasoning or "").split())
+    return any(
+        "".join(marker.split()) in normalized for marker in _BEHAVIOR_ADVICE_MARKERS
+    )
 
 
 def _clip(v: float, lo: float, hi: float) -> float:
