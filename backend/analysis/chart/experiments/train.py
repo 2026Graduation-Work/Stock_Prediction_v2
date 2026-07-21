@@ -1,128 +1,243 @@
+# ruff: noqa: I001
+
 import argparse
 import gc
-import hashlib
 import json
 import os
 
+import lightgbm as lgb
+import numpy as np
 import pandas as pd
+import scipy.stats as stats
 import yaml
+
+from experiment_utils import (
+    cache_dir,
+    find_processed_dir,
+    generate_dataset_hash,
+    generate_predictions_hash,
+    label_params_from_config,
+    result_dir,
+    resolve_splits,
+)
 from train_src.lgbm_wrapper import LGBMWrapper
 from train_src.loaders import load_parquet_data
 
 
-def resolve_splits(config: dict) -> list:
-    """config['data']의 split_strategy 에 따라 폴드 목록을 계산하여 반환합니다."""
-    data_cfg = config.get("data", {})
-    strategy = data_cfg.get("split_strategy", "single")
-    embargo_days = data_cfg.get("embargo_days", 7)
+def _json_safe(value):
+    if isinstance(value, (np.floating, np.integer)):
+        return value.item()
+    if pd.isna(value):
+        return None
+    return value
 
-    if strategy == "single":
-        return data_cfg.get("splits", [])
 
-    elif strategy == "sliding":
-        cfg = data_cfg.get("sliding", {})
-        tw = cfg.get("train_window_years", 3)
-        te = cfg.get("test_window_years", 1)
-        sy = cfg.get("start_year", 2016)
-        ey = cfg.get("end_year", 2025)
+def _validation_window(train_end: str, embargo_days: int) -> tuple[str, str, str]:
+    train_end_dt = pd.to_datetime(train_end)
+    pure_train_end_dt = train_end_dt - pd.DateOffset(months=6)
+    val_start_dt = pure_train_end_dt + pd.Timedelta(days=embargo_days)
+    return (
+        pure_train_end_dt.strftime("%Y-%m-%d"),
+        val_start_dt.strftime("%Y-%m-%d"),
+        train_end,
+    )
 
-        folds_info = []
-        for y in range(sy + tw, ey - te + 1):
-            ts = (pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)).strftime(
-                "%Y-%m-%d"
-            )
-            folds_info.append(
-                {
-                    "train_start": f"{y - tw}-01-01",
-                    "train_end": f"{y - 1}-12-31",
-                    "test_start": ts,
-                    "test_end": f"{y}-12-31",
-                }
-            )
-        return folds_info
 
-    elif strategy == "expanding":
-        cfg = data_cfg.get("expanding", {})
-        iy = cfg.get("initial_train_years", 5)
-        te = cfg.get("test_window_years", 1)
-        sy = cfg.get("start_year", 2016)
-        ey = cfg.get("end_year", 2025)
+def _get_spearman(group):
+    if len(group) < 5:
+        return np.nan
+    if group["Prob"].std() == 0 or group["Y_Label"].std() == 0:
+        return np.nan
+    return group["Prob"].corr(group["Y_Label"], method="spearman")
 
-        folds_info = []
-        for y in range(sy + iy, ey - te + 1):
-            ts = (pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)).strftime(
-                "%Y-%m-%d"
-            )
-            folds_info.append(
-                {
-                    "train_start": f"{sy}-01-01",
-                    "train_end": f"{y - 1}-12-31",
-                    "test_start": ts,
-                    "test_end": f"{y}-12-31",
-                }
-            )
-        return folds_info
 
+def _evaluate_validation(
+    config: dict,
+    split_info: dict,
+    fold_idx: int,
+    model_wrapper: LGBMWrapper,
+    val_df: pd.DataFrame,
+    feature_cols: list[str],
+) -> dict:
+    prob_threshold = config.get("strategy", {}).get("prob_threshold", 0.65)
+    top_n = config.get("strategy", {}).get("top_n", 5)
+    fold_id = split_info.get("fold_id", fold_idx)
+    fold_name = split_info.get("name", f"Fold {fold_id}")
+
+    X_val = val_df[feature_cols]
+    val_probs = model_wrapper.predict(X_val)
+    required_metadata = {"Date", "Code", "Close", "Trading_Halt", "Y_Label"}
+    missing_metadata = sorted(required_metadata - set(val_df.columns))
+    if missing_metadata:
+        raise ValueError(
+            "검증 데이터에 실제 거래 가능 여부 판단용 메타데이터가 없습니다: "
+            f"{missing_metadata}"
+        )
+
+    val_eval_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"]
+    val_eval_df = val_df[val_eval_cols].copy()
+    val_eval_df["Prob"] = val_probs
+
+    daily_ic = val_eval_df.groupby("Date").apply(_get_spearman).dropna()
+    n_days = len(daily_ic)
+
+    if n_days < 5:
+        mean_ic = np.nan
+        std_ic = np.nan
+        t_stat = 0.0
+        p_val_t = 1.0
     else:
-        raise ValueError(f"지원하지 않는 split 전략: {strategy}")
+        mean_ic = daily_ic.mean()
+        std_ic = daily_ic.std()
+        t_stat = 0.0 if std_ic == 0 else mean_ic / (std_ic / np.sqrt(n_days))
+        p_val_t = stats.t.sf(t_stat, df=n_days - 1)
 
+    val_eval_df["Is_Valid"] = (
+        (val_eval_df["Prob"] >= prob_threshold)
+        & (val_eval_df["Close"] > 1.0)
+        & (val_eval_df["Trading_Halt"] == 0)
+    )
 
-def generate_dataset_hash(config: dict, resolved_splits: list) -> str:
-    """Dataset(.bin) 캐시용 해시: 데이터/피처/라벨 세팅의 변경사항만 감지하여 생성합니다."""
-    hash_dict = {
-        "data": {
-            "tickers": config.get("data", {}).get("tickers", None),
-            "start_date": config.get("data", {}).get("start_date", None),
-            "end_date": config.get("data", {}).get("end_date", None),
-            "split_strategy": config.get("data", {}).get("split_strategy", "single"),
-            "embargo_days": config.get("data", {}).get("embargo_days", 7),
-            "splits": resolved_splits,
-        },
-        "features": config.get("features", {}),
-        "labels": config.get("labels", {}),
+    def select_top_signals(group):
+        valid_group = group[group["Is_Valid"]]
+        if valid_group.empty:
+            return pd.DataFrame()
+        return valid_group.nlargest(top_n, "Prob")
+
+    selected_signals = val_eval_df.groupby("Date", group_keys=False).apply(select_top_signals)
+    n_signals = len(selected_signals)
+    base_rate = (val_eval_df["Y_Label"] == 2).mean()
+
+    if n_signals == 0:
+        n_success = 0
+        success_rate = 0.0
+        p_val_binom = 1.0
+    else:
+        n_success = (selected_signals["Y_Label"] == 2).sum()
+        success_rate = n_success / n_signals
+        p_val_binom = (
+            1.0 - stats.binom.cdf(n_success - 1, n_signals, base_rate)
+            if n_success > 0
+            else 1.0
+        )
+
+    ic_passed = bool(pd.notna(mean_ic) and mean_ic >= 0.02)
+    t_stat_passed = bool(t_stat >= 2.0 and p_val_t <= 0.05)
+    binom_passed = bool(p_val_binom <= 0.05)
+    validation_passed = bool(ic_passed and t_stat_passed and binom_passed)
+
+    failure_reasons = []
+    if n_days < 5:
+        failure_reasons.append("insufficient_ic_days")
+    if not ic_passed:
+        failure_reasons.append("ic_mean<0.02")
+    if not t_stat_passed:
+        failure_reasons.append("t_stat_or_p_value_failed")
+    if not binom_passed:
+        failure_reasons.append("binomial_p_value>0.05")
+
+    return {
+        "fold_id": fold_id,
+        "Fold": fold_name,
+        "train_start": split_info["train_start"],
+        "train_end": split_info["train_end"],
+        "validation_start": val_eval_df["Date"].min(),
+        "validation_end": val_eval_df["Date"].max(),
+        "sample_count": len(val_eval_df),
+        "up_class_ratio": base_rate,
+        "ic_mean": mean_ic,
+        "ic_std": std_ic,
+        "ic_t_stat": t_stat,
+        "ic_p_value": p_val_t,
+        "ic_positive_day_ratio": (daily_ic > 0).mean() if n_days else 0.0,
+        "ic_n_days": n_days,
+        "prob_threshold": prob_threshold,
+        "top_n": top_n,
+        "selected_signal_count": n_signals,
+        "selected_success_count": n_success,
+        "selected_success_rate": success_rate,
+        "selected_base_rate": base_rate,
+        "selected_binomial_p_value": p_val_binom,
+        "ic_passed": ic_passed,
+        "t_stat_passed": t_stat_passed,
+        "binomial_passed": binom_passed,
+        "validation_passed": validation_passed,
+        "failure_reasons": ",".join(failure_reasons),
     }
-    hash_str = json.dumps(hash_dict, sort_keys=True)
-    return hashlib.md5(hash_str.encode()).hexdigest()[:8]
 
 
-def generate_predictions_hash(config: dict, resolved_splits: list) -> str:
-    """예측 확률 및 모델 캐시용 해시: 데이터/피처/라벨 + 모델 하이퍼파라미터를 감지하여 생성합니다."""
-    hash_dict = {
-        "data": {
-            "tickers": config.get("data", {}).get("tickers", None),
-            "start_date": config.get("data", {}).get("start_date", None),
-            "end_date": config.get("data", {}).get("end_date", None),
-            "split_strategy": config.get("data", {}).get("split_strategy", "single"),
-            "embargo_days": config.get("data", {}).get("embargo_days", 7),
-            "splits": resolved_splits,
-        },
-        "features": config.get("features", {}),
-        "labels": config.get("labels", {}),
-        "model": config.get("model", {}),
+def _write_validation_artifacts(
+    validation_records: list[dict],
+    out_dir: str,
+    predictions_hash: str,
+) -> None:
+    if not validation_records:
+        return
+
+    validation_df = pd.DataFrame(validation_records)
+    validation_df.to_csv(os.path.join(out_dir, "validation_metrics_by_fold.csv"), index=False)
+
+    passed = validation_df["validation_passed"].astype(bool)
+    summary = {
+        "prediction_hash": predictions_hash,
+        "validation_fold_count": int(len(validation_df)),
+        "validation_passed_fold_count": int(passed.sum()),
+        "validation_failed_fold_count": int((~passed).sum()),
+        "validation_all_passed": bool(passed.all()),
+        "validation_ic_mean": _json_safe(validation_df["ic_mean"].mean()),
+        "validation_ic_min": _json_safe(validation_df["ic_mean"].min()),
+        "validation_selected_success_rate_mean": _json_safe(
+            validation_df["selected_success_rate"].mean()
+        ),
+        "validation_selected_binomial_p_value_max": _json_safe(
+            validation_df["selected_binomial_p_value"].max()
+        ),
     }
-    hash_str = json.dumps(hash_dict, sort_keys=True)
-    return hashlib.md5(hash_str.encode()).hexdigest()[:8]
+    with open(os.path.join(out_dir, "validation_metrics_summary.json"), "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=4, ensure_ascii=False)
 
 
-def find_processed_dir() -> str:
-    """
-    실행 경로에 구애받지 않도록 data/processed 폴더의 위치를 유연하게 탐색합니다.
-    """
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    candidate_paths = [
-        os.path.abspath(
-            os.path.join(current_dir, "..", "data", "processed")
-        ),  # 블록 내부 data/processed
-        os.path.abspath(
-            os.path.join(current_dir, "..", "..", "..", "data", "processed")
-        ),  # 프로젝트 루트 data/processed
-        os.path.abspath(os.path.join(os.getcwd(), "data", "processed")),  # 현재 CWD 기준
-    ]
-    for p in candidate_paths:
-        if os.path.exists(p):
-            return p
-    # 기본값으로 첫 번째 후보군 반환
-    return candidate_paths[0]
+def _load_validation_df(
+    processed_dir: str,
+    val_start: str,
+    val_end: str,
+    tickers_cfg,
+    label_params: dict,
+    feature_cols: list[str],
+) -> pd.DataFrame:
+    val_df = load_parquet_data(
+        processed_dir,
+        val_start,
+        val_end,
+        tickers=tickers_cfg,
+        label_params=label_params,
+        training=False,
+    )
+    val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols
+    return val_df[[c for c in val_cols if c in val_df.columns]].copy()
+
+
+def _print_validation_report(fold_number: int, validation_metrics: dict) -> None:
+    print("=" * 85)
+    print(f"📊 [VALIDATION REPORT] Fold {fold_number} Validation Summary")
+    print("=" * 85)
+    print(
+        f"  - Mean Rank IC:   {validation_metrics['ic_mean']:.4f}  "
+        f"(Threshold: >= 0.02) -> {'PASSED ✅' if validation_metrics['ic_passed'] else 'FAILED ❌'}"
+    )
+    print(
+        f"  - t-statistic:    {validation_metrics['ic_t_stat']:.4f}  "
+        f"(Threshold: >= 2.0)  -> {'PASSED ✅' if validation_metrics['t_stat_passed'] else 'FAILED ❌'}"
+    )
+    print(
+        f"  - Success Rate:   {validation_metrics['selected_success_rate'] * 100:.2f}% "
+        f"(Base Rate: {validation_metrics['selected_base_rate'] * 100:.2f}%)"
+    )
+    print(
+        f"  - Binomial p-val: {validation_metrics['selected_binomial_p_value']:.6f}  "
+        f"(Threshold: <= 0.05) -> {'PASSED ✅' if validation_metrics['binomial_passed'] else 'FAILED ❌'}"
+    )
+    print("=" * 85)
 
 
 def main(config_path):
@@ -155,9 +270,10 @@ def main(config_path):
     dataset_hash = generate_dataset_hash(config, splits)
     predictions_hash = generate_predictions_hash(config, splits)
     print(f"[*] Dataset Cache Hash: {dataset_hash} | Predictions Cache Hash: {predictions_hash}")
+    out_dir = result_dir(config, __file__)
 
     # 데이터 경로 자동 탐색
-    processed_dir = find_processed_dir()
+    processed_dir = find_processed_dir(config, __file__)
     print(f"[*] 데이터 소스 디렉토리: {processed_dir}")
     if not os.path.exists(processed_dir) or not os.listdir(processed_dir):
         print(
@@ -165,18 +281,62 @@ def main(config_path):
         )
 
     tickers_cfg = config.get("data", {}).get("tickers", None)
+    skip_validation = bool(config.get("training", {}).get("skip_validation", False))
 
     # OOS 예측 확률 캐시 확인
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    cache_dir = os.path.join(current_dir, "cache")
-    os.makedirs(cache_dir, exist_ok=True)
-    predictions_cache_path = os.path.join(cache_dir, f"{predictions_hash}_predictions.parquet")
+    exp_cache_dir = cache_dir(__file__)
+    predictions_cache_path = os.path.join(exp_cache_dir, f"{predictions_hash}_predictions.parquet")
 
     if os.path.exists(predictions_cache_path):
         print("\n⚡ [CACHE HIT] 기존 설정 기반 예측 캐시를 찾았습니다!")
         print(f"   -> 캐시 파일: {os.path.basename(predictions_cache_path)}")
+        if skip_validation:
+            print("[*] Validation 복원 생략: config training.skip_validation=true")
+            print(f"\n🎉 모델 학습 및 예측 캐시 빌드 [{exp_name}] 완료!")
+            return
+        print("[*] 저장된 fold 모델로 Validation 결과 파일을 복원합니다.")
+
+        validation_records = []
+        for idx, split_info in enumerate(splits):
+            train_end = split_info["train_end"]
+            embargo_days = config.get("data", {}).get("embargo_days", 7)
+            label_params = label_params_from_config(config)
+            _, val_start, val_end = _validation_window(train_end, embargo_days)
+            fold_pred_hash = f"{predictions_hash}_fold{idx}"
+            model_wrapper = LGBMWrapper(config)
+            model_save_path = os.path.join(
+                model_wrapper.cache_dir, "models", f"{fold_pred_hash}_model.txt"
+            )
+            if not os.path.exists(model_save_path):
+                print(
+                    f"[!] Validation 복원 스킵: fold 모델 캐시가 없습니다 -> "
+                    f"{os.path.basename(model_save_path)}"
+                )
+                continue
+
+            model_wrapper.model = lgb.Booster(model_file=model_save_path)
+            feature_cols = model_wrapper.model.feature_name()
+            val_df = _load_validation_df(
+                processed_dir, val_start, val_end, tickers_cfg, label_params, feature_cols
+            )
+            validation_metrics = _evaluate_validation(
+                config, split_info, idx, model_wrapper, val_df, feature_cols
+            )
+            validation_records.append(validation_metrics)
+            _write_validation_artifacts(validation_records, out_dir, predictions_hash)
+            _print_validation_report(idx + 1, validation_metrics)
+
+            if not validation_metrics["validation_passed"]:
+                raise RuntimeError(
+                    "Cached prediction validation failed: "
+                    f"fold={idx + 1}, reason={validation_metrics['failure_reasons']}"
+                )
+
+            del val_df
+            gc.collect()
     else:
         all_predictions = []
+        validation_records = []
 
         for idx, split_info in enumerate(splits):
             print(f"\n{'=' * 60}")
@@ -187,9 +347,13 @@ def main(config_path):
             train_end = split_info["train_end"]
             test_start = split_info["test_start"]
             test_end = split_info["test_end"]
+            embargo_days = config.get("data", {}).get("embargo_days", 7)
+            label_params = label_params_from_config(config)
+            pure_train_end, val_start, val_end = _validation_window(train_end, embargo_days)
 
             fold_pred_hash = f"{predictions_hash}_fold{idx}"
-            models_dir = os.path.join(cache_dir, "models")
+            model_wrapper = LGBMWrapper(config)
+            models_dir = os.path.join(model_wrapper.cache_dir, "models")
             os.makedirs(models_dir, exist_ok=True)
             model_save_path = os.path.join(models_dir, f"{fold_pred_hash}_model.txt")
 
@@ -197,196 +361,122 @@ def main(config_path):
                 print(
                     f"\n⚡ [MODEL CACHE HIT] 기존 학습된 모델 파라미터 발견! -> {os.path.basename(model_save_path)}"
                 )
-                import lightgbm as lgb
-
-                model_wrapper = LGBMWrapper(config)
                 model_wrapper.model = lgb.Booster(model_file=model_save_path)
                 feature_cols = model_wrapper.model.feature_name()
             else:
-                # 검증을 위해 Train의 마지막 6개월을 Validation으로 사용
-                train_end_dt = pd.to_datetime(train_end)
-                pure_train_end_dt = train_end_dt - pd.DateOffset(months=6)
-                embargo_days = config.get("data", {}).get("embargo_days", 7)
-                val_start_dt = pure_train_end_dt + pd.Timedelta(days=embargo_days)
-                pure_train_end = pure_train_end_dt.strftime("%Y-%m-%d")
-                val_start = val_start_dt.strftime("%Y-%m-%d")
-
                 # ---------------------------------------------------------
                 # 1. 학습 데이터 (Train) 준비 및 라벨링
                 # ---------------------------------------------------------
-                print("\n[1] Train 데이터 로딩 및 동적 라벨(Y) 생성...")
-                label_params = {
-                    "type": config["labels"].get("type", "dynamic_sigma"),
-                    "horizon": config["labels"]["horizon"],
-                    "up_mult": config["labels"].get("up_mult", 1.5),
-                    "down_mult": config["labels"].get("down_mult", 1.2),
-                }
-
-                # 순수 Alpha158 학습 (노이즈 필터링 배제)
-                train_df = load_parquet_data(
-                    processed_dir,
-                    train_start,
-                    pure_train_end,
-                    tickers=tickers_cfg,
-                    label_params=label_params,
-                    training=True,
-                    keep_date=False,
-                )
-
-                exclude_cols = ["Y_Label", "Date", "Code"]
-                feature_cols = [c for c in train_df.columns if c not in exclude_cols]
-
-                X_train, y_train = train_df[feature_cols], train_df["Y_Label"]
-
-                # ---------------------------------------------------------
-                # 2. 모델 학습 시작 및 Train 데이터셋 빌드 (RAM 즉시 해제)
-                # ---------------------------------------------------------
                 print("\n[2] 모델 학습 준비 (LGBM Wrapper)...")
-                model_wrapper = LGBMWrapper(config)
                 fold_data_hash = f"{dataset_hash}_fold{idx}"
 
                 train_bin_path = os.path.join(
                     model_wrapper.cache_dir, f"{fold_data_hash}_train.bin"
                 )
-                train_data = model_wrapper._build_dataset(X_train, y_train, train_bin_path)
+                if os.path.exists(train_bin_path):
+                    print(
+                        f"  [CACHE HIT] 기존 Train .bin으로 학습 데이터 로드 -> "
+                        f"{os.path.basename(train_bin_path)}"
+                    )
+                    train_data = lgb.Dataset(train_bin_path, free_raw_data=False)
+                    train_data.construct()
+                    feature_cols = train_data.feature_name
+                else:
+                    print("\n[1] Train 데이터 로딩 및 동적 라벨(Y) 생성...")
 
-                del train_df, X_train, y_train
-                gc.collect()
+                    # 순수 Alpha158 학습 (노이즈 필터링 배제)
+                    train_df = load_parquet_data(
+                        processed_dir,
+                        train_start,
+                        pure_train_end,
+                        tickers=tickers_cfg,
+                        label_params=label_params,
+                        training=True,
+                        keep_date=False,
+                    )
+
+                    exclude_cols = ["Y_Label", "Date", "Code"]
+                    feature_cols = [c for c in train_df.columns if c not in exclude_cols]
+
+                    X_train, y_train = train_df[feature_cols], train_df["Y_Label"]
+                    train_data = model_wrapper._build_dataset(X_train, y_train, train_bin_path)
+
+                    del train_df, X_train, y_train
+                    gc.collect()
 
                 # ---------------------------------------------------------
                 # 2.5. 검증 데이터 (Val) 준비 및 라벨링
                 # ---------------------------------------------------------
-                print("\n[2.5] Val 데이터 로딩 및 동적 라벨(Y) 생성...")
-                val_df = load_parquet_data(
-                    processed_dir,
-                    val_start,
-                    train_end,
-                    tickers=tickers_cfg,
-                    label_params=label_params,
-                    training=False,
-                )
-
-                val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols
-                val_df = val_df[[c for c in val_cols if c in val_df.columns]].copy()
-
-                X_val, y_val = val_df[feature_cols], val_df["Y_Label"]
-
-                print("[LGBM] Validation 데이터셋 준비 중...")
-                import lightgbm as lgb
-                from sklearn.utils.class_weight import compute_sample_weight
-
-                sample_weights_val = compute_sample_weight("balanced", y_val)
-                valid_data = lgb.Dataset(
-                    X_val,
-                    label=y_val,
-                    weight=sample_weights_val,
-                    reference=train_data,
-                    free_raw_data=False,
-                )
-
-                # 모델 학습
-                model_wrapper.fit(train_data, valid_data, cache_hash=fold_pred_hash)
-
-                # ---------------------------------------------------------
-                # 2.6. 검증 데이터에 대한 통계적 검정 (OOS 과적합 통제)
-                # ---------------------------------------------------------
-                print("\n[2.6] Validation 셋에 대한 통계적 신뢰성 검증 진행...")
-                import numpy as np
-                import scipy.stats as stats
-
-                val_probs = model_wrapper.predict(X_val)
-                val_eval_df = val_df[["Date", "Code", "Y_Label"]].copy()
-                val_eval_df["Prob"] = val_probs
-                val_eval_df["Close"] = val_df.get("Close", 10.0)
-                val_eval_df["Trading_Halt"] = val_df.get("Trading_Halt", 0)
-
-                # Rank IC
-                def get_spearman(group):
-                    if len(group) < 5:
-                        return np.nan
-                    if group["Prob"].std() == 0 or group["Y_Label"].std() == 0:
-                        return np.nan
-                    return group["Prob"].corr(group["Y_Label"], method="spearman")
-
-                daily_ic = val_eval_df.groupby("Date").apply(get_spearman).dropna()
-
-                if len(daily_ic) < 5:
-                    raise ValueError(
-                        f"[-] Validation 기간의 유효 거래일 수({len(daily_ic)})가 너무 적어 통계 검정이 불가능합니다."
-                    )
-
-                mean_ic = daily_ic.mean()
-                std_ic = daily_ic.std()
-                n_days = len(daily_ic)
-
-                # IC t-test
-                t_stat = 0.0 if std_ic == 0 else mean_ic / (std_ic / np.sqrt(n_days))
-                p_val_t = stats.t.sf(t_stat, df=n_days - 1)
-
-                # 이항검정
-                prob_threshold = config.get("strategy", {}).get("prob_threshold", 0.65)
-                top_n = config.get("strategy", {}).get("top_n", 5)
-
-                val_eval_df["Is_Valid"] = (
-                    (val_eval_df["Prob"] >= prob_threshold)
-                    & (val_eval_df["Close"] > 1.0)
-                    & (val_eval_df["Trading_Halt"] == 0)
-                )
-
-                def select_top_signals(group, top_n=top_n):
-                    valid_group = group[group["Is_Valid"]]
-                    if valid_group.empty:
-                        return pd.DataFrame()
-                    return valid_group.nlargest(top_n, "Prob")
-
-                selected_signals = val_eval_df.groupby("Date", group_keys=False).apply(
-                    select_top_signals
-                )
-                n_signals = len(selected_signals)
-                base_rate = (val_eval_df["Y_Label"] == 2).mean()
-
-                if n_signals == 0:
-                    n_success = 0
-                    success_rate = 0.0
-                    p_val_binom = 1.0
+                if skip_validation:
+                    print("\n[2.5] Validation 생략: config training.skip_validation=true")
+                    val_df = None
+                    model_wrapper.fit(train_data, None, cache_hash=fold_pred_hash)
                 else:
-                    n_success = (selected_signals["Y_Label"] == 2).sum()
-                    success_rate = n_success / n_signals
-                    p_val_binom = (
-                        1.0 - stats.binom.cdf(n_success - 1, n_signals, base_rate)
-                        if n_success > 0
-                        else 1.0
+                    print("\n[2.5] Val 데이터 로딩 및 동적 라벨(Y) 생성...")
+                    val_df = load_parquet_data(
+                        processed_dir,
+                        val_start,
+                        train_end,
+                        tickers=tickers_cfg,
+                        label_params=label_params,
+                        training=False,
                     )
 
-                ic_passed = mean_ic >= 0.02
-                t_stat_passed = t_stat >= 2.0 and p_val_t <= 0.05
-                binom_passed = p_val_binom <= 0.05
+                    val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols
+                    val_df = val_df[[c for c in val_cols if c in val_df.columns]].copy()
 
-                print("=" * 85)
-                print(f"📊 [VALIDATION REPORT] Fold {idx + 1} Validation Summary")
-                print("=" * 85)
-                print(
-                    f"  - Mean Rank IC:   {mean_ic:.4f}  (Threshold: >= 0.02) -> {'PASSED ✅' if ic_passed else 'FAILED ❌'}"
-                )
-                print(
-                    f"  - t-statistic:    {t_stat:.4f}  (Threshold: >= 2.0)  -> {'PASSED ✅' if t_stat >= 2.0 else 'FAILED ❌'}"
-                )
-                print(
-                    f"  - Success Rate:   {success_rate * 100:.2f}% (Base Rate: {base_rate * 100:.2f}%)"
-                )
-                print(
-                    f"  - Binomial p-val: {p_val_binom:.6f}  (Threshold: <= 0.05) -> {'PASSED ✅' if binom_passed else 'FAILED ❌'}"
-                )
-                print("=" * 85)
+                    X_val, y_val = val_df[feature_cols], val_df["Y_Label"]
 
-                if not (ic_passed and t_stat_passed and binom_passed):
+                    print("[LGBM] Validation 데이터셋 준비 중...")
+                    from sklearn.utils.class_weight import compute_sample_weight
+
+                    sample_weights_val = compute_sample_weight("balanced", y_val)
+                    valid_data = lgb.Dataset(
+                        X_val,
+                        label=y_val,
+                        weight=sample_weights_val,
+                        reference=train_data,
+                        free_raw_data=False,
+                    )
+
+                    # 모델 학습
+                    model_wrapper.fit(train_data, valid_data, cache_hash=fold_pred_hash)
+
+                    del X_val, y_val, valid_data
+                    gc.collect()
+
+            # ---------------------------------------------------------
+            # 2.6. 검증 데이터에 대한 통계적 검정 (OOS 과적합 통제)
+            # ---------------------------------------------------------
+            if skip_validation:
+                print("\n[2.6] Validation 검정 생략: 2024 holdout 평가로 검증합니다.")
+            else:
+                print("\n[2.6] Validation 셋에 대한 통계적 신뢰성 검증 진행...")
+            if (not skip_validation) and "val_df" not in locals():
+                print("\n[2.5] Val 데이터 로딩 및 동적 라벨(Y) 생성...")
+                val_df = _load_validation_df(
+                    processed_dir, val_start, val_end, tickers_cfg, label_params, feature_cols
+                )
+
+            if not skip_validation:
+                validation_metrics = _evaluate_validation(
+                    config, split_info, idx, model_wrapper, val_df, feature_cols
+                )
+                validation_records.append(validation_metrics)
+                _write_validation_artifacts(validation_records, out_dir, predictions_hash)
+
+                _print_validation_report(idx + 1, validation_metrics)
+
+                if not validation_metrics["validation_passed"]:
                     print(
-                        f"\n❌ [VALIDATION FAILED] Fold {idx + 1} 통계적 검정 미통과 (과적합 위험)."
+                        f"\n❌ [VALIDATION FAILED] Fold {idx + 1} 통계적 검정 미통과 "
+                        f"(과적합 위험): {validation_metrics['failure_reasons']}"
                     )
                     raise RuntimeError("Validation Statistical Test Failed.")
 
-                del val_df, X_val, y_val, val_probs, val_eval_df, daily_ic, valid_data
-                gc.collect()
+            if "val_df" in locals():
+                del val_df
+            gc.collect()
 
             # ---------------------------------------------------------
             # 3. 테스트(OOS) 추론

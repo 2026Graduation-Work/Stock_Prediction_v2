@@ -46,10 +46,14 @@
 python -m analysis.text.preprocess --ticker 005930 --out news_corpus.csv
 ```
 
+`--ticker`와 같은 이름의 종목 디렉터리가 있으면 그 디렉터리만 읽으므로 다른 종목 뉴스가
+한 CSV에 섞이지 않는다. 기존처럼 `raw/` 바로 아래에 파일을 둔 단일 종목 구조도 지원한다.
+
 상대 `--out` 경로는 `backend/analysis/text/data/processed/`를 기준으로 해석한다. 결과 CSV는
 `news_id,date,title,body,press,ticker` 컬럼으로 고정되며, 실제 수록 기간과 뉴스가 0건인 날짜는
 표준 출력 리포트에서 확인할 수 있다.
 
 ## 참고
 
+- [BigKinds 뉴스 수집 방식 결정](../../../docs/decisions/bigkinds-acquisition.md)
 - HuggingFace FinBERT (사전학습 금융 감성 모델)

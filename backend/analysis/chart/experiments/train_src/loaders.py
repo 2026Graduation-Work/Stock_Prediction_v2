@@ -174,10 +174,29 @@ def load_parquet_data(
                 continue
 
             temp_df["Date"] = pd.to_datetime(temp_df["Date"])
+            temp_df = temp_df.sort_values("Date").reset_index(drop=True)
             if start_date is not None:
                 temp_df = temp_df[temp_df["Date"] >= pd.to_datetime(start_date)]
-            if end_date is not None:
-                temp_df = temp_df[temp_df["Date"] <= pd.to_datetime(end_date)]
+
+            # 라벨은 t 이후 horizon 거래일의 가격을 참조한다. 요청 종료일에서
+            # 즉시 자르면 마지막 horizon 행의 실제 라벨이 모두 사라진다. 따라서
+            # 라벨 생성시에만 종목별 우측 버퍼를 함께 읽고, 생성 뒤 요청 기간으로
+            # 다시 제한한다. dynamic barrier는 거래정지일을 건너뛸 수 있어 더 넉넉한
+            # 탐색 범위를 사용한다.
+            requested_end = pd.to_datetime(end_date) if end_date is not None else None
+            if requested_end is not None:
+                if label_params is None:
+                    temp_df = temp_df[temp_df["Date"] <= requested_end]
+                else:
+                    horizon = int(label_params["horizon"])
+                    label_type = label_params.get("type", "fixed")
+                    buffer_rows = horizon
+                    if label_type == "dynamic_sigma":
+                        buffer_rows = int(np.ceil(horizon * 2.5))
+
+                    in_requested_period = temp_df[temp_df["Date"] <= requested_end]
+                    right_buffer = temp_df[temp_df["Date"] > requested_end].head(buffer_rows)
+                    temp_df = pd.concat([in_requested_period, right_buffer], ignore_index=True)
 
             if temp_df.empty:
                 continue
@@ -201,6 +220,9 @@ def load_parquet_data(
                 temp_df["Y_Label"] = y_label_series.map({-1: 0, 0: 1, 1: 2})
                 temp_df = temp_df.dropna(subset=["Y_Label"])
                 temp_df["Y_Label"] = temp_df["Y_Label"].astype(int)
+
+                if requested_end is not None:
+                    temp_df = temp_df[temp_df["Date"] <= requested_end]
 
             if temp_df.empty:
                 continue
