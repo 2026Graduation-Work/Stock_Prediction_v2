@@ -35,9 +35,24 @@ class Settings:
         default_factory=lambda: os.getenv("FINBERT_MODEL", "snunlp/KR-FinBert-SC")
     )
     use_finbert: bool = field(default_factory=lambda: os.getenv("USE_FINBERT", "1") != "0")
+    # 재생(replay) 모드: LLM 캐시 미스를 에러로 만든다. 백테스트 데이터셋을 만들 때
+    # 켜면, 재생 중 LLM이 호출되어 결정론이 깨지는 일을 구조적으로 막는다.
+    llm_replay_only: bool = field(
+        default_factory=lambda: os.getenv("LLM_REPLAY_ONLY", "0") != "0"
+    )
 
     news_lookback_days: int = 3
     price_lookback_days: int = 120
+    # 뉴스 감성에 쓸 최대 기사 수 (관련성 라벨링 후 적용).
+    # 병리적인 날을 막는 안전 상한일 뿐, 실제로는 걸리지 않아야 한다 —
+    # 감성은 평균이라 관련 기사가 많을수록 추정이 정확해지고, FinBERT는 로컬이라
+    # 비용이 사실상 없다. 상한에 걸리면 '어느 기사를 버릴지'가 임의 선택이 되어
+    # 관련성 필터로 없앤 노이즈가 되살아난다(실측: 2022-06-15 관련 37건 중 7건 유실).
+    max_daily_articles: int = 200
+    # staleness 계산 시 비교할 직전 기사 수 (Tetlock 2011은 10건)
+    staleness_lookback_articles: int = 10
+    # 직전 기사 10건을 채우기 위해 거슬러 올라갈 최대 일수
+    staleness_lookback_days: int = 7
 
     @property
     def has_gemini(self) -> bool:

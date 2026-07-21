@@ -1,10 +1,16 @@
-"""데이터 수집기 (무료 소스 우선, 실패/키 없음 시 샘플 폴백).
+"""데이터 수집기 (무료 소스 우선).
 
-뉴스   : 네이버 검색 OpenAPI(키 있으면) → HTML 크롤(키 없을 때) → 샘플
-소셜   : 네이버 금융 종목토론 크롤링          (키 불필요, best-effort)
+뉴스   : 빅카인즈 엑셀(data/, preprocess) → 네이버 검색 OpenAPI(키 있으면)
+         → HTML 크롤(키 없을 때)
 시세   : FinanceDataReader                   (키 불필요)
 재무제표: OpenDartReader / Open DART API      (무료 키 필요)
-어느 단계든 실패하면 sample_data/ 의 동봉 데이터로 대체되어 파이프라인이 끝까지 돈다.
+
+재무는 폴백이 없다. 밸류에이션이 종합점수의 60%를 차지하므로 재무를 못 구하면
+FinancialsUnavailableError로 중단한다 — 결측을 중립값으로 메워 그럴듯한 시그널을
+만들어내는 것이 아무 시그널도 없는 것보다 나쁘기 때문이다(가짜 SELL 방지).
+
+소셜(SNS/종목토론) 수집은 데이터 확보 난이도로 파이프라인에서 제외되었다
+(News + Financial 2개 에이전트만 오케스트레이션).
 """
 from __future__ import annotations
 
@@ -12,16 +18,26 @@ import datetime as dt
 import html
 import json
 import re
-import unicodedata
 import warnings
 from email.utils import parsedate_to_datetime
 from pathlib import Path
-from typing import Any
 
 from .config import SETTINGS
 
+# 빅카인즈 전처리 파이프라인(preprocess.py)의 point-in-time 로더 재사용.
+# `python -m value_pipeline.run`(top-level)와 `analysis.text.value_pipeline`
+# (namespace 패키지) 두 실행 방식을 모두 지원한다.
+try:  # 패키지로 임포트된 경우
+    from .. import preprocess
+except (ImportError, ValueError):  # text/ 디렉터리에서 top-level 실행된 경우
+    import preprocess
+
 SAMPLE_DIR = Path(__file__).parent / "sample_data"
 DATA_DIR = Path(__file__).resolve().parents[4] / "data"
+
+
+class FinancialsUnavailableError(RuntimeError):
+    """재무 데이터 확보 실패 (DART 키 없음/조회 실패이며 샘플도 없음)."""
 
 
 def _load_sample(name: str):
@@ -39,16 +55,46 @@ def _filter_by_date(items: list[dict], date: str) -> list[dict]:
 
 # ── 뉴스 ────────────────────────────────────────────────────────
 def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict], str]:
-    """해당 날짜 '하루치' 상위 10건 기사 리스트와 출처 반환.
-    각 항목: {title, summary, url, press, date}.
-    우선순위: 로컬 엑셀(data/) → 네이버 검색 OpenAPI(키 있으면) → HTML 크롤 → 샘플."""
+    """해당 날짜 '하루치' 기사 전량과 출처 반환.
+    각 항목: {news_id, title, summary, url, press, date}.
+
+    빅카인즈 엑셀(data/, preprocess)이 정본이다. 워크북을 찾았는데 그날 기사가
+    없으면 그대로 빈 리스트를 준다 — 네이버로 폴백하지 않는다.
+
+    네이버는 과거 날짜 조회가 불안정하고(OpenAPI는 최근 1,000건까지만) news_id도
+    없어 그라운딩이 안 된다. 백테스트 행마다 소스가 다르면 피처가 비교 불가능해진다.
+    그래서 워크북이 아예 없을 때(=오늘 날짜 조회 같은 실시간 용도)만 폴백한다.
+
+    빅카인즈 경로는 상한 없이(limit=None) 전량을 돌려준다 — 상한은 관련성 필터
+    뒤에 news_agent가 적용한다. news_id 정렬순 상위 N건은 임의 표본이기 때문이다.
+    """
     query = company_name or ticker
+    workbook = None
     try:
-        items = _load_excel_news(query, date)
-        if items:
-            return items, "excel"
+        workbook = preprocess.find_news_workbook(query, date, DATA_DIR, ticker)
     except Exception as e:
-        warnings.warn(f"엑셀 뉴스 로드 실패, 다음 소스로 폴백합니다: {e}", stacklevel=2)
+        warnings.warn(f"빅카인즈 워크북 탐색 실패: {e}", stacklevel=2)
+
+    if workbook is not None:
+        try:
+            items = preprocess.load_daily_news(
+                query, date, DATA_DIR, limit=None, ticker=ticker
+            )
+            # 워크북이 이 날짜를 커버하므로, 0건이어도 그것이 사실이다.
+            # 여기서 네이버로 폴백하면 point-in-time이 깨진다.
+            return items, "bigkinds"
+        except Exception as e:
+            warnings.warn(
+                f"빅카인즈 엑셀 뉴스 로드 실패({workbook.name}): {e}", stacklevel=2
+            )
+    else:
+        warnings.warn(
+            f"'{query}' {date}를 커버하는 빅카인즈 워크북이 {DATA_DIR}에 없습니다. "
+            f"기대 파일명: {{종목코드}}_{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx. "
+            f"네이버로 폴백하지만 과거 날짜는 신뢰할 수 없습니다.",
+            stacklevel=2,
+        )
+
     if SETTINGS.has_naver:
         try:
             items = _fetch_naver_news_api(query, date)
@@ -66,101 +112,50 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
     return _filter_by_date(sample, date)[:10], "sample"
 
 
-def _parse_news_workbook_name(path: Path) -> tuple[str, str, str] | None:
-    match = re.fullmatch(r"(.+)_(\d{8})-(\d{8})\.xlsx", path.name)
-    if not match:
-        return None
-    return match.group(1), match.group(2), match.group(3)
+def _published_at(item: dict) -> str:
+    """정렬용 발행 시각 키. 빅카인즈 news_id는 '{언론사코드}.{YYYYMMDDHHMMSS}{일련}'.
+
+    news_id를 그대로 정렬하면 점 앞 언론사 코드가 먼저 비교되어 시간순이 아니라
+    언론사 코드순이 된다. 점 뒤를 써야 시간순이 된다.
+    포맷이 다르면(generated: 해시 등) 날짜로만 정렬한다.
+    """
+    nid = str(item.get("news_id", ""))
+    if "." in nid:
+        tail = nid.rsplit(".", 1)[1]
+        if tail[:8].isdigit():
+            return tail
+    return str(item.get("date", "")).replace("-", "")
 
 
-def _normalize_yyyymmdd(value: Any) -> str:
-    if isinstance(value, dt.date):  # dt.datetime은 dt.date의 하위 클래스라 함께 처리됨
-        return value.strftime("%Y%m%d")
-    text = str(value or "").strip()
-    if not text:
-        return ""
-    if re.fullmatch(r"\d+\.0", text):
-        text = text[:-2]
-    digits = re.sub(r"\D", "", text)
-    return digits[:8]
+def collect_prior_news(
+    ticker: str, company_name: str, date: str, count: int
+) -> list[dict]:
+    """기준일 '직전' 기사를 최신순으로 최대 count건 반환 (staleness 비교용).
 
+    Tetlock(2011)의 staleness는 '직전 10건'과의 단어 중복률이므로 날짜가 아니라
+    건수 기준으로 거슬러 올라간다. 기준일 당일은 포함하지 않는다(point-in-time).
+    빅카인즈 엑셀만 지원 — 네이버 경로는 과거 조회가 불가능해 빈 리스트를 준다.
 
-def _format_iso_date(yyyymmdd: str) -> str:
-    return f"{yyyymmdd[:4]}-{yyyymmdd[4:6]}-{yyyymmdd[6:8]}"
-
-
-def _find_excel_news_file(company_name: str, date: str) -> Path | None:
-    target_day = date.replace("-", "")
-    normalized_company = unicodedata.normalize("NFC", company_name)
-    for path in sorted(DATA_DIR.glob("*.xlsx")):
-        parsed = _parse_news_workbook_name(path)
-        if parsed is None:
-            continue
-        file_company, start, end = parsed
-        file_company = unicodedata.normalize("NFC", file_company)
-        if file_company == normalized_company and start <= target_day <= end:
-            return path
-    return None
-
-
-def _load_excel_news(company_name: str, date: str, limit: int = 10) -> list[dict]:
-    """data/<회사명>_YYYYMMDD-YYYYMMDD.xlsx에서 해당 날짜 제목을 읽는다."""
-    path = _find_excel_news_file(company_name, date)
-    if path is None:
-        return []
-
-    from openpyxl import load_workbook
-
-    with warnings.catch_warnings():
-        warnings.filterwarnings(
-            "ignore",
-            message="Workbook contains no default style.*",
-            category=UserWarning,
-        )
-        wb = load_workbook(path, read_only=True, data_only=True)
-
-    # read_only 모드는 zip 파일 핸들을 열어두므로, 모든 종료 경로에서 반드시 닫는다.
-    try:
-        ws = wb.active
-        if hasattr(ws, "reset_dimensions"):
-            ws.reset_dimensions()
-        rows = ws.iter_rows(values_only=True)
+    하루치를 다 모은 뒤 발행 시각 역순으로 잘라야 진짜 '직전 N건'이 된다.
+    load_daily_news가 news_id(=언론사 코드) 순으로 주므로 그대로 자르면 임의 표본이다.
+    """
+    query = company_name or ticker
+    out: list[dict] = []
+    day = dt.date.fromisoformat(date)
+    for back in range(1, SETTINGS.staleness_lookback_days + 1):
+        prev_day = (day - dt.timedelta(days=back)).isoformat()
         try:
-            header = next(rows)
-        except StopIteration:
-            return []
-
-        columns = {str(name).strip(): idx for idx, name in enumerate(header) if name is not None}
-        if "일자" not in columns or "제목" not in columns:
-            raise RuntimeError(f"엑셀 뉴스 파일 필수 컬럼 누락: {path}")
-
-        date_idx = columns["일자"]
-        title_idx = columns["제목"]
-        press_idx = columns.get("언론사")
-        target_day = date.replace("-", "")
-        items: list[dict] = []
-        for row in rows:
-            row_day = _normalize_yyyymmdd(row[date_idx] if date_idx < len(row) else "")
-            if row_day != target_day:
-                continue
-            title = str(row[title_idx] if title_idx < len(row) else "").strip()
-            if not title:
-                continue
-            press = ""
-            if press_idx is not None and press_idx < len(row) and row[press_idx] is not None:
-                press = str(row[press_idx]).strip()
-            items.append({
-                "title": title,
-                "summary": "",
-                "url": "",
-                "press": press,
-                "date": _format_iso_date(row_day),
-            })
-            if len(items) >= limit:
-                break
-        return items
-    finally:
-        wb.close()
+            items = preprocess.load_daily_news(
+                query, prev_day, DATA_DIR, limit=None, ticker=ticker
+            )
+        except Exception as e:
+            warnings.warn(f"직전 뉴스 로드 실패({prev_day}): {e}", stacklevel=2)
+            continue
+        # 그날 안에서 최신순으로 정렬한 뒤 누적 (날짜는 이미 최신 → 과거 순회)
+        out.extend(sorted(items, key=_published_at, reverse=True))
+        if len(out) >= count:
+            break
+    return out[:count]
 
 
 def _strip_tags(s: str) -> str:
@@ -246,80 +241,33 @@ def _crawl_naver_news(query: str, date: str, limit: int = 10) -> list[dict]:
     return items
 
 
-# ── 소셜 (네이버 금융 종목토론실) ────────────────────────────────
-def collect_social(ticker: str, date: str) -> tuple[list[dict], str]:
-    """해당 날짜 '하루치' 게시글 리스트와 출처 반환. 각 항목: {title, date}."""
-    try:
-        posts = _crawl_naver_board(ticker, date)
-        if posts:
-            return posts, "naver"
-    except Exception:
-        pass
-    sample = _load_sample(f"{ticker}_social.json") or _load_sample("default_social.json") or []
-    return _filter_by_date(sample, date), "sample"
-
-
-def _crawl_naver_board(ticker: str, date: str, max_pages: int = 50) -> list[dict]:
-    """종목토론실을 페이지별로 읽으며 게시일이 해당 날짜인 글만 수집.
-
-    글이 최신순이라, 한 페이지 전체가 해당 날짜보다 과거가 되면 중단한다.
-    """
-    import requests
-    from bs4 import BeautifulSoup
-
-    posts: list[dict] = []
-    for page in range(1, max_pages + 1):
-        r = requests.get(
-            "https://finance.naver.com/item/board.naver",
-            params={"code": ticker, "page": page},
-            headers={"User-Agent": "Mozilla/5.0"},
-            timeout=10,
-        )
-        r.raise_for_status()
-        r.encoding = "euc-kr"  # 네이버 금융은 euc-kr
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        page_days: list[str] = []
-        has_row = False
-        for tr in soup.select("table.type2 tr"):
-            a = tr.select_one("td.title a")
-            span = tr.select_one("span.tah")  # 날짜 셀 (예: 2026.05.17 14:30)
-            if not a or not span:
-                continue
-            has_row = True
-            day = span.get_text(strip=True)[:10].replace(".", "-")  # 2026-05-17
-            page_days.append(day)
-            if day == date:
-                title = a.get("title") or a.get_text(strip=True)
-                if title:
-                    posts.append({"title": title, "date": date})
-        if not has_row:
-            break
-        if page_days and all(d < date for d in page_days):
-            break  # 이 페이지부터 전부 과거 → 더 봐도 해당 날짜 없음
-    if not posts:
-        raise RuntimeError("해당 날짜 게시글 없음/파싱 실패")
-    return posts
-
-
 # ── 재무제표 + 시세 ─────────────────────────────────────────────
 def collect_financials(ticker: str, date: str) -> tuple[dict, str]:
-    """표준화 재무 dict와 출처('dart'/'sample') 반환. 시세는 가능하면 FDR로 덮어쓴다."""
+    """표준화 재무 dict와 출처('dart'/'sample') 반환. 시세는 가능하면 FDR로 덮어쓴다.
+
+    재무를 못 구하면 FinancialsUnavailableError. 중립값으로 메우면
+    valuation=3.0(결측을 적자로 오인)·health=5.0 → 종합 3.8 → 가짜 SELL이 나온다.
+    """
     data: dict | None = None
     source = "sample"
     if SETTINGS.has_dart:
         try:
-            data = _fetch_dart_financials(ticker)
+            data = _fetch_dart_financials(ticker, date)
             source = "dart"
-        except Exception:
+        except Exception as e:
+            warnings.warn(f"DART 재무 조회 실패({ticker} {date}): {e}", stacklevel=2)
             data = None
     if not data:
-        data = (
+        sample = (
             _load_sample(f"{ticker}_financials.json")
             or _load_sample("default_financials.json")
-            or {}
         )
-        data = dict(data)  # 복사
+        if not sample:
+            raise FinancialsUnavailableError(
+                f"{ticker} {date}: DART 조회 실패/키 없음이며 샘플 재무도 없습니다. "
+                f"밸류에이션이 종합점수의 60%를 차지하므로 재무 없이 시그널을 만들지 않습니다."
+            )
+        data = dict(sample)  # 복사
         source = "sample"
 
     price = _fetch_price(ticker, date)
@@ -327,6 +275,29 @@ def collect_financials(ticker: str, date: str) -> tuple[dict, str]:
         data["price"] = price
         data["_price_source"] = "fdr"
     return data, source
+
+
+# 사업보고서 법정 제출기한: 사업연도 종료(12/31) 후 90일 이내 → 익년 3/31.
+# 따라서 4/1부터 직전 사업연도(Y-1) 보고서가 공시되어 있다고 본다.
+_REPORT_AVAILABLE_MONTH = 4
+_REPORT_AVAILABLE_DAY = 1
+
+
+def select_fiscal_year(date: str) -> int:
+    """기준일(date) 시점에 이미 공시된 가장 최근 사업연도를 반환 (point-in-time).
+
+    12월 결산 법인 기준. 기준일이 4/1 이후면 직전 연도(Y-1), 이전이면 그 전년도(Y-2).
+    예) 2022-06-15 → 2021, 2022-02-15 → 2020.
+
+    이게 없으면 과거 시점 피처에 미래 재무가 섞인다(look-ahead bias).
+    (ticker, date)로 OHLCV와 조인하는 피처라 미래 정보가 새면 모델 평가가 무효가 된다.
+
+    한계: DART는 해당 사업연도의 '최신 정정본'을 반환하므로 기준일 이후 제출된
+    정정공시는 여전히 새어들 수 있다(2차 오차).
+    """
+    d = dt.date.fromisoformat(date)
+    cutoff = dt.date(d.year, _REPORT_AVAILABLE_MONTH, _REPORT_AVAILABLE_DAY)
+    return d.year - 1 if d >= cutoff else d.year - 2
 
 
 def _fetch_price(ticker: str, date: str) -> float | None:
@@ -355,8 +326,8 @@ _DART_MAP = {
 }
 
 
-def _fetch_dart_financials(ticker: str) -> dict:
-    """OpenDartReader로 최근 사업보고서 재무제표를 표준 dict로 변환.
+def _fetch_dart_financials(ticker: str, date: str) -> dict:
+    """OpenDartReader로 기준일 시점 공시된 사업보고서 재무제표를 표준 dict로 변환.
 
     DART 계정명/구조가 회사마다 달라 best-effort 매핑이며,
     매핑 실패 항목은 결측(None)으로 남아 지표가 부분 계산된다.
@@ -364,7 +335,7 @@ def _fetch_dart_financials(ticker: str) -> dict:
     import OpenDartReader
 
     dart = OpenDartReader(SETTINGS.dart_api_key)
-    year = dt.date.today().year - 1  # 직전 사업연도
+    year = select_fiscal_year(date)  # 기준일 시점 공시된 사업연도 (look-ahead 방지)
     fs = dart.finstate_all(ticker, year)  # 연결재무제표 전체 계정
     if fs is None or len(fs) == 0:
         raise RuntimeError("DART 재무제표 없음")
@@ -383,7 +354,8 @@ def _fetch_dart_financials(ticker: str) -> dict:
     if "revenue" not in out:
         raise RuntimeError("DART 매핑 실패")
 
-    # 전년 동기 (성장률용)
+    # 전년 동기 (성장률용). frmtrm_amount는 같은 fs 프레임의 컬럼이라
+    # 구조적으로 FY(year-1)이다 — year와의 일관성이 자동 보장된다.
     for _, row in fs.iterrows():
         name = str(row.get("account_nm", "")).strip()
         key = _DART_MAP.get(name)
@@ -394,15 +366,22 @@ def _fetch_dart_financials(ticker: str) -> dict:
             except ValueError:
                 pass
 
-    # 발행주식수
+    # 발행주식수 — 재무제표와 같은 사업연도를 써야 EPS/BPS가 정합적이다.
     try:
         sh = dart.report(ticker, "주식총수", year)
+        if sh is None or len(sh) == 0:
+            raise RuntimeError("주식총수 보고서가 비어 있음")
         out["shares_outstanding"] = float(str(sh.iloc[0]["istc_totqy"]).replace(",", ""))
-    except Exception:
-        pass
+    except Exception as e:
+        warnings.warn(
+            f"발행주식수 조회 실패({ticker} FY{year}): {e} "
+            f"→ per/pbr/altman_z가 결측이 됩니다.",
+            stacklevel=2,
+        )
 
     # 업종 평균 PER/PBR은 별도 소스 필요 → 샘플 기본값 유지
     sample = _load_sample(f"{ticker}_financials.json") or {}
     out.setdefault("sector_per", sample.get("sector_per"))
     out.setdefault("sector_pbr", sample.get("sector_pbr"))
+    out["fiscal_year"] = year  # 감사용: 어느 사업연도를 썼는지 출력에 남긴다
     return out
