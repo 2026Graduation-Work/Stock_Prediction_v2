@@ -173,6 +173,47 @@ def test_load_daily_news_supports_legacy_filename(tmp_path: Path) -> None:
     assert [it["title"] for it in items] == ["구버전 파일 기사"]
 
 
+def test_load_daily_news_reads_only_ticker_directory(tmp_path: Path) -> None:
+    """종목별 하위 디렉터리(data/<종목코드>/)가 있으면 그 종목만 읽어 혼입을 막는다.
+
+    코퍼스 빌더와 동일한 <기준>/<종목코드>/ 해석을 point-in-time 로더도 공유해야
+    두 소비자가 서로 다른 파일을 보고 조용히 폴백하는 사고가 없다.
+    """
+    data_dir = tmp_path / "data"
+    (data_dir / "005930").mkdir(parents=True)
+    (data_dir / "035720").mkdir()
+    _write_bigkinds(
+        data_dir / "005930" / "삼성전자_20220101-20221231.xlsx",
+        [{"뉴스 식별자": "samsung", "일자": 20220615, "언론사": "매일경제",
+          "제목": "삼성 기사", "본문": "본문", "URL": "", "분석제외 여부": ""}],
+    )
+    _write_bigkinds(
+        data_dir / "035720" / "카카오_20220101-20221231.xlsx",
+        [{"뉴스 식별자": "kakao", "일자": 20220615, "언론사": "한국경제",
+          "제목": "카카오 기사", "본문": "본문", "URL": "", "분석제외 여부": ""}],
+    )
+
+    # 종목 폴더가 종목을 특정하므로 기간만 맞으면 반환한다(회사명 불일치해도 무관).
+    assert pp.find_news_workbook("삼성전자", "2022-06-15", data_dir, ticker="005930") == (
+        data_dir / "005930" / "삼성전자_20220101-20221231.xlsx"
+    )
+    samsung = pp.load_daily_news(
+        "삼성전자", "2022-06-15", data_dir=data_dir, ticker="005930"
+    )
+    assert [it["title"] for it in samsung] == ["삼성 기사"]
+
+    kakao = pp.load_daily_news(
+        "카카오", "2022-06-15", data_dir=data_dir, ticker="035720"
+    )
+    assert [it["title"] for it in kakao] == ["카카오 기사"]
+
+    # 종목 폴더가 있는데 요청 종목 폴더가 없으면 point-in-time은 예외 없이 폴백(None → []).
+    assert (
+        pp.load_daily_news("네이버", "2022-06-15", data_dir=data_dir, ticker="035420")
+        == []
+    )
+
+
 def test_parse_workbook_name_new_and_legacy() -> None:
     assert pp._parse_workbook_name("005930_삼성전자_20220101-20221231.xlsx") == (
         "005930", "삼성전자", "20220101", "20221231",

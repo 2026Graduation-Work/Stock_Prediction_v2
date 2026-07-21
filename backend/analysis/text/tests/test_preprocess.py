@@ -177,3 +177,58 @@ def test_fails_with_clear_error_when_required_column_is_missing(tmp_path: Path) 
     assert "NewsResult_missing_press.xlsx" in message
     assert "press" in message
     assert "언론사" in message
+
+
+def test_reads_only_the_requested_ticker_directory(tmp_path: Path) -> None:
+    """종목별 하위 디렉터리(raw/<종목코드>/)가 있으면 그 종목만 읽어 혼입을 막는다."""
+    raw_dir = tmp_path / "raw"
+    samsung_dir = raw_dir / "005930"
+    kakao_dir = raw_dir / "035720"
+    samsung_dir.mkdir(parents=True)
+    kakao_dir.mkdir()
+    base_row = {
+        "일자": 20250101,
+        "제목": "종목 기사",
+        "본문": "본문",
+        "언론사": "테스트일보",
+    }
+    _write_workbook(
+        samsung_dir / "NewsResult_20250101-20250131.xlsx",
+        [{**base_row, "뉴스 식별자": "samsung-news"}],
+    )
+    _write_workbook(
+        kakao_dir / "NewsResult_20250101-20250131.xlsx",
+        [{**base_row, "뉴스 식별자": "kakao-news"}],
+    )
+
+    output_path = tmp_path / "news_corpus.csv"
+    report = build_news_corpus("005930", output_path, raw_dir)
+    result = pd.read_csv(output_path, dtype={"ticker": str})
+
+    assert report.input_files == 1
+    assert result["news_id"].tolist() == ["samsung-news"]
+    assert result["ticker"].tolist() == ["005930"]
+
+
+def test_raises_when_ticker_directory_missing_but_others_exist(tmp_path: Path) -> None:
+    """다른 종목 폴더는 있는데 요청 종목 폴더가 없으면, 엉뚱한 데이터로 코퍼스를
+    만들지 않도록 즉시 멈춘다(코퍼스 빌더는 strict)."""
+    raw_dir = tmp_path / "raw"
+    (raw_dir / "035720").mkdir(parents=True)
+    row: dict[str, object] = {
+        "뉴스 식별자": "kakao-news",
+        "일자": 20250101,
+        "제목": "기사",
+        "본문": "본문",
+        "언론사": "테스트일보",
+    }
+    _write_workbook(
+        raw_dir / "035720" / "NewsResult_20250101-20250131.xlsx", [row]
+    )
+
+    with pytest.raises(FileNotFoundError) as error:
+        build_news_corpus("005930", tmp_path / "output.csv", raw_dir)
+
+    message = str(error.value)
+    assert "005930" in message
+    assert "035720" in message  # 현재 존재하는 종목 디렉터리를 안내

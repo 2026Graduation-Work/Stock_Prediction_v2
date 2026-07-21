@@ -10,8 +10,8 @@
 
 ## 입력 데이터
 
-- 뉴스 — 빅카인즈 수동 다운로드 엑셀(`data/{종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx`) 우선,
-  없으면 네이버 검색 OpenAPI / HTML 크롤로 폴백 (한국어)
+- 뉴스 — 빅카인즈 수동 다운로드 엑셀(`data/<종목코드>/{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx`,
+  종목별 하위 디렉터리) 우선, 없으면 네이버 검색 OpenAPI / HTML 크롤로 폴백 (한국어)
 - 재무제표 — DART OpenAPI (`DART_API_KEY` 필수)
 - profiling 블록의 사용자 컨텍스트 JSON
 
@@ -37,14 +37,23 @@
 
 ## 빅카인즈 뉴스 전처리
 
-1. `NewsResult_*.xlsx` 파일을 `backend/analysis/text/data/raw/` 아래에 둔다. 하위 디렉터리도
-   재귀 탐색하며, 파일명에 적힌 기간은 커버리지 계산에 사용하지 않는다.
+1. 종목별로 저장소 루트 `data/<6자리 종목코드>/` 디렉터리를 만들고 그 종목의 빅카인즈 원본
+   엑셀을 둔다. 예: 삼성전자는 `data/005930/삼성전자_20220101-20221231.xlsx`.
+   이 `data/`는 value_pipeline의 point-in-time 로더(`load_daily_news`)와 **공유하는 기준
+   디렉터리**(`preprocess.DEFAULT_NEWS_DIR`)이며, 두 소비자 모두 `<기준>/<종목코드>/`를 먼저
+   해석하므로 다른 종목 뉴스가 섞이지 않는다. 파일명은 `{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx`
+   (신규 `{종목코드}_{회사명}_{기간}`·레거시 `NewsResult_*.xlsx`도 인식), 종목 폴더 안은 재귀
+   탐색하며 파일명에 적힌 기간은 커버리지 계산에 쓰지 않는다. 종목 폴더가 하나도 없으면
+   기준 디렉터리 평면 구조로 폴백한다(구버전 호환).
 2. `pip install -r analysis/text/requirements.txt`로 의존성을 설치한다.
 3. 저장소의 `backend/` 디렉터리에서 실행한다.
 
 ```bash
 python -m analysis.text.preprocess --ticker 005930 --out news_corpus.csv
 ```
+
+`--ticker`와 같은 이름의 종목 디렉터리가 있으면 그 폴더만 읽어 한 CSV에 다른 종목이 섞이지
+않는다. 종목 디렉터리가 하나도 없으면 기존처럼 기준 디렉터리 평면 구조를 읽는다(단일 종목).
 
 상대 `--out` 경로는 `backend/analysis/text/data/processed/`를 기준으로 해석한다. 결과 CSV는
 `news_id,date,title,body,press,ticker` 컬럼으로 고정되며, 실제 수록 기간과 뉴스가 0건인 날짜는

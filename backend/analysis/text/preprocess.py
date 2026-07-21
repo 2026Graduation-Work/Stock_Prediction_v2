@@ -17,8 +17,14 @@ import pandas as pd
 TEXT_DIR = Path(__file__).resolve().parent
 DEFAULT_PROCESSED_DIR = TEXT_DIR / "data" / "processed"
 # 빅카인즈 원본 위치 — build_news_corpus(CSV 코퍼스)와 load_daily_news(하루치
-# point-in-time)가 **같은 디렉터리·같은 파일명 규약**을 본다. 규약이 갈리면 한쪽만
-# 파일을 못 찾고 조용히 폴백해 오염된 행이 나온다.
+# point-in-time)가 **같은 기준 디렉터리·같은 종목 분리 규약**을 본다. 규약이 갈리면
+# 한쪽만 파일을 못 찾고 조용히 폴백해 오염된 행이 나온다.
+#
+# 종목별 분리: 원본은 기준 디렉터리 아래 <6자리 종목코드>/ 하위 폴더로 나눈다.
+#   예) data/005930/삼성전자_20220101-20221231.xlsx  (삼성전자)
+#       data/035720/카카오_20220101-20221231.xlsx    (카카오)
+# 두 소비자 모두 <기준>/<종목코드>/ 를 먼저 해석하므로 다른 종목 뉴스가 섞이지 않는다.
+# 종목 디렉터리가 하나도 없으면 기준 디렉터리 평면 구조로 폴백한다(구버전 호환).
 DEFAULT_NEWS_DIR = TEXT_DIR.parents[2] / "data"
 # 레거시 입력. 파일명에 회사·기간 정보가 없어 종목 필터·기간 판정이 불가능하므로
 # 신규 데이터는 아래 워크북 규약을 쓸 것.
@@ -218,24 +224,66 @@ def _resolve_output_path(out: Path) -> Path:
     return out if out.is_absolute() else DEFAULT_PROCESSED_DIR / out
 
 
+def _iter_ticker_directories(base_dir: Path) -> list[Path]:
+    """기준 디렉터리 바로 아래의 <6자리 종목코드>/ 폴더 목록."""
+    if not base_dir.is_dir():
+        return []
+    return [
+        path
+        for path in base_dir.iterdir()
+        if path.is_dir() and len(path.name) == 6 and path.name.isdigit()
+    ]
+
+
+def _resolve_ticker_dir(base_dir: Path, ticker: str, *, strict: bool) -> Path:
+    """원본을 읽을 실제 디렉터리를 종목별로 해석한다.
+
+    - <base>/<ticker>/ 가 있으면 그 폴더만 본다(다른 종목 혼입 방지).
+    - 종목 폴더(6자리 숫자)가 하나라도 있는데 요청 종목 폴더가 없으면:
+        strict=True  → FileNotFoundError (코퍼스 빌드는 잘못된 데이터로 학습 CSV를
+                       만드느니 즉시 멈추는 게 낫다)
+        strict=False → 기준 디렉터리 평면 구조로 폴백(point-in-time 로더는 다음
+                       소스로 그레이스풀 폴백하므로 예외 대신 폴백)
+    - 종목 폴더가 전혀 없으면 기준 디렉터리 평면 구조로 폴백한다(구버전 호환).
+    """
+    ticker = (ticker or "").strip()
+    ticker_dir = base_dir / ticker
+    if ticker and ticker_dir.is_dir():
+        return ticker_dir
+    if strict:
+        ticker_directories = _iter_ticker_directories(base_dir)
+        if ticker_directories:
+            available = ", ".join(sorted(path.name for path in ticker_directories))
+            raise FileNotFoundError(
+                f"{ticker} 종목 원본 디렉터리가 없습니다: {ticker_dir}. "
+                f"현재 종목 디렉터리: {available}"
+            )
+    return base_dir
+
+
 def find_corpus_workbooks(
     raw_dir: Path, ticker: str = "", company_name: str = ""
 ) -> list[Path]:
     """해당 종목의 빅카인즈 워크북 목록 (하위 디렉터리 포함).
 
-    파일명 규약은 load_daily_news와 동일하다 — 두 소비자가 같은 파일을 본다:
+    종목 분리는 load_daily_news와 동일하다 — 두 소비자가 <기준>/<종목코드>/ 를
+    먼저 해석한다. 종목 폴더로 스코프되면 그 폴더의 모든 워크북을 쓴다(폴더 자체가
+    종목을 특정하므로 파일명이 종목을 또 담을 필요가 없다). 종목 폴더가 없어 평면
+    구조로 폴백한 경우에만 파일명 규약으로 종목을 가린다:
       정본  : {종목코드}_{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
       구버전: {회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx
       레거시: NewsResult_*.xlsx (파일명에 회사·기간 정보가 없어 종목 필터 불가)
-
-    규약 파일은 종목코드/회사명이 일치하는 것만 고르고, 레거시는 전부 포함한다
-    (파일명으로 종목을 구분할 수 없으므로 넣어둔 사람을 신뢰).
     """
+    input_dir = _resolve_ticker_dir(raw_dir, ticker, strict=True)
+    scoped_by_dir = input_dir != raw_dir  # 종목 폴더로 스코프됨
     wanted_company = _normalize_company(company_name)
     wanted_code = (ticker or "").strip()
     found: list[Path] = []
-    for path in sorted(raw_dir.glob("**/*.xlsx")):
+    for path in sorted(input_dir.glob("**/*.xlsx")):
         if path.name.startswith("~$"):
+            continue
+        if scoped_by_dir:
+            found.append(path)
             continue
         if path.name.startswith("NewsResult_"):
             found.append(path)
@@ -260,7 +308,8 @@ def build_news_corpus(
     """Build the deterministic FinBERT input CSV and return its coverage report.
 
     기본 입력 위치는 value_pipeline과 동일한 저장소 루트 data/ 다 — 두 소비자가
-    경로 규약을 공유해야 한 쪽만 파일을 못 찾고 조용히 폴백하는 사고가 없다.
+    <기준>/<종목코드>/ 종목 분리 규약을 공유해야 한 쪽만 파일을 못 찾고 조용히
+    폴백하는 사고가 없다. 종목 폴더가 있으면 그 종목만, 없으면 평면 구조를 읽는다.
     """
     ticker = ticker.strip()
     if not ticker:
@@ -269,9 +318,9 @@ def build_news_corpus(
     input_files = find_corpus_workbooks(raw_dir, ticker, company_name)
     if not input_files:
         raise FileNotFoundError(
-            f"입력 파일이 없습니다: {raw_dir} 에서 "
-            f"'{{종목코드}}_{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx'"
-            f"(종목코드={ticker}) 또는 '{INPUT_PATTERN}' 을 찾지 못했습니다."
+            f"입력 파일이 없습니다: {raw_dir}/{ticker}/ (또는 평면 구조 {raw_dir}) 에서 "
+            f"'{INPUT_PATTERN}' 이나 '{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx' 를 "
+            f"찾지 못했습니다."
         )
 
     frames = [_read_workbook(path) for path in input_files]
@@ -360,15 +409,26 @@ def find_news_workbook(
     data_dir: Path = DEFAULT_NEWS_DIR,
     ticker: str = "",
 ) -> Path | None:
-    """뉴스 워크북 중 date가 기간에 포함되고, 종목코드 또는 회사명이 일치하는 파일 반환.
+    """뉴스 워크북 중 date가 기간에 포함되는 파일 반환 (없으면 None).
 
-    파일명은 신규({코드}_{명}_{기간})·구버전({명}_{기간})을 모두 인식한다.
-    ticker(종목코드)가 주어지면 코드 일치를, 아니면 회사명(NFC) 일치를 사용한다.
+    종목 분리는 코퍼스 빌더와 동일하게 <기준>/<종목코드>/ 를 먼저 해석한다.
+    종목 폴더로 스코프되면 폴더 자체가 종목을 특정하므로 기간만 맞으면 반환한다.
+    평면 구조로 폴백한 경우에만 파일명 규약(신규 {코드}_{명}_{기간}·구버전 {명}_{기간})의
+    종목코드 또는 회사명(NFC) 일치를 추가로 요구한다.
+
+    코퍼스 빌더와 달리 종목 폴더가 없어도 예외를 던지지 않는다(strict=False) —
+    상위 호출자(collectors)가 다음 소스로 그레이스풀 폴백하기 때문이다.
     """
+    base_dir = Path(data_dir)
+    search_dir = _resolve_ticker_dir(base_dir, ticker, strict=False)
+    scoped_by_dir = search_dir != base_dir
+    # 종목 폴더 안은 재귀 탐색(분할 파일이 하위 폴더에 있을 수 있음), 평면은 최상위만
+    # (평면 폴백은 종목 폴더가 없을 때만 일어나므로 재귀해도 안전하지만, 기존 동작을 유지).
+    pattern = "**/*.xlsx" if scoped_by_dir else "*.xlsx"
     target_day = date.replace("-", "")
     wanted_company = _normalize_company(company_name)
     wanted_code = (ticker or "").strip()
-    for path in sorted(Path(data_dir).glob("*.xlsx")):
+    for path in sorted(search_dir.glob(pattern)):
         if path.name.startswith("~$"):
             continue
         parsed = _parse_workbook_name(path.name)
@@ -377,6 +437,8 @@ def find_news_workbook(
         code, company, start, end = parsed
         if not (start <= target_day <= end):
             continue
+        if scoped_by_dir:
+            return path
         code_match = bool(wanted_code) and code == wanted_code
         name_match = bool(wanted_company) and _normalize_company(company) == wanted_company
         if code_match or name_match:
@@ -465,7 +527,10 @@ def _build_parser() -> argparse.ArgumentParser:
         "--raw-dir",
         type=Path,
         default=DEFAULT_NEWS_DIR,
-        help="빅카인즈 워크북을 재귀 탐색할 디렉터리 (기본: 저장소 루트 data/ — value_pipeline과 동일)",
+        help=(
+            "빅카인즈 원본 기준 디렉터리 (기본: 저장소 루트 data/ — value_pipeline과 동일). "
+            "<종목코드>/ 하위 폴더가 있으면 --ticker 종목 폴더만 읽는다"
+        ),
     )
     return parser
 
