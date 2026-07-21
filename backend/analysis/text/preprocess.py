@@ -247,8 +247,10 @@ def _resolve_ticker_dir(base_dir: Path, ticker: str, *, strict: bool) -> Path:
     - 종목 폴더가 전혀 없으면 기준 디렉터리 평면 구조로 폴백한다(구버전 호환).
     """
     ticker = (ticker or "").strip()
+    if not ticker:
+        return base_dir
     ticker_dir = base_dir / ticker
-    if ticker and ticker_dir.is_dir():
+    if ticker_dir.is_dir():
         return ticker_dir
     if strict:
         ticker_directories = _iter_ticker_directories(base_dir)
