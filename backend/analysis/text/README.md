@@ -61,4 +61,5 @@ python -m analysis.text.preprocess --ticker 005930 --out news_corpus.csv
 
 ## 참고
 
+- [BigKinds 뉴스 수집 방식 결정](../../../docs/decisions/bigkinds-acquisition.md)
 - HuggingFace FinBERT (사전학습 금융 감성 모델)

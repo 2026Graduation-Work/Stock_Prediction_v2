@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "./disclaimer-footer";
 import InvestorProfileCard from "./investor-profile-card";
@@ -12,8 +12,16 @@ import type {
   InvestorProfileSummary,
   MarketStatus,
   PortfolioHolding,
+  ProfilingOutput,
   RecommendedStock,
 } from "@/lib/types";
+import { AVOIDED_ASSET_LABELS } from "@/lib/profiling-rules";
+import {
+  getSavedProfileSnapshot,
+  getServerProfileSnapshot,
+  parseSavedProfile,
+  subscribeToSavedProfile,
+} from "@/lib/save-profile";
 
 interface ExcludedStock {
   name: string;
@@ -40,6 +48,28 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
   );
 }
 
+function profileSummaryFromOutput(
+  output: ProfilingOutput,
+  fallback: InvestorProfileSummary,
+): InvestorProfileSummary {
+  const months = output.investor_profile.time_horizon_months;
+  const horizon = months <= 24 ? "short" : months <= 60 ? "mid" : "long";
+  const stable = output.investor_profile.profile_type === "stable";
+  const completedAt = new Date(output.timestamp);
+  const surveyedAt = Number.isNaN(completedAt.getTime())
+    ? fallback.surveyedAt
+    : `${completedAt.getFullYear()}.${String(completedAt.getMonth() + 1).padStart(2, "0")}`;
+  return {
+    ...fallback,
+    profileTypeLabel: stable ? "안정추구형" : "수익추구형",
+    personaLabel: stable ? "신중한 중장기 투자자" : "적극적인 기회 탐색형 투자자",
+    riskTolerance: Math.round(output.investor_profile.risk_tolerance * 100),
+    sentimentSensitivity: Math.round(output.psychological_state.fomo_index * 100),
+    horizon,
+    surveyedAt,
+  };
+}
+
 export default function Dashboard({
   marketStatus,
   profile,
@@ -51,6 +81,21 @@ export default function Dashboard({
 }: DashboardProps) {
   const [query, setQuery] = useState("");
   const [showExcluded, setShowExcluded] = useState(false);
+  const savedSnapshot = useSyncExternalStore(
+    subscribeToSavedProfile,
+    getSavedProfileSnapshot,
+    getServerProfileSnapshot,
+  );
+  const savedProfile = parseSavedProfile(savedSnapshot);
+  const activeProfile = savedProfile
+    ? profileSummaryFromOutput(savedProfile, profile)
+    : profile;
+  const activeAvoidedLabels = savedProfile
+    ? savedProfile.constraints.avoided_assets
+        .map((asset) => AVOIDED_ASSET_LABELS[asset])
+        .filter((label): label is string => Boolean(label))
+    : avoidedLabels;
+  const activeExcludedStocks = activeAvoidedLabels.length > 0 ? excludedStocks : [];
   const keyword = query.trim();
   const normalized = keyword.toLowerCase();
   const matches = (stock: RecommendedStock) =>
@@ -62,7 +107,7 @@ export default function Dashboard({
 
   return (
     <div className="w-full pb-[72px]">
-      <SiteHeader query={query} onQueryChange={setQuery} profile={profile} />
+      <SiteHeader query={query} onQueryChange={setQuery} profile={activeProfile} />
 
       <div className="mx-auto box-border flex w-full max-w-[1440px] flex-col gap-5 px-8 pt-5">
         <MarketStatusBar status={marketStatus} />
@@ -71,18 +116,18 @@ export default function Dashboard({
           <main className="flex flex-col gap-3.5">
             <SectionTitle
               title="오늘의 추천 종목"
-              subtitle={`${profile.profileTypeLabel} 기준 · 위험 4·5등급 위주 선별`}
+              subtitle={`${activeProfile.profileTypeLabel} 기준 · 위험 4·5등급 위주 선별`}
             />
 
-            {!keyword && excludedStocks.length > 0 && (
+            {!keyword && activeExcludedStocks.length > 0 && (
               <div className="flex flex-col gap-2 rounded-[10px] border border-line bg-track px-4 py-2.5">
                 <div className="flex items-center gap-2.5">
                   <span className="grid size-4 flex-none place-items-center rounded-full bg-faint text-[10px] font-extrabold text-white">
                     i
                   </span>
                   <span className="text-[13px] text-body">
-                    회피 설정({avoidedLabels.join("·")})으로 {excludedStocks.length}개 종목이
-                    제외되었습니다
+                    회피 설정({activeAvoidedLabels.join("·")})으로 {activeExcludedStocks.length}개
+                    종목이 제외되었습니다
                   </span>
                   <button
                     type="button"
@@ -94,7 +139,7 @@ export default function Dashboard({
                 </div>
                 {showExcluded && (
                   <ul className="flex flex-col gap-1 border-t border-line pl-[26px] pt-2">
-                    {excludedStocks.map((stock) => (
+                    {activeExcludedStocks.map((stock) => (
                       <li key={stock.code} className="text-[12.5px] text-body">
                         {stock.name}{" "}
                         <span className="text-faint">
@@ -144,7 +189,10 @@ export default function Dashboard({
           </main>
 
           <aside className="flex flex-col gap-4">
-            <InvestorProfileCard profile={profile} />
+            <InvestorProfileCard
+              profile={activeProfile}
+              avoidedLabels={activeAvoidedLabels}
+            />
             <PortfolioHeatmap holdings={holdings} />
           </aside>
         </div>

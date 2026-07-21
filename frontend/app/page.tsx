@@ -1,23 +1,33 @@
 import Dashboard from "./components/dashboard";
 import {
-  avoidanceNotice,
-  holdingAlerts,
-  investorProfile,
-  marketStatus,
-  portfolioHoldings,
-  recommendedStocks,
-} from "@/lib/mock-data";
+  getHoldingAlerts,
+  getMarketStatus,
+  getPortfolio,
+  getProfile,
+  getRecommendedStocks,
+} from "@/lib/queries";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+export default async function Home() {
+  const [marketStatus, stocks, holdingAlerts, holdings, profileResult] =
+    await Promise.all([
+      getMarketStatus(),
+      getRecommendedStocks(),
+      getHoldingAlerts(),
+      getPortfolio(),
+      getProfile(),
+    ]);
+
   return (
     <Dashboard
       marketStatus={marketStatus}
-      profile={investorProfile}
-      stocks={recommendedStocks}
+      profile={profileResult.profile}
+      stocks={stocks}
       holdingAlerts={holdingAlerts}
-      holdings={portfolioHoldings}
-      excludedStocks={avoidanceNotice.excludedStocks}
-      avoidedLabels={avoidanceNotice.avoidedLabels}
+      holdings={holdings}
+      excludedStocks={profileResult.excludedStocks}
+      avoidedLabels={profileResult.avoidedLabels}
     />
   );
 }

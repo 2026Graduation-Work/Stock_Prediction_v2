@@ -1,7 +1,9 @@
+# ruff: noqa: I001
+
 import calendar
-import hashlib
-import json
 import os
+import sys
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,108 +11,13 @@ import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
+EXPERIMENTS_DIR = Path(__file__).resolve().parents[1]
+if str(EXPERIMENTS_DIR) not in sys.path:
+    sys.path.insert(0, str(EXPERIMENTS_DIR))
+
+from experiment_utils import generate_predictions_hash, model_cache_dir, resolve_splits  # noqa: E402
+
 st.set_page_config(page_title="Quant Backtest Dashboard", layout="wide")
-
-
-def resolve_splits(config: dict) -> list:
-    """config['data']의 split_strategy 에 따라 폴드 목록을 계산하여 반환합니다."""
-    data_cfg = config.get("data", {})
-    strategy = data_cfg.get("split_strategy", "single")
-    embargo_days = data_cfg.get("embargo_days", 7)
-
-    if strategy == "single":
-        return data_cfg.get("splits", [])
-
-    elif strategy == "custom_blocks":
-        if "custom_blocks" in data_cfg:
-            return data_cfg["custom_blocks"]
-        else:
-            return [
-                {
-                    "train_start": "2016-01-01",
-                    "train_end": "2018-12-31",
-                    "test_start": "2019-01-08",
-                    "test_end": "2019-12-31",
-                },
-                {
-                    "train_start": "2018-01-01",
-                    "train_end": "2020-12-31",
-                    "test_start": "2021-01-08",
-                    "test_end": "2021-12-31",
-                },
-                {
-                    "train_start": "2021-01-01",
-                    "train_end": "2023-12-31",
-                    "test_start": "2024-01-08",
-                    "test_end": "2025-12-31",
-                },
-            ]
-
-    elif strategy == "sliding":
-        cfg = data_cfg.get("sliding", {})
-        tw = cfg.get("train_window_years", 3)
-        te = cfg.get("test_window_years", 1)
-        sy = cfg.get("start_year", 2016)
-        ey = cfg.get("end_year", 2025)
-
-        folds_info = []
-        for y in range(sy + tw, ey - te + 1):
-            ts = (pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)).strftime(
-                "%Y-%m-%d"
-            )
-            folds_info.append(
-                {
-                    "train_start": f"{y - tw}-01-01",
-                    "train_end": f"{y - 1}-12-31",
-                    "test_start": ts,
-                    "test_end": f"{y}-12-31",
-                }
-            )
-        return folds_info
-
-    elif strategy == "expanding":
-        cfg = data_cfg.get("expanding", {})
-        iy = cfg.get("initial_train_years", 5)
-        te = cfg.get("test_window_years", 1)
-        sy = cfg.get("start_year", 2016)
-        ey = cfg.get("end_year", 2025)
-
-        folds_info = []
-        for y in range(sy + iy, ey - te + 1):
-            ts = (pd.to_datetime(f"{y - 1}-12-31") + pd.Timedelta(days=embargo_days)).strftime(
-                "%Y-%m-%d"
-            )
-            folds_info.append(
-                {
-                    "train_start": f"{sy}-01-01",
-                    "train_end": f"{y - 1}-12-31",
-                    "test_start": ts,
-                    "test_end": f"{y}-12-31",
-                }
-            )
-        return folds_info
-
-    else:
-        raise ValueError(f"지원하지 않는 split 전략: {strategy}")
-
-
-def generate_predictions_hash(config: dict, resolved_splits: list) -> str:
-    """예측 확률 및 모델 캐시용 해시: 데이터/피처/라벨 + 모델 하이퍼파라미터를 감지하여 생성합니다."""
-    hash_dict = {
-        "data": {
-            "tickers": config.get("data", {}).get("tickers", None),
-            "start_date": config.get("data", {}).get("start_date", None),
-            "end_date": config.get("data", {}).get("end_date", None),
-            "split_strategy": config.get("data", {}).get("split_strategy", "single"),
-            "embargo_days": config.get("data", {}).get("embargo_days", 7),
-            "splits": resolved_splits,
-        },
-        "features": config.get("features", {}),
-        "labels": config.get("labels", {}),
-        "model": config.get("model", {}),
-    }
-    hash_str = json.dumps(hash_dict, sort_keys=True)
-    return hashlib.md5(hash_str.encode()).hexdigest()[:8]
 
 
 # ==========================================
@@ -142,6 +49,155 @@ def get_monthly_returns(daily_returns: pd.Series) -> pd.DataFrame:
     return pivot
 
 
+def _analysis_dir(results_dir: str) -> str:
+    return os.path.join(results_dir, "horizon_final_analysis")
+
+
+def _format_analysis_percent(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    out = df.copy()
+    for col in columns:
+        if col in out.columns:
+            out[col] = pd.to_numeric(out[col], errors="coerce").map(
+                lambda x: "" if pd.isna(x) else f"{x * 100:.2f}%"
+            )
+    return out
+
+
+def render_horizon_final_analysis(results_dir: str) -> None:
+    analysis_dir = _analysis_dir(results_dir)
+    if not os.path.exists(analysis_dir):
+        st.warning(
+            "horizon_final_analysis 결과가 없습니다. "
+            "`python experiments/scripts/analysis/run_horizon_final_analysis.py`를 먼저 실행하세요."
+        )
+        return
+
+    st.subheader("H별 확정 Multiplier 분석")
+    paths = {
+        "summary": os.path.join(analysis_dir, "horizon_final_summary.csv"),
+        "prob": os.path.join(analysis_dir, "probability_return_calibration.csv"),
+        "ticker": os.path.join(analysis_dir, "ticker_contribution.csv"),
+        "market": os.path.join(analysis_dir, "market_contribution.csv"),
+        "sensitivity": os.path.join(analysis_dir, "portfolio_rule_sensitivity.csv"),
+        "corr": os.path.join(analysis_dir, "horizon_signal_correlation.csv"),
+        "overlap": os.path.join(analysis_dir, "horizon_signal_overlap_groups.csv"),
+    }
+    missing = [name for name, path in paths.items() if not os.path.exists(path)]
+    if missing:
+        st.error(f"분석 파일이 누락되었습니다: {missing}")
+        return
+
+    summary = pd.read_csv(paths["summary"])
+    prob = pd.read_csv(paths["prob"])
+    ticker = pd.read_csv(paths["ticker"])
+    market = pd.read_csv(paths["market"])
+    sensitivity = pd.read_csv(paths["sensitivity"])
+    corr = pd.read_csv(paths["corr"])
+    overlap = pd.read_csv(paths["overlap"])
+
+    invalid_bench = summary[~summary["Benchmark Valid"]]
+    if invalid_bench.empty:
+        st.success("Benchmark_CustomKRX validity: all selected horizon results are valid.")
+    else:
+        st.warning("일부 horizon의 Benchmark_CustomKRX가 invalid입니다.")
+        st.dataframe(
+            invalid_bench[["Horizon", "Benchmark Validity Reason"]],
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    tab_summary, tab_prob, tab_contrib, tab_market, tab_overlap, tab_rules = st.tabs(
+        [
+            "H 비교",
+            "Probability Bucket",
+            "종목 기여도",
+            "시장별 성과",
+            "신호 중복",
+            "Rule 민감도",
+        ]
+    )
+
+    with tab_summary:
+        display = _format_analysis_percent(
+            summary,
+            [
+                "Total Return",
+                "CAGR",
+                "MDD",
+                "Win Rate",
+                "Average Win",
+                "Average Loss",
+                "Expectancy",
+                "Benchmark Custom KRX Return",
+                "Excess Return vs Custom KRX",
+            ],
+        )
+        st.dataframe(display, use_container_width=True, hide_index=True)
+        fig = px.bar(summary, x="Horizon", y="Total Return", color="Horizon", title="H별 Total Return")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab_prob:
+        selected_h = st.selectbox("Horizon", sorted(prob["Horizon"].unique()), key="prob_horizon")
+        display = prob[prob["Horizon"] == selected_h].copy()
+        st.dataframe(
+            _format_analysis_percent(
+                display,
+                [
+                    "average_return",
+                    "win_rate",
+                    "average_win",
+                    "average_loss",
+                    "expectancy",
+                    "Label Hit Rate",
+                    "Average Forward Return",
+                    "Average Realized Return",
+                ],
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+        chart_df = display[display["Bucket Type"] == "probability"]
+        fig = px.bar(
+            chart_df,
+            x="Bucket",
+            y="Average Realized Return",
+            color="Bucket",
+            title=f"{selected_h} bucket별 realized-return proxy",
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab_contrib:
+        selected_h = st.selectbox("Horizon", sorted(ticker["Horizon"].unique()), key="ticker_horizon")
+        contrib = ticker[ticker["Horizon"] == selected_h].sort_values("total_pnl", ascending=False)
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### 수익 상위")
+            st.dataframe(contrib.head(20), use_container_width=True, hide_index=True)
+        with col2:
+            st.markdown("#### 손실 상위")
+            st.dataframe(contrib.tail(20).sort_values("total_pnl"), use_container_width=True, hide_index=True)
+
+    with tab_market:
+        st.dataframe(market, use_container_width=True, hide_index=True)
+        fig = px.bar(market, x="Market", y="total_pnl", color="Horizon", barmode="group")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with tab_overlap:
+        st.markdown("#### Prediction correlation")
+        st.dataframe(corr, use_container_width=True, hide_index=True)
+        st.markdown("#### Top-k overlap 및 H5/H20 group performance")
+        st.dataframe(overlap, use_container_width=True, hide_index=True)
+
+    with tab_rules:
+        st.dataframe(
+            _format_analysis_percent(
+                sensitivity, ["proxy_total_return", "proxy_cagr", "proxy_mdd"]
+            ),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+
 def main():
     st.title("📈 Quant Trading Dashboard")
     st.markdown(
@@ -169,10 +225,15 @@ def main():
     selected_exp = st.sidebar.selectbox("결과 분석할 실험(Experiment)을 선택하세요:", experiments)
 
     view_mode = st.sidebar.radio(
-        "📊 대시보드 뷰 선택:", ["📈 기본 성과 대시보드", "📝 QuantStats 상세 분석 리포트"]
+        "📊 대시보드 뷰 선택:",
+        ["📈 기본 성과 대시보드", "🔎 H별 확정 Multiplier 분석", "📝 QuantStats 상세 분석 리포트"],
     )
 
     exp_path = os.path.join(results_dir, selected_exp)
+
+    if view_mode == "🔎 H별 확정 Multiplier 분석":
+        render_horizon_final_analysis(results_dir)
+        return
 
     if view_mode == "📝 QuantStats 상세 분석 리포트":
         st.subheader("📊 QuantStats 상세 분석 보고서 (Tear Sheet)")
@@ -218,8 +279,9 @@ def main():
         return
 
     # ── [실험 설정 파싱 및 표기] ──
-    # 설정 파일을 다각도로 탐색 (core 폴더 또는 현재 CWD 기준)
+    # 실행 결과와 한 쌍인 snapshot을 최우선으로 사용한다. 없을 때만 로컬 템플릿을 탐색한다.
     config_candidates = [
+        os.path.join(exp_path, "config_snapshot.yaml"),
         os.path.abspath(os.path.join(results_dir, "..", "..", "core", "config.yaml")),
         os.path.abspath(os.path.join(results_dir, "..", "..", "core", "config.example.yaml")),
         os.path.abspath(os.path.join(os.getcwd(), "config.yaml")),
@@ -299,6 +361,7 @@ def main():
                 )
     daily_returns_path = os.path.join(exp_path, "daily_returns.csv")
     trades_path = os.path.join(exp_path, "trades.csv")
+    benchmark_metadata_path = os.path.join(exp_path, "benchmark_metadata.csv")
 
     if os.path.exists(daily_returns_path):
         ret_df = pd.read_csv(daily_returns_path)
@@ -312,6 +375,24 @@ def main():
         # 1. 누적 수익률 차트
         # ----------------------------------------------------
         st.subheader("1. 누적 수익률 곡선 (Cumulative Equity Curve)")
+
+        if os.path.exists(benchmark_metadata_path):
+            try:
+                benchmark_meta = pd.read_csv(benchmark_metadata_path)
+                if not benchmark_meta.empty:
+                    meta_row = benchmark_meta.iloc[0].to_dict()
+                    valid = meta_row.get("valid", True)
+                    source = meta_row.get("source", "unknown")
+                    reason = meta_row.get("reason", "")
+                    validity_reason = meta_row.get("validity_reason", "")
+                    if str(valid).lower() in {"false", "0", "nan"}:
+                        st.warning(
+                            f"Benchmark source: `{source}` / invalid: {validity_reason or reason}"
+                        )
+                    else:
+                        st.info(f"Benchmark source: `{source}` / {reason}")
+            except Exception as e:
+                st.warning(f"benchmark_metadata.csv 로드 실패: {e}")
 
         portfolio_col = "Portfolio" if "Portfolio" in ret_df.columns else ret_df.columns[0]
         ret_series = ret_df[portfolio_col]
@@ -728,7 +809,7 @@ $$R_{composite, t} = w_{KOSPI, y} \\times R_{KOSPI, t} \\quad + \\quad w_{KOSDAQ
     st.subheader("4. 🤖 AI 모델 분석: 피처 중요도 (Feature Importance)")
 
     # 모델 캐시 폴더 경로 지정
-    models_cache_dir = os.path.abspath(os.path.join(current_dir, "..", "cache", "models"))
+    models_cache_dir = model_cache_dir(__file__)
 
     if config:
         try:

@@ -21,7 +21,7 @@ function formatPercent(value: number) {
 }
 
 // 활성 도트만 신호 색, 비활성은 회색 — 5단계 중 현재 단계가 색으로 바로 구분되게
-function SignalDots({ active }: { active: RecommendedStock["signalLight"] }) {
+export function SignalDots({ active }: { active: RecommendedStock["signalLight"] }) {
   return (
     <div className="flex items-center gap-[5px]">
       {SIGNAL_ORDER.map((signal) => {

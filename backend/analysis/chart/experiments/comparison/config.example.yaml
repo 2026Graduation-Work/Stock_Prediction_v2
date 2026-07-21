@@ -1,0 +1,50 @@
+seed: 42
+
+data:
+  input_path: ../../data/comparison/comparison_input.parquet
+  date_column: Date
+  code_column: Code
+  train_start: "2019-01-01"
+  train_end: "2023-12-31"
+  test_start: "2024-01-08"
+  test_end: "2025-12-31"
+  return_column: Next_Day_Return
+  volatility_column: Market_Volatility
+  universe: []  # 비우면 입력 데이터의 전체 유니버스 사용
+
+features:
+  # v1 baseline 모델이 실제 사용한 Alpha158 컬럼을 읽어 목록 드리프트를 막는다.
+  baseline_model_file: ../cache/models/65dc5055_fold0_model.txt
+  treatment:
+    - synthetic_psychology_index
+    - news_sentiment
+
+profiles:
+  stable:
+    target_column: Target_H20
+    probability_threshold: 0.65
+    top_n: 5
+  aggressive:
+    target_column: Target_H5
+    probability_threshold: 0.60
+    top_n: 10
+
+model:
+  params:
+    n_estimators: 500
+    learning_rate: 0.03
+    max_depth: 5
+    num_leaves: 20
+    min_child_samples: 200
+    colsample_bytree: 0.7
+    subsample: 0.8
+    subsample_freq: 1
+    class_weight: balanced
+
+evaluation:
+  classification_threshold: 0.5
+  calibration_bins: 10
+  volatile_fraction: 0.2
+  annualization: 252
+
+output_dir: ../results/psychology_ab
