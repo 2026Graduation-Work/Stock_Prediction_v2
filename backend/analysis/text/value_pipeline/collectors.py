@@ -89,8 +89,9 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
             )
     else:
         warnings.warn(
-            f"'{query}' {date}를 커버하는 빅카인즈 워크북이 {DATA_DIR}에 없습니다. "
-            f"기대 파일명: {{종목코드}}_{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx. "
+            f"'{query}' {date}를 커버하는 빅카인즈 워크북이 {DATA_DIR}/{ticker}/ "
+            f"(또는 평면 {DATA_DIR})에 없습니다. "
+            f"기대 위치·파일명: {DATA_DIR}/{ticker}/{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx. "
             f"네이버로 폴백하지만 과거 날짜는 신뢰할 수 없습니다.",
             stacklevel=2,
         )
