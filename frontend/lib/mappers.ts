@@ -7,10 +7,12 @@ import type {
   MarketIndexQuote,
   MarketStatus,
   PortfolioHolding,
+  PredictionReason,
   RecommendedStock,
   RiskFlag,
   RiskGrade,
   SignalLight,
+  StockDetail,
 } from "./types";
 
 export interface UserRow {
@@ -59,6 +61,19 @@ export interface PredictionRow {
   display_order: number;
 }
 
+export interface PredictionDetailRow extends PredictionRow {
+  id: string;
+  data_asof: string | null;
+  horizon: "h5" | "h10" | "h20" | null;
+}
+
+export interface PredictionFeatureRow {
+  feature: string;
+  label_ko: string;
+  contribution: number;
+  display_order: number;
+}
+
 export interface PortfolioHoldingRow {
   stock_code: string;
   quantity: number;
@@ -100,6 +115,20 @@ const SIGNAL_LIGHTS: SignalLight[] = [
 const HORIZON_DIRECTIONS: HorizonDirection[] = ["up", "flat", "down"];
 const HORIZON_AGREEMENTS: HorizonAgreement[] = ["aligned", "mixed", "conflict"];
 const MARKET_CONDITIONS: MarketCondition[] = ["stable", "caution", "high_volatility"];
+const NEWS_FEATURE_TOKENS = ["news", "sentiment", "finbert", "headline"];
+const PROFILING_FEATURE_TOKENS = ["psychology", "psychological", "profile", "fomo"];
+const FINANCIAL_FEATURE_TOKENS = [
+  "dart",
+  "financial",
+  "fundamental",
+  "revenue",
+  "profit",
+  "earning",
+  "per",
+  "pbr",
+  "roe",
+  "debt",
+];
 
 export function mapMarketStatus(row: MarketStatusRow): MarketStatus {
   return {
@@ -143,6 +172,43 @@ export function mapRecommendedStock(
     riskFlags: toRiskFlags(stock.risk_flags),
     ...(prediction.caution ? { caution: prediction.caution } : {}),
   };
+}
+
+export function mapStockDetail(
+  prediction: PredictionDetailRow,
+  stock: StockRow,
+  featureRows: PredictionFeatureRow[],
+): StockDetail {
+  return {
+    ...mapRecommendedStock(prediction, stock),
+    asOf: prediction.data_asof ?? prediction.prediction_date,
+    ...(prediction.horizon ? { returnHorizon: prediction.horizon } : {}),
+    reasons: mapPredictionReasons(featureRows),
+  };
+}
+
+export function mapPredictionReasons(
+  rows: PredictionFeatureRow[],
+): PredictionReason[] {
+  return [...rows]
+    .sort(
+      (left, right) =>
+        left.display_order - right.display_order ||
+        Math.abs(right.contribution) - Math.abs(left.contribution) ||
+        left.feature.localeCompare(right.feature),
+    )
+    .slice(0, 3)
+    .map((row) => {
+      const source = featureSource(row.feature);
+      const direction = row.contribution >= 0 ? "신호를 높이는 기여" : "신호를 낮추는 기여";
+      const signedValue = `${row.contribution > 0 ? "+" : ""}${row.contribution.toFixed(4)}`;
+      return {
+        title: row.label_ko,
+        detail: `${direction} · 모델 기여값 ${signedValue}`,
+        source: source.type,
+        sourceLabel: source.label,
+      };
+    });
 }
 
 export function mapProfileSummary(
@@ -258,6 +324,23 @@ function toRiskGrade(value: number): RiskGrade {
 
 function toHorizonDirection(value: string | null): HorizonDirection {
   return includes(HORIZON_DIRECTIONS, value) ? value : "flat";
+}
+
+function featureSource(feature: string): {
+  type: PredictionReason["source"];
+  label: string;
+} {
+  const tokens = new Set(feature.toLowerCase().split(/[^a-z0-9]+/));
+  if (NEWS_FEATURE_TOKENS.some((token) => tokens.has(token))) {
+    return { type: "news", label: "뉴스 감성 분석" };
+  }
+  if (PROFILING_FEATURE_TOKENS.some((token) => tokens.has(token))) {
+    return { type: "profiling", label: "심리 지수" };
+  }
+  if (FINANCIAL_FEATURE_TOKENS.some((token) => tokens.has(token))) {
+    return { type: "financial", label: "재무 지표" };
+  }
+  return { type: "chart", label: "차트 지표" };
 }
 
 function includes<T extends string>(values: readonly T[], value: unknown): value is T {

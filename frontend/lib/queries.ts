@@ -6,6 +6,7 @@ import {
   marketStatus,
   portfolioHoldings,
   recommendedStocks,
+  stockDetails,
 } from "./mock-data";
 import {
   mapAvoidedAssetLabels,
@@ -14,12 +15,15 @@ import {
   mapPortfolioHolding,
   mapProfileSummary,
   mapRecommendedStock,
+  mapStockDetail,
   toRiskFlags,
   type AvoidedAssetRow,
   type ExcludedStock,
   type IpsProfileRow,
   type MarketStatusRow,
   type PortfolioHoldingRow,
+  type PredictionDetailRow,
+  type PredictionFeatureRow,
   type PredictionRow,
   type StockRow,
   type UserRow,
@@ -30,6 +34,7 @@ import type {
   MarketStatus,
   PortfolioHolding,
   RecommendedStock,
+  StockDetail,
 } from "./types";
 
 export const DEMO_USER_ID = "u_minji_001";
@@ -52,6 +57,14 @@ export interface DashboardData {
   excludedStocks: ExcludedStock[];
 }
 
+export interface StockDetailData {
+  detail: StockDetail;
+  profile: InvestorProfileSummary;
+  marketStatus: MarketStatus;
+  maxRiskTier: number;
+  source: "mock" | "supabase";
+}
+
 interface ProfileSettingsRow {
   profile_type: "stable" | "aggressive";
   max_risk_tier: number;
@@ -70,6 +83,10 @@ interface ProfileQueryContext {
 
 const PREDICTION_COLUMNS =
   "stock_code,prediction_date,signal_light,rank_percentile,return_low,return_high,return_ci_level,bucket_hit_rate,similar_case_count,horizon_h5,horizon_h10,horizon_h20,horizon_agreement,caution,display_order" as const;
+const DETAIL_PREDICTION_COLUMNS =
+  `id,data_asof,horizon,${PREDICTION_COLUMNS}` as const;
+const PREDICTION_FEATURE_COLUMNS =
+  "feature,label_ko,contribution,display_order" as const;
 
 const STOCK_COLUMNS = "code,name,market,risk_grade,risk_flags";
 
@@ -134,6 +151,39 @@ export async function getAuthenticatedDashboardData(): Promise<DashboardData> {
     avoidedLabels: profileContext.result.avoidedLabels,
     excludedStocks: profileContext.result.excludedStocks,
   };
+}
+
+export function getMockStockDetailData(code: string): StockDetailData | null {
+  const detail = stockDetails[code];
+  if (!detail) return null;
+  return {
+    detail,
+    profile: investorProfile,
+    marketStatus,
+    maxRiskTier: 4,
+    source: "mock",
+  };
+}
+
+export async function getAuthenticatedStockDetailData(
+  code: string,
+): Promise<StockDetailData> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("Supabase 환경변수가 설정되지 않았습니다.");
+
+  const { data: authData, error: authError } = await client.auth.getUser();
+  assertQuery(authError, "로그인 사용자 확인");
+  if (!authData.user) throw new Error("로그인 사용자 정보가 없습니다.");
+
+  const { data: appUser, error: appUserError } = await client
+    .from("users")
+    .select("id")
+    .eq("auth_user_id", authData.user.id)
+    .maybeSingle();
+  assertQuery(appUserError, "상세 화면 사용자 확인");
+  if (!appUser) throw new Error("연결된 서비스 사용자 정보가 없습니다.");
+
+  return queryStockDetail(client, appUser.id, code);
 }
 
 export async function getMarketStatus(): Promise<MarketStatus> {
@@ -305,6 +355,75 @@ async function queryProfile(
   userId: string,
 ): Promise<ProfileQueryResult> {
   return (await loadProfileQueryContext(client, userId)).result;
+}
+
+async function queryStockDetail(
+  client: SupabaseClient,
+  userId: string,
+  code: string,
+): Promise<StockDetailData> {
+  const [marketResult, userResult, profileResult, stockResult] = await Promise.all([
+    queryMarketStatus(client),
+    client
+      .from("users")
+      .select("id,display_name,avatar_label")
+      .eq("id", userId)
+      .maybeSingle(),
+    client
+      .from("ips_profiles")
+      .select(
+        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score",
+      )
+      .eq("user_id", userId)
+      .maybeSingle(),
+    client
+      .from("stocks")
+      .select(STOCK_COLUMNS)
+      .eq("code", code)
+      .eq("is_active", true)
+      .maybeSingle(),
+  ]);
+  assertQuery(userResult.error, "상세 화면 사용자 조회");
+  assertQuery(profileResult.error, "상세 화면 IPS 프로필 조회");
+  assertQuery(stockResult.error, "상세 화면 종목 조회");
+  if (!userResult.data || !profileResult.data) {
+    throw new Error("사용자 또는 IPS 프로필 데이터가 없습니다.");
+  }
+  if (!stockResult.data) throw new Error(`종목 정보를 찾지 못했습니다: ${code}`);
+
+  const profile = profileResult.data as IpsProfileRow;
+  const { data: predictionData, error: predictionError } = await client
+    .from("predictions")
+    .select(DETAIL_PREDICTION_COLUMNS)
+    .eq("stock_code", code)
+    .eq("model_type", profile.profile_type)
+    .order("prediction_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  assertQuery(predictionError, "상세 화면 예측 조회");
+  if (!predictionData) {
+    throw new Error(`${code}의 ${profile.profile_type} 모델 예측이 없습니다.`);
+  }
+
+  const prediction = predictionData as PredictionDetailRow;
+  const { data: featureData, error: featureError } = await client
+    .from("prediction_features")
+    .select(PREDICTION_FEATURE_COLUMNS)
+    .eq("prediction_id", prediction.id)
+    .order("display_order", { ascending: true });
+  assertQuery(featureError, "상세 화면 예측 근거 조회");
+
+  return {
+    detail: mapStockDetail(
+      prediction,
+      stockResult.data as StockRow,
+      (featureData ?? []) as PredictionFeatureRow[],
+    ),
+    profile: mapProfileSummary(userResult.data as UserRow, profile),
+    marketStatus: marketResult,
+    maxRiskTier: profile.max_risk_tier,
+    source: "supabase",
+  };
 }
 
 async function loadProfileQueryContext(
