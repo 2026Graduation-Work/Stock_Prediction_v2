@@ -201,6 +201,7 @@ def _load_validation_df(
     processed_dir: str,
     val_start: str,
     val_end: str,
+    label_observation_end: str,
     tickers_cfg,
     label_params: dict,
     feature_cols: list[str],
@@ -211,6 +212,7 @@ def _load_validation_df(
         val_end,
         tickers=tickers_cfg,
         label_params=label_params,
+        label_observation_end=label_observation_end,
         training=False,
     )
     val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols
@@ -302,6 +304,9 @@ def main(config_path):
             embargo_days = config.get("data", {}).get("embargo_days", 7)
             label_params = label_params_from_config(config)
             _, val_start, val_end = _validation_window(train_end, embargo_days)
+            label_observation_end = (
+                pd.to_datetime(split_info["test_start"]) - pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d")
             fold_pred_hash = f"{predictions_hash}_fold{idx}"
             model_wrapper = LGBMWrapper(config)
             model_save_path = os.path.join(
@@ -317,7 +322,13 @@ def main(config_path):
             model_wrapper.model = lgb.Booster(model_file=model_save_path)
             feature_cols = model_wrapper.model.feature_name()
             val_df = _load_validation_df(
-                processed_dir, val_start, val_end, tickers_cfg, label_params, feature_cols
+                processed_dir,
+                val_start,
+                val_end,
+                label_observation_end,
+                tickers_cfg,
+                label_params,
+                feature_cols,
             )
             validation_metrics = _evaluate_validation(
                 config, split_info, idx, model_wrapper, val_df, feature_cols
@@ -350,6 +361,12 @@ def main(config_path):
             embargo_days = config.get("data", {}).get("embargo_days", 7)
             label_params = label_params_from_config(config)
             pure_train_end, val_start, val_end = _validation_window(train_end, embargo_days)
+            train_label_observation_end = (
+                pd.to_datetime(val_start) - pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d")
+            validation_label_observation_end = (
+                pd.to_datetime(test_start) - pd.Timedelta(days=1)
+            ).strftime("%Y-%m-%d")
 
             fold_pred_hash = f"{predictions_hash}_fold{idx}"
             model_wrapper = LGBMWrapper(config)
@@ -391,6 +408,7 @@ def main(config_path):
                         pure_train_end,
                         tickers=tickers_cfg,
                         label_params=label_params,
+                        label_observation_end=train_label_observation_end,
                         training=True,
                         keep_date=False,
                     )
@@ -419,6 +437,7 @@ def main(config_path):
                         train_end,
                         tickers=tickers_cfg,
                         label_params=label_params,
+                        label_observation_end=validation_label_observation_end,
                         training=False,
                     )
 
@@ -455,7 +474,13 @@ def main(config_path):
             if (not skip_validation) and "val_df" not in locals():
                 print("\n[2.5] Val 데이터 로딩 및 동적 라벨(Y) 생성...")
                 val_df = _load_validation_df(
-                    processed_dir, val_start, val_end, tickers_cfg, label_params, feature_cols
+                    processed_dir,
+                    val_start,
+                    val_end,
+                    validation_label_observation_end,
+                    tickers_cfg,
+                    label_params,
+                    feature_cols,
                 )
 
             if not skip_validation:

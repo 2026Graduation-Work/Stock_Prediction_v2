@@ -36,6 +36,11 @@ cp experiments/configs/base.yaml experiments/configs/local.yaml
 manifest와 이 버전을 포함하므로, 일반적인 데이터 갱신은 기존 모델/예측 캐시를 재사용하지 않는다.
 내용을 바꾸면서 파일 메타데이터를 의도적으로 보존한 경우에도 `data.version`을 반드시 바꾼다.
 
+비교실험의 종목 유니버스는 `data.tickers`에 6자리 코드 목록으로 고정한다. 실행 시점마다
+구성 종목이 달라지는 `KOSPI_TOP200` 실시간 별칭은 재현성 때문에 허용하지 않으며, 목록을
+만든 기준일과 코드를 실험 설정과 함께 보관한다. `data.start_date`/`data.end_date`는 모든
+자동 생성 fold의 최종 경계로 적용된다.
+
 `core/config.example.yaml`은 서비스 추론용 로컬 설정 템플릿입니다. 필요할 때만
 `core/config.yaml`으로 복사해 사용하며, 이 파일도 Git에 올리지 않습니다.
 

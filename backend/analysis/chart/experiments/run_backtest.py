@@ -11,6 +11,7 @@ from evaluation.baselines import (
     generate_ma_breakout_signals,
     generate_momentum_signals,
     generate_random_top_k_signals,
+    restrict_signals_to_test_folds,
 )
 from experiment_utils import (
     build_fold_alignment,
@@ -186,6 +187,9 @@ def main(config_path, predictions_path=None):
         random_entries, random_weights = generate_random_top_k_signals(
             market_df, top_n=top_n, seed=seed
         )
+        random_entries, random_weights = restrict_signals_to_test_folds(
+            random_entries, random_weights, splits
+        )
         random_pf = bt_engine.run(random_entries, random_weights, market_df, generate_report=False)
         random_metrics = calculate_trading_metrics(
             random_pf.returns(),
@@ -196,12 +200,18 @@ def main(config_path, predictions_path=None):
         random_sharpes.append(random_metrics.get("sharpe_ratio", np.nan))
 
     mom_entries, mom_weights = generate_momentum_signals(market_df, top_n=top_n, horizon=5)
+    mom_entries, mom_weights = restrict_signals_to_test_folds(
+        mom_entries, mom_weights, splits
+    )
     mom_pf = bt_engine.run(mom_entries, mom_weights, market_df, generate_report=False)
     mom_metrics = calculate_trading_metrics(
         mom_pf.returns(), mom_pf.trades.records_readable if len(mom_pf.trades.records) > 0 else None
     )
 
     ma_entries, ma_weights = generate_ma_breakout_signals(market_df, top_n=top_n, window=20)
+    ma_entries, ma_weights = restrict_signals_to_test_folds(
+        ma_entries, ma_weights, splits
+    )
     ma_pf = bt_engine.run(ma_entries, ma_weights, market_df, generate_report=False)
     ma_metrics = calculate_trading_metrics(
         ma_pf.returns(), ma_pf.trades.records_readable if len(ma_pf.trades.records) > 0 else None
