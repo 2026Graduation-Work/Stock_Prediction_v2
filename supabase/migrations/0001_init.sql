@@ -167,6 +167,7 @@ create table if not exists public.market_status (
   condition text not null check (condition in ('stable', 'caution', 'high_volatility')),
   volatility_score smallint not null check (volatility_score between 0 and 100),
   volume_score smallint not null check (volume_score between 0 and 100),
+  index_quotes jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );

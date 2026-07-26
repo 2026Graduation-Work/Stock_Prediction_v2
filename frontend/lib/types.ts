@@ -79,11 +79,21 @@ export interface StockDetail extends RecommendedStock {
 
 export type MarketCondition = "stable" | "caution" | "high_volatility";
 
+export interface MarketIndexQuote {
+  symbol: string;
+  label: string;
+  value: number;
+  change: number;
+  changePercent: number;
+}
+
 export interface MarketStatus {
   date: string; // ISO date (YYYY-MM-DD)
+  source: "mock" | "supabase";
   condition: MarketCondition;
   volatilityScore: number; // 0~100
   volumeScore: number; // 0~100
+  indexQuotes: MarketIndexQuote[];
 }
 
 export type InvestmentHorizon = "short" | "mid" | "long";
@@ -103,6 +113,8 @@ export interface PortfolioHolding {
   code: string;
   name: string;
   signalLight: SignalLight;
+  quantity: number;
+  avgBuyPrice: number;
 }
 
 export type ProfileType = "stable" | "aggressive";

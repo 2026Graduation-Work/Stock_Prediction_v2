@@ -15,7 +15,12 @@ import {
   RISK_GRADE_META,
   SIGNAL_META,
 } from "@/lib/display";
-import type { InvestorProfileSummary, RiskGrade, StockDetail } from "@/lib/types";
+import type {
+  InvestorProfileSummary,
+  MarketStatus,
+  RiskGrade,
+  StockDetail,
+} from "@/lib/types";
 
 // 수익률 밴드 바: 0%가 바 중앙(50%), 수익률 1%p당 5% 이동 (stock-card와 동일 규칙)
 const BAND_SCALE = 5;
@@ -55,9 +60,14 @@ function Card({
 interface StockDetailViewProps {
   detail: StockDetail;
   profile: InvestorProfileSummary;
+  marketStatus: MarketStatus;
 }
 
-export default function StockDetailView({ detail, profile }: StockDetailViewProps) {
+export default function StockDetailView({
+  detail,
+  profile,
+  marketStatus,
+}: StockDetailViewProps) {
   const [query, setQuery] = useState("");
   const [choice, setChoice] = useState<"watch" | "reduce" | "drop" | null>(null);
 
@@ -72,10 +82,11 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
     detail.changePercent > 0 ? "#c93b34" : detail.changePercent < 0 ? "#2f5fd0" : "#667085";
   const changeArrow = detail.changePercent > 0 ? "▲" : detail.changePercent < 0 ? "▼" : "";
   const belowTolerance = detail.riskGrade < MIN_SAFE_GRADE;
+  const hasAiAdvice = Boolean(detail.aiAdvice?.trim());
   const horizons = [
-    ["단기 H5", detail.horizonAgreement.h5],
-    ["중기 H10", detail.horizonAgreement.h10],
-    ["장기 H20", detail.horizonAgreement.h20],
+    ["단기 H5 · 5거래일", detail.horizonAgreement.h5],
+    ["중기 H10 · 10거래일", detail.horizonAgreement.h10],
+    ["장기 H20 · 20거래일", detail.horizonAgreement.h20],
   ] as const;
   const choiceLabels = {
     watch: "관심 종목 추가",
@@ -84,8 +95,13 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
   } as const;
 
   return (
-    <div className="w-full pb-[72px]">
-      <SiteHeader query={query} onQueryChange={setQuery} profile={profile} />
+    <div className="w-full">
+      <SiteHeader
+        query={query}
+        onQueryChange={setQuery}
+        profile={profile}
+        marketStatus={marketStatus}
+      />
 
       <div className="mx-auto box-border flex w-full max-w-[1104px] flex-col gap-4 px-8 pb-6 pt-5">
         <Link href="/" className="self-start text-[13px] text-muted hover:text-brand">
@@ -255,10 +271,10 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
           </span>
         </Card>
 
-        {/* H5·H10·H20 신호 일치 */}
+        {/* 기간별 신호 일치 */}
         <Card className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <span className="min-w-[150px] text-[15px] font-extrabold">H5·H10·H20 신호 일치</span>
-          <div className="flex items-center gap-2">
+          <span className="min-w-[150px] text-[15px] font-extrabold">기간별 신호 일치</span>
+          <div className="flex flex-wrap items-center gap-2">
             {horizons.map(([label, direction]) => {
               const meta = HORIZON_META[direction];
               return (
@@ -357,16 +373,24 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
           )}
         </Card>
 
-        {/* AI 조언 — LLM은 수치 번역만. 행동 제안은 아래 HITL 3버튼이 담당 */}
-        <Card className="flex flex-col gap-3">
-          <div className="flex items-center gap-2.5">
-            <span className="text-[15px] font-extrabold">AI 조언</span>
-            <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
-              LLM 생성 · 설명 전용
-            </span>
-          </div>
-          <p className="m-0 text-[14.5px] leading-[1.7] text-[#38404e]">{detail.aiAdvice}</p>
-        </Card>
+        {/* AI 신호 해설 — LLM은 수치 번역만. 행동 제안은 아래 HITL 3버튼이 담당 */}
+        {hasAiAdvice && (
+          <Card className="flex flex-col gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[15px] font-extrabold">AI 신호 해설</span>
+              <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
+                설명 전용 · 매매 조언 아님
+              </span>
+            </div>
+            <p className="m-0 text-[14.5px] leading-[1.7] text-[#38404e]">
+              {detail.aiAdvice}
+            </p>
+            <p className="m-0 text-xs leading-5 text-muted">
+              AI가 생성한 설명은 부정확할 수 있습니다. 근거 수치와 출처를 확인한 뒤 최종 판단해
+              주세요.
+            </p>
+          </Card>
+        )}
 
         {/* 대응 선택지 (HITL) */}
         <Card className="flex flex-col gap-3">
@@ -402,7 +426,7 @@ export default function StockDetailView({ detail, profile }: StockDetailViewProp
         </Card>
       </div>
 
-      <DisclaimerFooter />
+      <DisclaimerFooter fixed={false} />
     </div>
   );
 }
