@@ -1,11 +1,15 @@
 import PerformanceDashboard from "../components/performance-dashboard";
 import { investorProfile, marketStatus } from "@/lib/mock-data";
-import { performanceResults } from "@/lib/mock-performance";
+import { loadPerformanceData } from "@/lib/performance-data";
 
-export default function PerformancePage() {
+export default async function PerformancePage() {
+  const { data, isSample, conclusion } = await loadPerformanceData();
+
   return (
     <PerformanceDashboard
-      data={performanceResults}
+      data={data}
+      isSample={isSample}
+      conclusion={conclusion}
       profile={investorProfile}
       marketStatus={marketStatus}
     />
