@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
+import OnboardingProvider from "./components/onboarding-provider";
 import "./globals.css";
 
 const pretendard = localFont({
@@ -21,7 +22,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko" className={`${pretendard.variable} h-full`}>
-      <body className="min-h-full">{children}</body>
+      <body className="min-h-full">
+        <OnboardingProvider>{children}</OnboardingProvider>
+      </body>
     </html>
   );
 }

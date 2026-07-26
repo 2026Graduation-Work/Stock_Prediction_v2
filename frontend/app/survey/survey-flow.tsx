@@ -11,6 +11,7 @@ import {
 } from "@/lib/profiling-rules";
 import { saveProfile } from "@/lib/save-profile";
 import type { ProfilingOutput, RiskFlag } from "@/lib/types";
+import SignOutButton from "../components/sign-out-button";
 
 type QuestionId = "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7";
 
@@ -295,24 +296,30 @@ export default function SurveyFlow() {
   return (
     <div className="min-h-screen bg-page">
       <header className="border-b border-line bg-white">
-        <div className="mx-auto flex h-16 w-full max-w-[1080px] items-center gap-3 px-5 sm:px-8">
+        <div className="mx-auto flex min-h-16 w-full max-w-[1080px] items-center gap-2.5 px-4 py-2 sm:h-16 sm:gap-3 sm:px-8 sm:py-0">
           <Link href="/" className="flex items-center gap-2.5 text-ink hover:no-underline">
             <span className="grid size-7 place-items-center rounded-lg bg-brand text-sm font-extrabold text-white">
               S
             </span>
-            <span className="text-[17px] font-extrabold">시그널랩</span>
+            <span className="hidden text-[17px] font-extrabold sm:inline">시그널랩</span>
           </Link>
           <span className="h-5 w-px bg-line" />
-          <span className="text-sm font-semibold text-body">투자 성향 설문</span>
-          {!result && (
-            <button
-              type="button"
-              onClick={loadDemoAnswers}
-              className="ml-auto rounded-lg px-3 py-2 text-xs font-bold text-brand hover:bg-brand-soft"
-            >
-              데모 응답 불러오기
-            </button>
-          )}
+          <span className="whitespace-nowrap text-sm font-semibold text-body">
+            투자 성향 설문
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            {!result && (
+              <button
+                type="button"
+                onClick={loadDemoAnswers}
+                className="rounded-lg px-3 py-2 text-xs font-bold text-brand hover:bg-brand-soft"
+              >
+                <span className="hidden sm:inline">데모 응답 불러오기</span>
+                <span className="sm:hidden">데모 불러오기</span>
+              </button>
+            )}
+            <SignOutButton />
+          </div>
         </div>
       </header>
 
