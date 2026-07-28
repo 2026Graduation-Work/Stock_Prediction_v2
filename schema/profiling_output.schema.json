@@ -2,8 +2,8 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/2026Graduation-Work/Stock_Prediction_v2/schema/profiling_output.schema.json",
   "title": "Profiling Block Output Schema",
-  "description": "profiling 블록(설문/사용자 프로파일링)이 analysis 블록·platform으로 넘기는 표준 인터페이스. v1.0 FREEZE (2026-07-07). 회의(7/6) 결정 반영: 회피 제약(하드/소프트 분리), 보유 종목(포트폴리오 히트맵), 3축(risk/fomo/horizon) 매핑 명시.",
-  "version": "1.0.0",
+  "description": "profiling 블록(설문/사용자 프로파일링)이 analysis 블록·platform으로 넘기는 표준 인터페이스. v1.0 FREEZE (2026-07-07). 회의(7/6) 결정 반영: 회피 제약(하드/소프트 분리), 보유 종목(포트폴리오 히트맵), 3축(risk/fomo/horizon) 매핑 명시. v1.1 (2026-07-28) additive 확장: style_axes·contradictions 추가. v1.0으로 유효한 문서는 v1.1에서도 그대로 유효하며, 기존 필드의 의미·필수 여부는 변경하지 않았다. 신규 블록은 모두 optional이므로 chart·text 블록은 영향을 받지 않는다.",
+  "version": "1.1.0",
   "type": "object",
   "required": ["user_id", "session_id", "timestamp", "investor_profile", "psychological_state", "constraints", "context", "meta"],
   "properties": {
@@ -90,6 +90,98 @@
       }
     },
 
+    "style_axes": {
+      "type": "object",
+      "description": "[v1.1 신규 · optional] 8축 투자스타일 진단 결과. 축당 복수 문항(리커트 5점)에 가중치를 적용해 산출한다. 100% 결정론 — 같은 응답이면 같은 축 점수가 나오며 LLM을 쓰지 않는다. 이 블록 자체는 소프트 틸트다: 종목 제거에 쓰지 않는다. 하드 제약은 constraints.avoided_assets뿐이다. 기존 v1.0 필드는 아래 축약 규칙으로 계속 채우므로 v1.0 소비자(chart·text·platform)는 변경 없이 동작한다 — risk_tolerance = (loss_tolerance.ratio + 1) / 2, fomo_index = (urgency.ratio + 1) / 2, panic_sell_tendency = (drawdown_reaction.ratio + 1) / 2, herding_score = (information_reliance.ratio + 1) / 2, time_horizon_months = holding_horizon.ratio의 구간 매핑(구간표는 backend/profiling 상수 테이블이 SSOT). self_confidence·liquidity_need_ratio 등 나머지 v1.0 필드는 축약 대상이 아니며 기존 산출 방식을 유지한다. confidence_per_field의 각 값은 대응 축의 confidence를 그대로 쓴다.",
+      "required": ["assessment_mode", "axes"],
+      "properties": {
+        "assessment_mode": {
+          "type": "string",
+          "enum": ["quick", "detailed"],
+          "description": "진단 모드. 축당 문항 수만 다르고 스코어링 규칙은 동일하다. quick은 발표·데모용."
+        },
+        "axes": {
+          "type": "array",
+          "description": "8축 각각의 결과. 축 8개를 모두 포함한다.",
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "required": ["axis_id", "ratio", "confidence", "answered_count", "question_count"],
+            "properties": {
+              "axis_id": {
+                "type": "string",
+                "enum": [
+                  "market_participation",
+                  "loss_tolerance",
+                  "holding_horizon",
+                  "concentration",
+                  "rule_adherence",
+                  "information_reliance",
+                  "urgency",
+                  "drawdown_reaction"
+                ],
+                "description": "성향 4축(market_participation=시장 수익률 참여↔내 목표 우선, loss_tolerance=원금 보전↔수익 기회, holding_horizon=장기 보유↔단기 회전, concentration=폭넓은 분산↔소수 집중)과 행동재무학 4축(rule_adherence=사전 규칙 준수↔상황별 재량, information_reliance=본인 판단↔시장·타인 추종, urgency=여유↔조급함, drawdown_reaction=하락 시 유지↔이탈)."
+              },
+              "ratio": {
+                "type": "number",
+                "minimum": -1,
+                "maximum": 1,
+                "description": "축 점수를 최대점으로 나눈 값. -1=음극(축 설명의 앞쪽), +1=양극(뒤쪽), 0=중립. 축별 원점수 대신 이 정규화 값을 계약으로 둔다."
+              },
+              "confidence": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1,
+                "description": "축 내부 응답 일관성에서 결정론적으로 산출한 신뢰도. 같은 축 문항끼리 답이 갈릴수록 낮아진다. 최상위 confidence_per_field를 채우는 원천."
+              },
+              "answered_count": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "이 축에서 실제로 응답한 문항 수"
+              },
+              "question_count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "이 축에 배정된 전체 문항 수. answered_count와 함께 미응답 비율을 드러낸다."
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "contradictions": {
+      "type": "array",
+      "description": "[v1.1 신규 · optional] 축 간 상충 관측치. 행동재무학 관찰 지표이며 결정론적 규칙으로만 검출한다(LLM 미사용). 점수 보정에 쓰지 않는다 — 관측 사실만 전달하고 해석은 화면·상담에서 한다.",
+      "items": {
+        "type": "object",
+        "required": ["id", "axes", "severity", "observation", "follow_up_question"],
+        "properties": {
+          "id": { "type": "string", "description": "모순 규칙 식별자. 규칙별 테스트와 1:1 대응." },
+          "axes": {
+            "type": "array",
+            "minItems": 2,
+            "description": "상충한 축 id 목록",
+            "items": { "type": "string" }
+          },
+          "severity": {
+            "type": "string",
+            "enum": ["caution", "high"],
+            "description": "caution=참고, high=상담 시 반드시 확인"
+          },
+          "observation": {
+            "type": "string",
+            "description": "관측 서술. 예: '손실 회피가 강한 편인데 소수 종목 집중을 선호한다.' 행동 지시·권유 문구를 넣지 않는다(AGENTS.md 사용자 노출 표현 규칙)."
+          },
+          "follow_up_question": {
+            "type": "string",
+            "description": "사용자에게 되물을 확인 문항. 모순을 자동으로 해소하지 않고 사용자에게 판단을 넘긴다(HITL)."
+          }
+        }
+      }
+    },
+
     "free_text_signal": {
       "type": "object",
       "description": "자유 텍스트 1문항 LLM 추출 시그널. LLM은 설명/추출만, 점수 산출은 결정론(정량/정성 분리).",
@@ -128,7 +220,7 @@
       "type": "object",
       "required": ["schema_version", "source"],
       "properties": {
-        "schema_version": { "type": "string", "const": "1.0.0" },
+        "schema_version": { "type": "string", "enum": ["1.0.0", "1.1.0"], "description": "1.0.0 문서는 v1.1 스키마에서도 그대로 유효하다. style_axes·contradictions를 담은 출력만 1.1.0을 쓴다." },
         "source": { "type": "string", "const": "profiling_block" },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1, "description": "전체 응답 신뢰도" }
       }
