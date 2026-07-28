@@ -129,7 +129,7 @@ export const MARKET_CONDITION_META: Record<
     label: "경계",
     color: "#b45814",
     bg: "#fdf1e6",
-    comment: "단기 변동성이 크게 확대된 구간입니다. 신규 진입은 신중히 판단하세요",
+    comment: "단기 변동성이 평소 범위를 크게 벗어난 구간입니다",
   },
 };
 
