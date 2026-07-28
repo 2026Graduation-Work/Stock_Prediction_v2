@@ -129,21 +129,17 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            backend/analysis/text/requirements-preprocess.txt
-            backend/analysis/text/value_pipeline/requirements.txt
+            backend/analysis/text/requirements.txt
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install ruff pytest
-          # 빅카인즈 엑셀 전처리 의존성
-          pip install -r backend/analysis/text/requirements-preprocess.txt
-          # value_pipeline 전용 의존성
-          pip install -r backend/analysis/text/value_pipeline/requirements.txt
-          # torch/transformers/requests: 루트 requirements.txt가 없으므로 CI에서 별도 설치.
-          # KR-FinBERT 폴백 경로에서 사용; CPU-only 빌드로 용량을 줄인다.
+          # torch를 먼저 CPU-only 빌드로 고정 설치한다. requirements.txt의
+          # torch>=2.0.0 보다 앞서야 CUDA 빌드(수 GB)를 받지 않는다.
           pip install torch --index-url https://download.pytorch.org/whl/cpu
-          pip install transformers requests
+          # 블록 전체 의존성 (preprocess + value_pipeline)
+          pip install -r backend/analysis/text/requirements.txt
 
       - name: Lint (ruff)
         run: ruff check backend/analysis/text/

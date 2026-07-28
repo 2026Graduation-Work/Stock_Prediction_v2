@@ -48,9 +48,14 @@ def calculate_trading_metrics(daily_returns: pd.Series, trades_df: pd.DataFrame 
         metrics["sortino_ratio"] = np.nan
 
     # Max Drawdown (MDD)
+    # Include the initial equity (1.0). Without it, a loss on day one becomes
+    # the first running maximum and is incorrectly reported as zero drawdown.
     cum_returns = (1.0 + daily_returns).cumprod()
-    running_max = cum_returns.cummax()
-    drawdowns = (cum_returns - running_max) / running_max
+    equity = pd.concat(
+        [pd.Series([1.0], dtype=float), cum_returns], ignore_index=True
+    )
+    running_max = equity.cummax()
+    drawdowns = (equity - running_max) / running_max
     mdd = drawdowns.min()
     metrics["max_drawdown"] = float(mdd)
 

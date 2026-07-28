@@ -60,7 +60,7 @@ export async function getMarketStatus(): Promise<MarketStatus> {
   return withFallback("market status", marketStatus, async (client) => {
     const { data, error } = await client
       .from("market_status")
-      .select("status_date,condition,volatility_score,volume_score")
+      .select("status_date,condition,volatility_score,volume_score,index_quotes")
       .order("status_date", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -274,7 +274,7 @@ async function loadHoldings(
 ): Promise<PortfolioHoldingRow[]> {
   const { data, error } = await client
     .from("portfolio_holdings")
-    .select("stock_code,display_order")
+    .select("stock_code,quantity,avg_buy_price,display_order")
     .eq("user_id", userId)
     .eq("is_active", true)
     .order("display_order", { ascending: true });

@@ -151,7 +151,10 @@ def valuation_score(
             parts.append(_band(disc, [1.3, 1.0, 0.7], [10, 6, 3]))
         else:  # 절대 기준
             parts.append(_band(per, [8, 15, 25], [10, 6, 3], higher_better=False))
-    elif per is None:  # 적자(EPS<=0) → 밸류에이션 매력 낮음
+    elif m.get("roe") is not None and m["roe"] <= 0:
+        # 적자(ROE<=0) → 밸류에이션 매력 낮음.
+        # per가 None인 이유는 '적자'와 '데이터 결측' 둘 다다. roe로 둘을 구분해,
+        # 결측(주가·발행주식수 누락 등)을 적자로 오인해 3점을 주지 않는다.
         parts.append(3.0)
     if pbr is not None and pbr > 0:
         if sector_pbr and sector_pbr > 0:

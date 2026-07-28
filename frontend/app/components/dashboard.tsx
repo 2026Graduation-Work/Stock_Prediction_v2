@@ -4,7 +4,6 @@ import { useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "./disclaimer-footer";
 import InvestorProfileCard from "./investor-profile-card";
-import MarketStatusBar from "./market-status-bar";
 import PortfolioHeatmap from "./portfolio-heatmap";
 import SiteHeader from "./site-header";
 import StockCard from "./stock-card";
@@ -106,12 +105,15 @@ export default function Dashboard({
   const noResult = keyword && visibleStocks.length === 0 && visibleAlerts.length === 0;
 
   return (
-    <div className="w-full pb-[72px]">
-      <SiteHeader query={query} onQueryChange={setQuery} profile={activeProfile} />
+    <div className="w-full">
+      <SiteHeader
+        query={query}
+        onQueryChange={setQuery}
+        profile={activeProfile}
+        marketStatus={marketStatus}
+      />
 
       <div className="mx-auto box-border flex w-full max-w-[1440px] flex-col gap-5 px-8 pt-5">
-        <MarketStatusBar status={marketStatus} />
-
         <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_356px]">
           <main className="flex flex-col gap-3.5">
             <SectionTitle
@@ -168,7 +170,7 @@ export default function Dashboard({
                   />
                 </div>
                 {visibleAlerts.map((stock) => (
-                  <StockCard key={stock.code} stock={stock} />
+                  <StockCard key={stock.code} stock={stock} variant="holding" />
                 ))}
               </>
             )}
@@ -198,7 +200,7 @@ export default function Dashboard({
         </div>
       </div>
 
-      <DisclaimerFooter />
+      <DisclaimerFooter fixed={false} />
     </div>
   );
 }

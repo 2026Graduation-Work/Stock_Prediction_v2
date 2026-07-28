@@ -352,7 +352,7 @@ values
     '투자 자문이 아닌 연구용 참고 신호입니다.',
     false,
     true,
-    '안정추구형 성향보다 변동성이 큰 종목입니다. 담더라도 비중을 낮게 가져가는 것을 권장합니다.',
+    '안정추구형 성향 기준 허용 범위를 벗어난 변동성 특성을 가진 종목입니다.',
     3
   ),
   (
@@ -460,11 +460,24 @@ insert into public.market_status (
   status_date,
   condition,
   volatility_score,
-  volume_score
+  volume_score,
+  index_quotes
 )
-values ('2026-07-07', 'caution', 61, 48)
+values (
+  '2026-07-07',
+  'caution',
+  61,
+  48,
+  '[
+    {"symbol":"KOSPI","label":"KOSPI","value":2790.30,"change":31.00,"change_percent":1.12},
+    {"symbol":"KOSDAQ","label":"KOSDAQ","value":829.43,"change":4.55,"change_percent":0.55},
+    {"symbol":"KOSPI200","label":"KOSPI 200","value":371.90,"change":4.28,"change_percent":1.16},
+    {"symbol":"USD/KRW","label":"원/달러","value":1220.00,"change":-2.00,"change_percent":-0.16}
+  ]'::jsonb
+)
 on conflict (status_date) do update set
   condition = excluded.condition,
   volatility_score = excluded.volatility_score,
   volume_score = excluded.volume_score,
+  index_quotes = excluded.index_quotes,
   updated_at = now();

@@ -2,6 +2,29 @@ import numpy as np
 import pandas as pd
 
 
+def restrict_signals_to_test_folds(
+    entries: pd.DataFrame,
+    weights: pd.DataFrame,
+    splits: list[dict],
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Block new baseline entries outside configured OOS test windows."""
+    index = pd.DatetimeIndex(entries.index).tz_localize(None)
+    eligible = pd.Series(False, index=index)
+    for split in splits:
+        eligible |= (index >= pd.to_datetime(split["test_start"])) & (
+            index <= pd.to_datetime(split["test_end"])
+        )
+
+    restricted_entries = entries.copy()
+    restricted_entries.index = index
+    restricted_entries.loc[~eligible.to_numpy(), :] = False
+
+    restricted_weights = weights.copy()
+    restricted_weights.index = index
+    restricted_weights = restricted_weights.where(restricted_entries, np.nan)
+    return restricted_entries, restricted_weights
+
+
 def generate_random_top_k_signals(
     price_df: pd.DataFrame, top_n: int, seed: int = 42
 ) -> tuple[pd.DataFrame, pd.DataFrame]:

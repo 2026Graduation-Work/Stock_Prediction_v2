@@ -57,6 +57,11 @@ raw/processed를 갱신하면 보통 새 캐시가 생성된다. 같은 파일 �
 내용을 바꾼 특수한 경우에는 `local.yaml`의 `data.version`에 새 식별자를 넣어 캐시를
 분리한다.
 
+비교실험의 종목 유니버스는 `data.tickers`에 6자리 코드 목록으로 고정한다. 실행 시점마다
+구성 종목이 달라지는 `KOSPI_TOP200` 실시간 별칭은 재현성 때문에 허용하지 않으며, 목록을
+만든 기준일과 코드를 실험 설정과 함께 보관한다. `data.start_date`/`data.end_date`는 모든
+자동 생성 fold의 최종 경계로 적용된다.
+
 `core/config.example.yaml`은 서비스 추론용 로컬 설정 템플릿입니다. 필요할 때만
 `core/config.yaml`으로 복사해 사용하며, 이 파일도 Git에 올리지 않습니다.
 

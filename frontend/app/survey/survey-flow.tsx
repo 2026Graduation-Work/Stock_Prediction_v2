@@ -468,8 +468,18 @@ function ResultSummary({
 
       <div className="px-6 py-8 sm:px-10 sm:py-10">
         <div className="grid gap-8 md:grid-cols-3">
-          <AxisGauge label="위험 감수" value={riskScore} caption="risk_tolerance" tone="brand" />
-          <AxisGauge label="심리 민감도" value={fomoScore} caption="fomo_index" tone="amber" />
+          <AxisGauge
+            label="위험 감수"
+            value={riskScore}
+            caption="손실과 변동성을 감수하는 정도"
+            tone="brand"
+          />
+          <AxisGauge
+            label="심리 민감도"
+            value={fomoScore}
+            caption="시장 분위기에 영향을 받는 정도"
+            tone="amber"
+          />
           <AxisGauge
             label="투자 기간"
             value={horizonScore}
@@ -498,15 +508,6 @@ function ResultSummary({
             선택한 유형은 추천 후보에서 제외되며, 그 외 성향 점수는 종목 제거가 아닌 정렬과 설명에만 사용됩니다.
           </p>
         </div>
-
-        <details className="mt-7 border-t border-line-soft pt-5">
-          <summary className="cursor-pointer text-sm font-bold text-brand">
-            생성된 프로필 JSON 보기
-          </summary>
-          <pre className="mt-3 max-h-[320px] overflow-auto rounded-lg bg-[#172033] p-4 text-xs leading-5 text-[#e8edf7]">
-            {JSON.stringify(result, null, 2)}
-          </pre>
-        </details>
 
         <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button

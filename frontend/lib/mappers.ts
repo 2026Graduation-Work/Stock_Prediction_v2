@@ -4,6 +4,7 @@ import type {
   HorizonDirection,
   InvestorProfileSummary,
   MarketCondition,
+  MarketIndexQuote,
   MarketStatus,
   PortfolioHolding,
   RecommendedStock,
@@ -60,6 +61,8 @@ export interface PredictionRow {
 
 export interface PortfolioHoldingRow {
   stock_code: string;
+  quantity: number;
+  avg_buy_price: number;
   display_order: number;
 }
 
@@ -68,6 +71,7 @@ export interface MarketStatusRow {
   condition: string;
   volatility_score: number;
   volume_score: number;
+  index_quotes: unknown;
 }
 
 export interface ExcludedStock {
@@ -100,9 +104,11 @@ const MARKET_CONDITIONS: MarketCondition[] = ["stable", "caution", "high_volatil
 export function mapMarketStatus(row: MarketStatusRow): MarketStatus {
   return {
     date: row.status_date,
+    source: "supabase",
     condition: includes(MARKET_CONDITIONS, row.condition) ? row.condition : "caution",
     volatilityScore: row.volatility_score,
     volumeScore: row.volume_score,
+    indexQuotes: toMarketIndexQuotes(row.index_quotes),
   };
 }
 
@@ -180,7 +186,36 @@ export function mapPortfolioHolding(
       prediction && includes(SIGNAL_LIGHTS, prediction.signal_light)
         ? prediction.signal_light
         : "neutral",
+    quantity: holding.quantity,
+    avgBuyPrice: holding.avg_buy_price,
   };
+}
+
+function toMarketIndexQuotes(value: unknown): MarketIndexQuote[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const quote = item as Record<string, unknown>;
+    if (
+      typeof quote.symbol !== "string" ||
+      typeof quote.label !== "string" ||
+      typeof quote.value !== "number" ||
+      typeof quote.change !== "number" ||
+      typeof quote.change_percent !== "number"
+    ) {
+      return [];
+    }
+    return [
+      {
+        symbol: quote.symbol,
+        label: quote.label,
+        value: quote.value,
+        change: quote.change,
+        changePercent: quote.change_percent,
+      },
+    ];
+  });
 }
 
 export function mapAvoidedAssetLabels(rows: AvoidedAssetRow[]): string[] {

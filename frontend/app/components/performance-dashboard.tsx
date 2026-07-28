@@ -30,11 +30,12 @@ import type {
   ComparisonResults,
   ComparisonSample,
 } from "@/lib/performance-types";
-import type { InvestorProfileSummary } from "@/lib/types";
+import type { InvestorProfileSummary, MarketStatus } from "@/lib/types";
 
 interface PerformanceDashboardProps {
   data: ComparisonResults;
   profile: InvestorProfileSummary;
+  marketStatus: MarketStatus;
 }
 
 const CONTROL_CONDITIONS = [
@@ -82,11 +83,13 @@ const CHART_SERIES = [
 export default function PerformanceDashboard({
   data,
   profile,
+  marketStatus,
 }: PerformanceDashboardProps) {
   return (
     <div className="min-h-screen w-full">
       <SiteHeader
         profile={profile}
+        marketStatus={marketStatus}
         activePage="performance"
         sectionLabel="모델 성능 비교"
       />
