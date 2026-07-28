@@ -16,15 +16,17 @@ from typing import Any
 import pandas as pd
 
 REQUIRED_COLUMNS = ("Date", "Code", "AvailableDate")
+RESERVED_SOURCE_COLUMNS = frozenset({"date", "code", "availabledate"})
+ALLOWED_BASE_TARGET_COLUMNS = frozenset({"y_label"})
 SUPPORTED_APPLY_PERIODS = {"one_day", "until_next_update"}
 SUPPORTED_MISSING_POLICIES = {"zero", "forward_fill", "drop", "error"}
 FORBIDDEN_FEATURE_COLUMNS = {
-    "Y_Label",
-    "Target",
-    "Target_H5",
-    "Target_H20",
-    "Next_Day_Return",
-    "Future_Return",
+    "y_label",
+    "target",
+    "target_h5",
+    "target_h20",
+    "next_day_return",
+    "future_return",
 }
 REQUIRED_BASE_COLUMNS = {
     "Date",
@@ -74,7 +76,13 @@ def _resolve_chart_path(value: str | Path) -> Path:
 
 
 def _normalize_date(series: pd.Series, column: str, source_name: str) -> pd.Series:
-    normalized = pd.to_datetime(series, errors="coerce", format="mixed")
+    # format="mixed"는 pandas 2.0부터 지원된다. 1.5는 dateutil 기반의 기존
+    # 벡터화 파서를 사용해 requirements.txt의 선언된 하한에서도 같은 계약을 지킨다.
+    pandas_major = int(pd.__version__.split(".", maxsplit=1)[0])
+    if pandas_major >= 2:
+        normalized = pd.to_datetime(series, errors="coerce", format="mixed")
+    else:
+        normalized = pd.to_datetime(series, errors="coerce")
     if getattr(normalized.dt, "tz", None) is not None:
         normalized = normalized.dt.tz_localize(None)
     if normalized.isna().any():
@@ -109,6 +117,24 @@ def _fingerprint(path: Path) -> dict[str, Any]:
     }
 
 
+def _canonical_column(column: object) -> str:
+    return str(column).strip().casefold()
+
+
+def _is_target_like_column(column: object) -> bool:
+    canonical = _canonical_column(column)
+    return (
+        canonical in FORBIDDEN_FEATURE_COLUMNS
+        or canonical.startswith(("target", "future_", "next_"))
+        or canonical.endswith("_label")
+    )
+
+
+def _is_forbidden_source_column(column: object) -> bool:
+    canonical = _canonical_column(column)
+    return canonical in RESERVED_SOURCE_COLUMNS or _is_target_like_column(canonical)
+
+
 def _parse_source_spec(source_config: dict[str, Any]) -> FeatureSourceSpec:
     required = ("name", "path", "apply_period", "columns")
     missing = [key for key in required if key not in source_config]
@@ -125,12 +151,19 @@ def _parse_source_spec(source_config: dict[str, Any]) -> FeatureSourceSpec:
             f"{name}: apply_period는 {sorted(SUPPORTED_APPLY_PERIODS)} 중 하나여야 합니다."
         )
 
-    columns = tuple(str(column) for column in source_config["columns"])
-    if not columns or len(columns) != len(set(columns)):
+    columns = tuple(str(column).strip() for column in source_config["columns"])
+    canonical_columns = tuple(_canonical_column(column) for column in columns)
+    if (
+        not columns
+        or any(not column for column in columns)
+        or len(columns) != len(set(canonical_columns))
+    ):
         raise FeatureContractError(f"{name}: columns는 중복 없는 한 개 이상의 컬럼이어야 합니다.")
-    forbidden = sorted(set(columns) & FORBIDDEN_FEATURE_COLUMNS)
+    forbidden = sorted(column for column in columns if _is_forbidden_source_column(column))
     if forbidden:
-        raise FeatureContractError(f"{name}: 미래 정보 또는 target 컬럼은 사용할 수 없습니다: {forbidden}")
+        raise FeatureContractError(
+            f"{name}: 키, 미래 정보 또는 target 컬럼은 사용할 수 없습니다: {forbidden}"
+        )
 
     missing_config = source_config.get("missing", {})
     if not isinstance(missing_config, dict):
@@ -353,9 +386,11 @@ def _apply_missing_policy(panel: pd.DataFrame, source: LoadedFeatureSource) -> p
         # until_next_update는 as-of join 자체가 직전 공개값을 전달한다. 여기서 다시
         # ffill하면 staleness 제한으로 비운 값을 되살릴 수 있으므로 one_day에만 적용한다.
         if source.spec.apply_period == "one_day":
-            panel[columns] = panel.groupby("Code", observed=True)[columns].ffill(
-                limit=source.spec.max_staleness_trading_days
-            )
+            limit = source.spec.max_staleness_trading_days
+            if limit:
+                panel[columns] = panel.groupby("Code", observed=True)[columns].ffill(
+                    limit=limit
+                )
     elif policy == "drop":
         panel = panel.loc[~original_missing.any(axis=1)].copy()
     elif policy == "error" and original_missing.any().any():
@@ -369,6 +404,18 @@ def _apply_missing_policy(panel: pd.DataFrame, source: LoadedFeatureSource) -> p
 
 def _select_base_columns(base: pd.DataFrame, features_config: dict[str, Any]) -> pd.DataFrame:
     """학습에 필요한 가격 메타데이터를 보존하면서 Alpha158 컬럼을 설정으로 좁힌다."""
+    forbidden_base = sorted(
+        str(column)
+        for column in base.columns
+        if _is_target_like_column(column)
+        and _canonical_column(column) not in ALLOWED_BASE_TARGET_COLUMNS
+    )
+    if forbidden_base:
+        raise FeatureContractError(
+            "기본 processed 패널에 미래 정보 또는 target 컬럼이 있습니다: "
+            f"{forbidden_base}"
+        )
+
     requested = features_config.get("base_columns", "*")
     excluded = {str(column) for column in features_config.get("exclude_columns", [])}
     protected = REQUIRED_BASE_COLUMNS & set(base.columns)
@@ -408,6 +455,8 @@ def assemble_feature_panel(base: pd.DataFrame, sources: list[LoadedFeatureSource
     panel["Code"] = _normalize_code(panel["Code"], "기본 processed 패널")
     if panel.duplicated(["Date", "Code"]).any():
         raise FeatureContractError("기본 processed 패널에 (Date, Code) 중복 행이 있습니다.")
+    # 결측 forward-fill은 현재 행 순서가 아니라 종목별 시간 순서에서만 안전하다.
+    panel = panel.sort_values(["Code", "Date"], kind="stable").reset_index(drop=True)
 
     report: dict[str, Any] = {"input_rows": int(len(panel)), "sources": {}}
     for source in sources:

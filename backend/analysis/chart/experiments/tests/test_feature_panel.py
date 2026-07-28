@@ -9,6 +9,7 @@ import pytest
 
 from experiments.features.panel_builder import (
     FeatureContractError,
+    _select_base_columns,
     assemble_feature_panel,
     build_feature_store,
     load_feature_sources,
@@ -185,6 +186,97 @@ def test_forward_fill_requires_and_respects_staleness_limit(tmp_path: Path) -> N
     assert pd.isna(panel.loc[0, "news_sentiment"])
     assert panel.loc[1:2, "news_sentiment"].tolist() == [0.7, 0.7]
     assert pd.isna(panel.loc[3, "news_sentiment"])
+
+
+def test_forward_fill_sorts_shuffled_base_before_propagating(tmp_path: Path) -> None:
+    """현재 공개값이 입력 행 순서 때문에 과거 날짜로 역류하면 안 된다."""
+    source_path = tmp_path / "shuffled_news.parquet"
+    pd.DataFrame(
+        {
+            "Date": ["2024-01-04"],
+            "Code": ["005930"],
+            "AvailableDate": ["2024-01-04"],
+            "news_sentiment": [0.7],
+        }
+    ).to_parquet(source_path, index=False)
+    base = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2024-01-04", "2024-01-02", "2024-01-03"]),
+            "Code": ["005930"] * 3,
+            "Close": [70200.0, 70000.0, 70100.0],
+        }
+    )
+    config = _source_config(
+        source_path,
+        missing={"policy": "forward_fill", "max_staleness_trading_days": 2},
+    )
+
+    panel, _ = assemble_feature_panel(base, load_feature_sources([config]))
+
+    assert panel["Date"].tolist() == list(
+        pd.to_datetime(["2024-01-02", "2024-01-03", "2024-01-04"])
+    )
+    assert panel["news_sentiment"].isna().tolist() == [True, True, False]
+    assert panel.loc[2, "news_sentiment"] == pytest.approx(0.7)
+
+
+@pytest.mark.parametrize(
+    "column",
+    [
+        "target",
+        " Target_H5 ",
+        "Y_LABEL",
+        "future_return",
+        "NEXT_DAY_RETURN",
+        " date ",
+        "CODE",
+        "availabledate",
+    ],
+)
+def test_rejects_target_like_and_reserved_source_columns(
+    tmp_path: Path, column: str
+) -> None:
+    config = _source_config(tmp_path / "unused.parquet", columns=[column])
+
+    with pytest.raises(FeatureContractError, match="키, 미래 정보 또는 target"):
+        load_feature_sources([config])
+
+
+@pytest.mark.parametrize("base_columns", ["*", ["alpha_feature", "TaRgEt_H5"]])
+def test_rejects_target_like_columns_in_base_panel(base_columns: object) -> None:
+    base = _base_panel()
+    base["TaRgEt_H5"] = [1.0, 0.0, -1.0, 1.0]
+
+    with pytest.raises(FeatureContractError, match="기본 processed 패널.*target"):
+        _select_base_columns(base, {"base_columns": base_columns})
+
+
+def test_allows_training_y_label_in_base_panel() -> None:
+    base = _base_panel()
+    base["Y_Label"] = [2, 0, 2, 1]
+
+    selected = _select_base_columns(base, {"base_columns": "*"})
+
+    assert selected["Y_Label"].tolist() == [2, 0, 2, 1]
+
+
+def test_mixed_date_formats_follow_declared_pandas_contract(tmp_path: Path) -> None:
+    source_path = tmp_path / "mixed_dates.parquet"
+    pd.DataFrame(
+        {
+            "Date": ["2024-01-02", "2024.01.03 09:00"],
+            "Code": ["005930", "005930"],
+            "AvailableDate": ["2024/01/02", "2024-01-03 09:00:00"],
+            "news_sentiment": [0.1, 0.2],
+        }
+    ).to_parquet(source_path, index=False)
+
+    loaded = load_feature_sources([_source_config(source_path)])[0].frame
+
+    assert loaded["Date"].tolist() == list(pd.to_datetime(["2024-01-02", "2024-01-03"]))
+    assert loaded["AvailableDate"].tolist() == list(
+        pd.to_datetime(["2024-01-02", "2024-01-03"])
+    )
 
 
 def test_rejects_duplicate_available_date_for_one_code(tmp_path: Path) -> None:
