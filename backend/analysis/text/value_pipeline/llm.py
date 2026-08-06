@@ -37,7 +37,7 @@ T = TypeVar("T", bound=BaseModel)
 CACHE_DIR = Path(__file__).parent / "llm_cache"
 
 # 프롬프트 템플릿을 바꾸면 이 값을 올린다 → 캐시 키가 바뀌어 옛 답이 재사용되지 않는다.
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 
 
 class LLMCacheMissError(RuntimeError):
