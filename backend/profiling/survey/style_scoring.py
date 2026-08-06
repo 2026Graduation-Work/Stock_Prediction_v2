@@ -23,10 +23,10 @@ from typing import Any, Final
 
 from style_questions import (
     AXIS_IDS,
-    HOLDING_HORIZON_MONTH_RULES,
     LIKERT_EXTREME,
     LIKERT_NEUTRAL,
     LIKERT_OPTIONS,
+    TURNOVER_MONTH_RULES,
     questions_for_mode,
 )
 
@@ -131,9 +131,9 @@ CONTRADICTION_RULES: Final = (
     },
     {
         "id": "long_horizon_but_reactive",
-        "axes": ("holding_horizon", "urgency", "drawdown_reaction"),
+        "axes": ("turnover", "urgency", "drawdown_reaction"),
         "conditions": {
-            "holding_horizon": ("<=", -0.20),
+            "turnover": ("<=", -0.20),
             "urgency": (">=", 0.30),
             "drawdown_reaction": (">=", 0.20),
         },
@@ -162,10 +162,10 @@ CONTRADICTION_RULES: Final = (
     },
     {
         "id": "benchmark_focused_but_short_horizon",
-        "axes": ("market_participation", "holding_horizon"),
+        "axes": ("market_participation", "turnover"),
         "conditions": {
             "market_participation": ("<=", -0.30),
-            "holding_horizon": (">=", 0.30),
+            "turnover": (">=", 0.30),
         },
         "severity": "caution",
         "observation": "시장 지수를 따라가는 성과를 중시하면서 보유 기간은 짧게 가져가려 합니다.",
@@ -231,17 +231,17 @@ def reduce_to_legacy_fields(style_axes: dict[str, Any]) -> dict[str, float | int
         field: round((by_id[axis_id]["ratio"] + 1) / 2, 6)
         for field, axis_id in LEGACY_RATIO_FIELDS
     }
-    reduced["time_horizon_months"] = months_for_holding_horizon(
-        by_id["holding_horizon"]["ratio"]
+    reduced["time_horizon_months"] = months_for_turnover(
+        by_id["turnover"]["ratio"]
     )
     return reduced
 
 
-def months_for_holding_horizon(ratio: float) -> int:
-    """holding_horizon ratio를 투자 기간(개월)으로 옮긴다."""
+def months_for_turnover(ratio: float) -> int:
+    """turnover ratio를 투자 기간(개월)으로 옮긴다."""
     if not -1.0 <= ratio <= 1.0:
-        raise StyleAnswerError("holding_horizon ratio must be between -1 and 1")
-    for rule in HOLDING_HORIZON_MONTH_RULES:
+        raise StyleAnswerError("turnover ratio must be between -1 and 1")
+    for rule in TURNOVER_MONTH_RULES:
         if ratio < rule["max_ratio"]:
             return int(rule["months"])
     raise AssertionError("horizon rules must cover the full -1..1 range")

@@ -17,7 +17,7 @@ from style_scoring import (
     StyleAnswerError,
     confidence_per_axis,
     detect_contradictions,
-    months_for_holding_horizon,
+    months_for_turnover,
     reduce_to_legacy_fields,
     score_style_axes,
 )
@@ -210,7 +210,7 @@ def test_rule_loss_averse_but_concentrated():
 
 def test_rule_long_horizon_but_reactive():
     assert "long_horizon_but_reactive" in _detect_for(
-        {"holding_horizon": -0.5, "urgency": 0.5, "drawdown_reaction": 0.5}
+        {"turnover": -0.5, "urgency": 0.5, "drawdown_reaction": 0.5}
     )
 
 
@@ -228,7 +228,7 @@ def test_rule_herding_but_concentrated():
 
 def test_rule_benchmark_focused_but_short_horizon():
     assert "benchmark_focused_but_short_horizon" in _detect_for(
-        {"market_participation": -0.5, "holding_horizon": 0.5}
+        {"market_participation": -0.5, "turnover": 0.5}
     )
 
 
@@ -309,19 +309,19 @@ def test_reduced_values_stay_inside_the_v1_0_range():
                 assert 0.0 <= value <= 1.0
 
 
-def test_longer_holding_horizon_means_more_months():
-    months = [months_for_holding_horizon(r) for r in (-1.0, -0.5, 0.0, 0.5, 1.0)]
+def test_lower_turnover_means_more_months():
+    months = [months_for_turnover(r) for r in (-1.0, -0.5, 0.0, 0.5, 1.0)]
     assert months == sorted(months, reverse=True)
 
 
-def test_holding_horizon_rules_cover_the_whole_range():
+def test_turnover_rules_cover_the_whole_range():
     for ratio in (-1.0, -0.6, -0.2, 0.0, 0.2, 0.6, 1.0):
-        assert months_for_holding_horizon(ratio) > 0
+        assert months_for_turnover(ratio) > 0
 
 
 def test_out_of_range_horizon_ratio_is_rejected():
     with pytest.raises(StyleAnswerError):
-        months_for_holding_horizon(1.5)
+        months_for_turnover(1.5)
 
 
 def test_confidence_per_axis_maps_to_legacy_field_names():

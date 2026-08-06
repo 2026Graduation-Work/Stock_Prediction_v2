@@ -45,10 +45,10 @@ AXES: Final = (
         "help": "원금이 줄어드는 것을 어디까지 견딜 수 있는지",
     },
     {
-        "id": "holding_horizon",
+        "id": "turnover",
         "negative_label": "장기 보유",
-        "positive_label": "단기 회전",
-        "section": "보유 기간",
+        "positive_label": "단기 매매",
+        "section": "보유 기간과 회전",
         "help": "한번 산 종목을 얼마나 오래 들고 갈 생각인지",
     },
     {
@@ -175,42 +175,42 @@ STYLE_QUESTIONS: Final = (
         "quick": False,
         "text": "손실이 나더라도 회복될 시간이 있다면 크게 걱정하지 않는다.",
     },
-    # ── holding_horizon ─────────────────────────────────────────────────────
+    # ── turnover ────────────────────────────────────────────────────────────
     {
-        "id": "hh01",
-        "axis": "holding_horizon",
+        "id": "tv01",
+        "axis": "turnover",
         "direction": 1,
         "weight": 1,
         "quick": True,
         "text": "한번 산 종목도 몇 달 안에 정리하는 편이 낫다고 생각한다.",
     },
     {
-        "id": "hh02",
-        "axis": "holding_horizon",
+        "id": "tv02",
+        "axis": "turnover",
         "direction": -1,
         "weight": 1,
         "quick": True,
         "text": "좋다고 판단한 종목은 몇 년이든 그대로 들고 가는 것이 맞다.",
     },
     {
-        "id": "hh03",
-        "axis": "holding_horizon",
+        "id": "tv03",
+        "axis": "turnover",
         "direction": 1,
         "weight": 1,
         "quick": True,
         "text": "수익이 조금이라도 나면 빨리 실현하고 싶다.",
     },
     {
-        "id": "hh04",
-        "axis": "holding_horizon",
+        "id": "tv04",
+        "axis": "turnover",
         "direction": -1,
         "weight": 1,
         "quick": False,
         "text": "이 투자금은 오랫동안 쓰지 않아도 괜찮다.",
     },
     {
-        "id": "hh05",
-        "axis": "holding_horizon",
+        "id": "tv05",
+        "axis": "turnover",
         "direction": 1,
         "weight": 1,
         "quick": False,
@@ -435,10 +435,10 @@ def questions_for_mode(mode: str) -> tuple[dict, ...]:
     return tuple(question for question in STYLE_QUESTIONS if question["quick"])
 
 
-# holding_horizon.ratio → time_horizon_months 구간표.
+# turnover.ratio → time_horizon_months 구간표.
 # schema의 style_axes 설명이 이 테이블을 SSOT로 지목한다.
-# ratio가 작을수록(장기 보유) 개월 수가 커진다.
-HOLDING_HORIZON_MONTH_RULES: Final = (
+# 회전율이 낮을수록(= ratio가 작을수록, 장기 보유) 개월 수가 커진다.
+TURNOVER_MONTH_RULES: Final = (
     {"max_ratio": -0.60, "months": 120},
     {"max_ratio": -0.20, "months": 60},
     {"max_ratio": 0.20, "months": 36},

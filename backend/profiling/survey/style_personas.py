@@ -29,7 +29,7 @@ PERSONAS: Final = (
         "pattern": {
             "market_participation": -1,
             "loss_tolerance": -2,
-            "holding_horizon": -2,
+            "turnover": -2,
             "concentration": -2,
             "rule_adherence": -2,
             "information_reliance": -1,
@@ -47,7 +47,7 @@ PERSONAS: Final = (
         "pattern": {
             "market_participation": -1,
             "loss_tolerance": -1,
-            "holding_horizon": 1,
+            "turnover": 1,
             "concentration": 2,
             "rule_adherence": 2,
             "information_reliance": 2,
@@ -65,7 +65,7 @@ PERSONAS: Final = (
         "pattern": {
             "market_participation": -2,
             "loss_tolerance": 1,
-            "holding_horizon": -2,
+            "turnover": -2,
             "concentration": -2,
             "rule_adherence": -2,
             "information_reliance": -2,
