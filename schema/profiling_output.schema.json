@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/2026Graduation-Work/Stock_Prediction_v2/schema/profiling_output.schema.json",
   "title": "Profiling Block Output Schema",
-  "description": "profiling 블록(설문/사용자 프로파일링)이 analysis 블록·platform으로 넘기는 표준 인터페이스. v1.0 FREEZE (2026-07-07). 회의(7/6) 결정 반영: 회피 제약(하드/소프트 분리), 보유 종목(포트폴리오 히트맵), 3축(risk/fomo/horizon) 매핑 명시. v1.1 (2026-07-28) additive 확장: style_axes·contradictions 추가. v1.0으로 유효한 문서는 v1.1에서도 그대로 유효하며, 기존 필드의 의미·필수 여부는 변경하지 않았다. 신규 블록은 모두 optional이므로 chart·text 블록은 영향을 받지 않는다.",
+  "description": "profiling 블록(설문/사용자 프로파일링)이 analysis 블록·platform으로 넘기는 표준 인터페이스. v1.0 FREEZE (2026-07-07). 회의(7/6) 결정 반영: 회피 제약(하드/소프트 분리), 보유 종목(포트폴리오 히트맵), 3축(risk/fomo/horizon) 매핑 명시. v1.1 (2026-07-28) additive 확장: style_axes·contradictions·investor_profile.time_horizon_days 추가. v1.0으로 유효한 문서는 v1.1에서도 그대로 유효하며, 기존 필드의 의미·필수 여부는 변경하지 않았다. 신규 블록은 모두 optional이므로 chart·text 블록은 영향을 받지 않는다.",
   "version": "1.1.0",
   "type": "object",
   "required": ["user_id", "session_id", "timestamp", "investor_profile", "psychological_state", "constraints", "context", "meta"],
@@ -17,7 +17,8 @@
       "required": ["risk_tolerance", "time_horizon_months", "liquidity_need_ratio", "target_return_annual", "investment_experience_years", "profile_type"],
       "properties": {
         "risk_tolerance": { "type": "number", "minimum": 0, "maximum": 1, "description": "위험 감수도(3축의 risk). 0=극보수, 1=극공격" },
-        "time_horizon_months": { "type": "integer", "minimum": 0, "description": "투자 기간(개월). 3축의 horizon 원천" },
+        "time_horizon_months": { "type": "integer", "minimum": 0, "description": "투자 기간(개월). 3축의 horizon 원천. v1.0 freeze 대상이며 DB 컬럼(profiles.time_horizon_months)·frontend/lib/types.ts가 이 단위에 묶여 있어 단위를 바꾸지 않는다. time_horizon_days가 있으면 round(time_horizon_days / 30)과 일치해야 한다." },
+        "time_horizon_days": { "type": "integer", "minimum": 0, "description": "[v1.1 신규 · optional] 투자 기간(일). 개월 단위로는 1개월 미만 구간이 전부 0으로 뭉개져 단기 매매 성향(turnover 축 양극)을 구분할 수 없어 추가했다. 있으면 이 값이 더 정밀한 표현이고, time_horizon_months는 여기서 반올림해 채운다. 없으면 기존대로 time_horizon_months만 쓴다." },
         "liquidity_need_ratio": { "type": "number", "minimum": 0, "maximum": 1, "description": "유동성 필요도. RRTTLLU의 L" },
         "target_return_annual": { "type": "number", "description": "연 목표 수익률. 0.10 = 10%" },
         "investment_experience_years": { "type": "number", "minimum": 0, "description": "투자 경험(년)" },
@@ -92,7 +93,7 @@
 
     "style_axes": {
       "type": "object",
-      "description": "[v1.1 신규 · optional] 8축 투자스타일 진단 결과. 축당 복수 문항(리커트 5점)에 가중치를 적용해 산출한다. 100% 결정론 — 같은 응답이면 같은 축 점수가 나오며 LLM을 쓰지 않는다. 이 블록 자체는 소프트 틸트다: 종목 제거에 쓰지 않는다. 하드 제약은 constraints.avoided_assets뿐이다. 기존 v1.0 필드는 아래 축약 규칙으로 계속 채우므로 v1.0 소비자(chart·text·platform)는 변경 없이 동작한다 — risk_tolerance = (loss_tolerance.ratio + 1) / 2, fomo_index = (urgency.ratio + 1) / 2, panic_sell_tendency = (drawdown_reaction.ratio + 1) / 2, herding_score = (information_reliance.ratio + 1) / 2, time_horizon_months = turnover.ratio의 구간 매핑(구간표는 backend/profiling 상수 테이블이 SSOT. turnover가 높을수록 짧다). self_confidence·liquidity_need_ratio 등 나머지 v1.0 필드는 축약 대상이 아니며 기존 산출 방식을 유지한다. confidence_per_field의 각 값은 대응 축의 confidence를 그대로 쓴다.",
+      "description": "[v1.1 신규 · optional] 8축 투자스타일 진단 결과. 축당 복수 문항(리커트 5점)에 가중치를 적용해 산출한다. 100% 결정론 — 같은 응답이면 같은 축 점수가 나오며 LLM을 쓰지 않는다. 이 블록 자체는 소프트 틸트다: 종목 제거에 쓰지 않는다. 하드 제약은 constraints.avoided_assets뿐이다. 기존 v1.0 필드는 아래 축약 규칙으로 계속 채우므로 v1.0 소비자(chart·text·platform)는 변경 없이 동작한다 — risk_tolerance = (loss_tolerance.ratio + 1) / 2, fomo_index = (urgency.ratio + 1) / 2, panic_sell_tendency = (drawdown_reaction.ratio + 1) / 2, herding_score = (information_reliance.ratio + 1) / 2, time_horizon_days = turnover.ratio의 구간 매핑(구간표는 backend/profiling 상수 테이블이 SSOT. turnover가 높을수록 짧다) → time_horizon_months = round(time_horizon_days / 30). self_confidence·liquidity_need_ratio 등 나머지 v1.0 필드는 축약 대상이 아니며 기존 산출 방식을 유지한다. confidence_per_field의 각 값은 대응 축의 confidence를 그대로 쓴다.",
       "required": ["assessment_mode", "axes"],
       "properties": {
         "assessment_mode": {

@@ -6,6 +6,7 @@
   "investor_profile": {
     "risk_tolerance": 0.35,
     "time_horizon_months": 48,
+    "time_horizon_days": 1440,
     "liquidity_need_ratio": 0.25,
     "target_return_annual": 0.08,
     "investment_experience_years": 1.0,
