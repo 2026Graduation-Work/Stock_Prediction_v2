@@ -7,7 +7,7 @@
 
 CSV 또는 Parquet 한 행은 학습·평가에 쓰는 `날짜 × 종목` 관측치를 나타내며 다음 컬럼이 필요하다.
 
-- 키: `Date`, `Code`
+- 키: `Date`(`YYYY-MM-DD`, 시간 정보 없음), `Code`(앞자리 0을 보존한 6자리 문자열)
 - Baseline: `config.yaml`의 `features.baseline` 또는 기준 모델의 `feature_names`
 - Treatment 전용: `synthetic_psychology_index`, `news_sentiment`
 - 정답: `Target_H20`(stable), `Target_H5`(aggressive), 모두 0/1

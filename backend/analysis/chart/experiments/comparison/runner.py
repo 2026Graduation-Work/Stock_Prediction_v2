@@ -75,7 +75,12 @@ def resolve_feature_sets(config: dict[str, Any], config_dir: Path) -> tuple[list
     return baseline, treatment
 
 
-def _read_input(path: Path, columns: list[str]) -> pd.DataFrame:
+def _read_input(
+    path: Path,
+    columns: list[str],
+    *,
+    string_columns: Sequence[str] = (),
+) -> pd.DataFrame:
     if not path.exists():
         raise FileNotFoundError(
             f"comparison input not found: {path}. Build the feature table before running results."
@@ -96,7 +101,8 @@ def _read_input(path: Path, columns: list[str]) -> pd.DataFrame:
                 raise ComparisonConfigError(
                     f"comparison input missing columns: {missing}. Available: {available}"
                 )
-            return pd.read_csv(path, usecols=columns)
+            string_dtypes = {column: "string" for column in string_columns}
+            return pd.read_csv(path, usecols=columns, dtype=string_dtypes)
     except ComparisonConfigError:
         raise
     except Exception as exc:
@@ -163,15 +169,32 @@ def prepare_common_data(
         )
     )
     input_path = input_override or _resolve_path(data_config["input_path"], config_dir)
-    frame = _read_input(input_path, required_columns)
+    frame = _read_input(input_path, required_columns, string_columns=(code_column,))
 
     absent = [column for column in required_columns if column not in frame.columns]
     if absent:
         raise ComparisonConfigError(f"comparison input missing columns: {absent}")
-    frame[date_column] = pd.to_datetime(frame[date_column], errors="coerce")
-    if frame[date_column].isna().any():
+    parsed_dates = pd.to_datetime(frame[date_column], errors="coerce")
+    if parsed_dates.isna().any():
         raise ComparisonConfigError("comparison input contains invalid dates")
-    frame[code_column] = frame[code_column].astype("string")
+    normalized_dates = parsed_dates.dt.normalize()
+    if parsed_dates.ne(normalized_dates).any():
+        raise ComparisonConfigError(
+            f"data.{date_column} must contain date-only values without time information"
+        )
+    frame[date_column] = normalized_dates
+
+    raw_codes = frame[code_column]
+    non_string_codes = raw_codes.map(lambda value: not isinstance(value, str))
+    codes = raw_codes.astype("string").str.strip()
+    invalid_codes = ~codes.str.fullmatch(r"\d{6}", na=False)
+    if non_string_codes.any() or invalid_codes.any():
+        invalid = non_string_codes | invalid_codes
+        sample = raw_codes.loc[invalid].head(5).tolist()
+        raise ComparisonConfigError(
+            f"data.{code_column} must contain six-digit strings; found {sample}"
+        )
+    frame[code_column] = codes
 
     universe = [str(code) for code in data_config.get("universe", [])]
     if universe:

@@ -4,7 +4,15 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-from experiments.comparison.runner import ComparisonConfigError, run_comparison
+import yaml
+from experiments.comparison.runner import (
+    ComparisonConfigError,
+    prepare_common_data,
+    resolve_feature_sets,
+    run_comparison,
+)
+
+CHART_DIR = Path(__file__).resolve().parents[3]
 
 
 def _fixture(seed: int = 7) -> pd.DataFrame:
@@ -85,6 +93,50 @@ def _config(input_path: Path, output_path: Path) -> dict:
         },
         "output_dir": str(output_path),
     }
+
+
+def test_example_config_resolves_tracked_baseline_model() -> None:
+    config_path = CHART_DIR / "experiments" / "comparison" / "config.example.yaml"
+    config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    baseline, treatment = resolve_feature_sets(config, config_path.parent)
+
+    assert len(baseline) == 161
+    assert treatment == ["synthetic_psychology_index", "news_sentiment"]
+
+
+def test_csv_input_preserves_six_digit_code_keys(tmp_path: Path) -> None:
+    input_path = tmp_path / "comparison.csv"
+    frame = _fixture()
+    frame.to_csv(input_path, index=False)
+
+    train, test, *_ = prepare_common_data(
+        _config(input_path, tmp_path / "results"), config_dir=tmp_path
+    )
+
+    expected_codes = set(frame["Code"])
+    assert set(train["Code"]) == expected_codes
+    assert set(test["Code"]) == expected_codes
+
+
+def test_rejects_numeric_code_keys_instead_of_padding_them(tmp_path: Path) -> None:
+    input_path = tmp_path / "numeric-code.parquet"
+    frame = _fixture()
+    frame["Code"] = frame["Code"].astype(int)
+    frame.to_parquet(input_path, index=False)
+
+    with pytest.raises(ComparisonConfigError, match="six-digit strings"):
+        prepare_common_data(_config(input_path, tmp_path / "results"), config_dir=tmp_path)
+
+
+def test_rejects_intraday_values_in_date_key(tmp_path: Path) -> None:
+    input_path = tmp_path / "intraday.parquet"
+    frame = _fixture()
+    frame.loc[0, "Date"] += pd.Timedelta(hours=9)
+    frame.to_parquet(input_path, index=False)
+
+    with pytest.raises(ComparisonConfigError, match="date-only"):
+        prepare_common_data(_config(input_path, tmp_path / "results"), config_dir=tmp_path)
 
 
 def test_runs_four_models_and_writes_both_required_tables(tmp_path: Path) -> None:
