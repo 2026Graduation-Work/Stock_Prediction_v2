@@ -19,5 +19,5 @@ yfinance>=0.2.0
 quantstats>=0.0.59
 
 # ── 실험 분석 대시보드 ─────────────────────────
-streamlit>=1.20.0
+streamlit>=1.60.0
 plotly>=5.10.0
