@@ -26,7 +26,7 @@ from style_questions import (
     LIKERT_EXTREME,
     LIKERT_NEUTRAL,
     LIKERT_OPTIONS,
-    TURNOVER_MONTH_RULES,
+    TURNOVER_DAY_RULES,
     questions_for_mode,
 )
 
@@ -231,20 +231,29 @@ def reduce_to_legacy_fields(style_axes: dict[str, Any]) -> dict[str, float | int
         field: round((by_id[axis_id]["ratio"] + 1) / 2, 6)
         for field, axis_id in LEGACY_RATIO_FIELDS
     }
-    reduced["time_horizon_months"] = months_for_turnover(
-        by_id["turnover"]["ratio"]
-    )
+    days = days_for_turnover(by_id["turnover"]["ratio"])
+    reduced["time_horizon_days"] = days
+    reduced["time_horizon_months"] = months_for_days(days)
     return reduced
 
 
-def months_for_turnover(ratio: float) -> int:
-    """turnover ratio를 투자 기간(개월)으로 옮긴다."""
+def days_for_turnover(ratio: float) -> int:
+    """turnover ratio를 투자 기간(일)으로 옮긴다.
+
+    schema v1.1의 축약 규칙에서 이쪽이 1차 산출값이고,
+    v1.0의 time_horizon_months는 여기서 파생된다.
+    """
     if not -1.0 <= ratio <= 1.0:
         raise StyleAnswerError("turnover ratio must be between -1 and 1")
-    for rule in TURNOVER_MONTH_RULES:
+    for rule in TURNOVER_DAY_RULES:
         if ratio < rule["max_ratio"]:
-            return int(rule["months"])
+            return int(rule["days"])
     raise AssertionError("horizon rules must cover the full -1..1 range")
+
+
+def months_for_days(days: int) -> int:
+    """투자 기간(일)을 v1.0의 time_horizon_months로 옮긴다."""
+    return round(days / 30)
 
 
 def confidence_per_axis(style_axes: dict[str, Any]) -> dict[str, float]:

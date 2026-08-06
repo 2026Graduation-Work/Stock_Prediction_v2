@@ -435,13 +435,20 @@ def questions_for_mode(mode: str) -> tuple[dict, ...]:
     return tuple(question for question in STYLE_QUESTIONS if question["quick"])
 
 
-# turnover.ratio → time_horizon_months 구간표.
+# turnover.ratio → time_horizon_days 구간표.
 # schema의 style_axes 설명이 이 테이블을 SSOT로 지목한다.
-# 회전율이 낮을수록(= ratio가 작을수록, 장기 보유) 개월 수가 커진다.
-TURNOVER_MONTH_RULES: Final = (
-    {"max_ratio": -0.60, "months": 120},
-    {"max_ratio": -0.20, "months": 60},
-    {"max_ratio": 0.20, "months": 36},
-    {"max_ratio": 0.60, "months": 18},
-    {"max_ratio": 1.01, "months": 6},
+# 회전율이 낮을수록(= ratio가 작을수록, 장기 보유) 기간이 길어진다.
+#
+# v1.0의 time_horizon_months는 여기서 round(days / 30)으로 파생된다.
+# 값은 기존 개월 구간(120·60·36·18·6)을 그대로 일 단위로 옮긴 것이라
+# 파생된 개월 수가 리네임 전과 동일하다 — 표현 단위만 바뀌고 동작은 그대로다.
+#
+# 1개월 미만 구간(단타·스윙)은 아직 나누지 않았다. 나누면 파생 개월 수가
+# 0이 되어 대시보드 horizon_score 매핑까지 같이 정해야 하므로 별도 논의 대상이다.
+TURNOVER_DAY_RULES: Final = (
+    {"max_ratio": -0.60, "days": 3600},
+    {"max_ratio": -0.20, "days": 1800},
+    {"max_ratio": 0.20, "days": 1080},
+    {"max_ratio": 0.60, "days": 540},
+    {"max_ratio": 1.01, "days": 180},
 )

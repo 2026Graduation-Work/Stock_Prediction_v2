@@ -64,7 +64,8 @@ backend/analysis/chart · backend/analysis/text 는 이 JSON을 모델 입력 �
 | `fomo_index` | `urgency` |
 | `panic_sell_tendency` | `drawdown_reaction` |
 | `herding_score` | `information_reliance` |
-| `time_horizon_months` | `turnover` (구간표는 `style_questions.TURNOVER_MONTH_RULES`가 SSOT) |
+| `time_horizon_days` (v1.1 optional) | `turnover` (구간표는 `style_questions.TURNOVER_DAY_RULES`가 SSOT) |
+| `time_horizon_months` | `round(time_horizon_days / 30)` |
 
 ### 모순 검출
 

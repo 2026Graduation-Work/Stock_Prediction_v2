@@ -9,6 +9,7 @@ from style_questions import (
     AXIS_IDS,
     LIKERT_NEUTRAL,
     STYLE_QUESTIONS,
+    TURNOVER_DAY_RULES,
     questions_for_mode,
 )
 from style_scoring import (
@@ -16,8 +17,9 @@ from style_scoring import (
     MIN_CONFIDENCE_FOR_CONTRADICTION,
     StyleAnswerError,
     confidence_per_axis,
+    days_for_turnover,
     detect_contradictions,
-    months_for_turnover,
+    months_for_days,
     reduce_to_legacy_fields,
     score_style_axes,
 )
@@ -303,25 +305,39 @@ def test_reduced_values_stay_inside_the_v1_0_range():
         answers = {q["id"]: extreme for q in questions_for_mode("detailed")}
         reduced = reduce_to_legacy_fields(score_style_axes(answers, "detailed"))
         for field, value in reduced.items():
-            if field == "time_horizon_months":
+            if field in ("time_horizon_months", "time_horizon_days"):
                 assert value >= 0
             else:
                 assert 0.0 <= value <= 1.0
 
 
-def test_lower_turnover_means_more_months():
-    months = [months_for_turnover(r) for r in (-1.0, -0.5, 0.0, 0.5, 1.0)]
-    assert months == sorted(months, reverse=True)
+def test_lower_turnover_means_a_longer_horizon():
+    days = [days_for_turnover(r) for r in (-1.0, -0.5, 0.0, 0.5, 1.0)]
+    assert days == sorted(days, reverse=True)
 
 
 def test_turnover_rules_cover_the_whole_range():
     for ratio in (-1.0, -0.6, -0.2, 0.0, 0.2, 0.6, 1.0):
-        assert months_for_turnover(ratio) > 0
+        assert days_for_turnover(ratio) > 0
 
 
 def test_out_of_range_horizon_ratio_is_rejected():
     with pytest.raises(StyleAnswerError):
-        months_for_turnover(1.5)
+        days_for_turnover(1.5)
+
+
+def test_months_are_derived_from_days():
+    """schema v1.1 축약 규칙: months = round(days / 30)."""
+    for extreme in (1, 5):
+        answers = {q["id"]: extreme for q in questions_for_mode("detailed")}
+        reduced = reduce_to_legacy_fields(score_style_axes(answers, "detailed"))
+        assert reduced["time_horizon_months"] == round(reduced["time_horizon_days"] / 30)
+
+
+def test_day_rules_keep_the_pre_rename_month_buckets():
+    """일 단위 전환은 표현만 바꾼다. 파생 개월 수는 리네임 전과 같아야 한다."""
+    expected = [120, 60, 36, 18, 6]
+    assert [months_for_days(rule["days"]) for rule in TURNOVER_DAY_RULES] == expected
 
 
 def test_confidence_per_axis_maps_to_legacy_field_names():
