@@ -33,7 +33,7 @@ jobs:
       chart: ${{ steps.filter.outputs.chart }}
       text: ${{ steps.filter.outputs.text }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v3
         id: filter
         with:
@@ -63,7 +63,7 @@ jobs:
       run:
         working-directory: backend/profiling/survey
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -91,7 +91,7 @@ jobs:
     if: ${{ needs.changes.outputs.chart == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
@@ -122,7 +122,7 @@ jobs:
     if: ${{ needs.changes.outputs.text == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-python@v5
         with:
