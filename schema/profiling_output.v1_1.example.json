@@ -31,7 +31,7 @@
     "axes": [
       { "axis_id": "market_participation", "ratio": -0.10, "confidence": 0.74, "answered_count": 10, "question_count": 10 },
       { "axis_id": "loss_tolerance", "ratio": -0.30, "confidence": 0.92, "answered_count": 10, "question_count": 10 },
-      { "axis_id": "holding_horizon", "ratio": -0.40, "confidence": 0.88, "answered_count": 10, "question_count": 10 },
+      { "axis_id": "turnover", "ratio": -0.40, "confidence": 0.88, "answered_count": 10, "question_count": 10 },
       { "axis_id": "concentration", "ratio": 0.45, "confidence": 0.81, "answered_count": 10, "question_count": 10 },
       { "axis_id": "rule_adherence", "ratio": 0.25, "confidence": 0.66, "answered_count": 9, "question_count": 10 },
       { "axis_id": "information_reliance", "ratio": 0.16, "confidence": 0.85, "answered_count": 10, "question_count": 10 },
@@ -50,7 +50,7 @@
     },
     {
       "id": "long_horizon_but_reactive",
-      "axes": ["holding_horizon", "urgency", "drawdown_reaction"],
+      "axes": ["turnover", "urgency", "drawdown_reaction"],
       "severity": "caution",
       "observation": "투자 기간은 길게 잡았지만 조급함과 하락 시 이탈 경향이 함께 높게 나왔습니다.",
       "follow_up_question": "하락 폭이 어느 정도일 때 계획을 다시 보고 싶으신가요?"

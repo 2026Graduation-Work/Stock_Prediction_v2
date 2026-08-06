@@ -92,7 +92,7 @@
 
     "style_axes": {
       "type": "object",
-      "description": "[v1.1 신규 · optional] 8축 투자스타일 진단 결과. 축당 복수 문항(리커트 5점)에 가중치를 적용해 산출한다. 100% 결정론 — 같은 응답이면 같은 축 점수가 나오며 LLM을 쓰지 않는다. 이 블록 자체는 소프트 틸트다: 종목 제거에 쓰지 않는다. 하드 제약은 constraints.avoided_assets뿐이다. 기존 v1.0 필드는 아래 축약 규칙으로 계속 채우므로 v1.0 소비자(chart·text·platform)는 변경 없이 동작한다 — risk_tolerance = (loss_tolerance.ratio + 1) / 2, fomo_index = (urgency.ratio + 1) / 2, panic_sell_tendency = (drawdown_reaction.ratio + 1) / 2, herding_score = (information_reliance.ratio + 1) / 2, time_horizon_months = holding_horizon.ratio의 구간 매핑(구간표는 backend/profiling 상수 테이블이 SSOT). self_confidence·liquidity_need_ratio 등 나머지 v1.0 필드는 축약 대상이 아니며 기존 산출 방식을 유지한다. confidence_per_field의 각 값은 대응 축의 confidence를 그대로 쓴다.",
+      "description": "[v1.1 신규 · optional] 8축 투자스타일 진단 결과. 축당 복수 문항(리커트 5점)에 가중치를 적용해 산출한다. 100% 결정론 — 같은 응답이면 같은 축 점수가 나오며 LLM을 쓰지 않는다. 이 블록 자체는 소프트 틸트다: 종목 제거에 쓰지 않는다. 하드 제약은 constraints.avoided_assets뿐이다. 기존 v1.0 필드는 아래 축약 규칙으로 계속 채우므로 v1.0 소비자(chart·text·platform)는 변경 없이 동작한다 — risk_tolerance = (loss_tolerance.ratio + 1) / 2, fomo_index = (urgency.ratio + 1) / 2, panic_sell_tendency = (drawdown_reaction.ratio + 1) / 2, herding_score = (information_reliance.ratio + 1) / 2, time_horizon_months = turnover.ratio의 구간 매핑(구간표는 backend/profiling 상수 테이블이 SSOT. turnover가 높을수록 짧다). self_confidence·liquidity_need_ratio 등 나머지 v1.0 필드는 축약 대상이 아니며 기존 산출 방식을 유지한다. confidence_per_field의 각 값은 대응 축의 confidence를 그대로 쓴다.",
       "required": ["assessment_mode", "axes"],
       "properties": {
         "assessment_mode": {
@@ -114,14 +114,14 @@
                 "enum": [
                   "market_participation",
                   "loss_tolerance",
-                  "holding_horizon",
+                  "turnover",
                   "concentration",
                   "rule_adherence",
                   "information_reliance",
                   "urgency",
                   "drawdown_reaction"
                 ],
-                "description": "성향 4축(market_participation=시장 수익률 참여↔내 목표 우선, loss_tolerance=원금 보전↔수익 기회, holding_horizon=장기 보유↔단기 회전, concentration=폭넓은 분산↔소수 집중)과 행동재무학 4축(rule_adherence=사전 규칙 준수↔상황별 재량, information_reliance=본인 판단↔시장·타인 추종, urgency=여유↔조급함, drawdown_reaction=하락 시 유지↔이탈)."
+                "description": "성향 4축(market_participation=시장 수익률 참여↔내 목표 우선, loss_tolerance=원금 보전↔수익 기회, turnover=낮은 회전(장기 보유)↔높은 회전(단기 매매), concentration=폭넓은 분산↔소수 집중)과 행동재무학 4축(rule_adherence=사전 규칙 준수↔상황별 재량, information_reliance=본인 판단↔시장·타인 추종, urgency=여유↔조급함, drawdown_reaction=하락 시 유지↔이탈). 축 이름은 전부 '+ 방향 = 이름이 가리키는 성질이 강함' 규약을 따른다(turnover가 높다=회전이 빠르다=보유 기간이 짧다)."
               },
               "ratio": {
                 "type": "number",
