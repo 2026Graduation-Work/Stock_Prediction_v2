@@ -1,0 +1,98 @@
+{
+  "user_id": "u_minji_001",
+  "session_id": "s_20260728_001",
+  "timestamp": "2026-07-28T14:32:00+09:00",
+
+  "investor_profile": {
+    "risk_tolerance": 0.35,
+    "time_horizon_months": 48,
+    "time_horizon_days": 1440,
+    "liquidity_need_ratio": 0.25,
+    "target_return_annual": 0.08,
+    "investment_experience_years": 1.0,
+    "profile_type": "stable"
+  },
+
+  "psychological_state": {
+    "fomo_index": 0.72,
+    "panic_sell_tendency": 0.65,
+    "herding_score": 0.58,
+    "self_confidence": 0.30,
+    "current_market_anxiety": 0.5,
+    "overheating_caution": 0.61
+  },
+
+  "constraints": {
+    "avoided_assets": ["spac", "managed_stock"],
+    "preferred_sectors": ["semiconductor", "healthcare"]
+  },
+
+  "style_axes": {
+    "assessment_mode": "detailed",
+    "axes": [
+      { "axis_id": "market_participation", "ratio": -0.10, "confidence": 0.74, "answered_count": 10, "question_count": 10 },
+      { "axis_id": "loss_tolerance", "ratio": -0.30, "confidence": 0.92, "answered_count": 10, "question_count": 10 },
+      { "axis_id": "turnover", "ratio": -0.40, "confidence": 0.88, "answered_count": 10, "question_count": 10 },
+      { "axis_id": "concentration", "ratio": 0.45, "confidence": 0.81, "answered_count": 10, "question_count": 10 },
+      { "axis_id": "rule_adherence", "ratio": 0.25, "confidence": 0.66, "answered_count": 9, "question_count": 10 },
+      { "axis_id": "information_reliance", "ratio": 0.16, "confidence": 0.85, "answered_count": 10, "question_count": 10 },
+      { "axis_id": "urgency", "ratio": 0.44, "confidence": 0.78, "answered_count": 10, "question_count": 10 },
+      { "axis_id": "drawdown_reaction", "ratio": 0.30, "confidence": 0.70, "answered_count": 10, "question_count": 10 }
+    ]
+  },
+
+  "contradictions": [
+    {
+      "id": "loss_averse_but_concentrated",
+      "axes": ["loss_tolerance", "concentration"],
+      "severity": "high",
+      "observation": "원금 보전을 우선한다고 답했으나 소수 종목 집중을 선호한다고도 답했습니다.",
+      "follow_up_question": "한 종목이 전체의 몇 %를 넘으면 부담스럽게 느끼시나요?"
+    },
+    {
+      "id": "long_horizon_but_reactive",
+      "axes": ["turnover", "urgency", "drawdown_reaction"],
+      "severity": "caution",
+      "observation": "투자 기간은 길게 잡았지만 조급함과 하락 시 이탈 경향이 함께 높게 나왔습니다.",
+      "follow_up_question": "하락 폭이 어느 정도일 때 계획을 다시 보고 싶으신가요?"
+    }
+  ],
+
+  "portfolio": {
+    "holdings": [
+      { "ticker": "005930", "name": "삼성전자", "quantity": 15, "avg_buy_price": 71200 },
+      { "ticker": "035720", "name": "카카오", "quantity": 8, "avg_buy_price": 48500 }
+    ],
+    "watchlist": ["000660", "035420"]
+  },
+
+  "free_text_signal": {
+    "raw_text": "남들 다 버는데 나만 뒤처지는 것 같아서 조급해요. 그래도 마이너스 나면 잠을 못 자요.",
+    "extracted_signals": { "fomo_index": 0.80, "panic_sell_tendency": 0.75 },
+    "conflict_with_survey": false
+  },
+
+  "confidence_per_field": {
+    "risk_tolerance": 0.92,
+    "time_horizon_months": 0.88,
+    "liquidity_need_ratio": 0.88,
+    "fomo_index": 0.78,
+    "panic_sell_tendency": 0.70,
+    "herding_score": 0.85,
+    "self_confidence": 0.85,
+    "overheating_caution": 0.55
+  },
+
+  "context": {
+    "investment_amount_krw": 500000,
+    "action_intent": "buy_consideration",
+    "market_regime_hint": "high_volatility",
+    "benchmark_index": "KOSPI"
+  },
+
+  "meta": {
+    "schema_version": "1.1.0",
+    "source": "profiling_block",
+    "confidence": 0.79
+  }
+}
