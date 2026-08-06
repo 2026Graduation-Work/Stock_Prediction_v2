@@ -34,6 +34,8 @@ import type { InvestorProfileSummary, MarketStatus } from "@/lib/types";
 
 interface PerformanceDashboardProps {
   data: ComparisonResults;
+  isSample: boolean;
+  conclusion: string;
   profile: InvestorProfileSummary;
   marketStatus: MarketStatus;
 }
@@ -82,6 +84,8 @@ const CHART_SERIES = [
 
 export default function PerformanceDashboard({
   data,
+  isSample,
+  conclusion,
   profile,
   marketStatus,
 }: PerformanceDashboardProps) {
@@ -97,9 +101,11 @@ export default function PerformanceDashboard({
       <section className="border-b border-line bg-white">
         <div className="mx-auto box-border w-full max-w-[1440px] px-6 py-6 lg:px-8">
           <div className="flex flex-wrap items-center gap-2.5">
-            <span className="rounded-md border border-[#e6c96b] bg-[#fff8df] px-2.5 py-1 text-[11px] font-extrabold text-[#8a6500]">
-              샘플 데이터
-            </span>
+            {isSample && (
+              <span className="rounded-md border border-[#e6c96b] bg-[#fff8df] px-2.5 py-1 text-[11px] font-extrabold text-[#8a6500]">
+                샘플 데이터
+              </span>
+            )}
             <span className="text-xs font-semibold text-muted">연구 질문</span>
           </div>
           <h1 className="mt-2 text-[26px] font-extrabold leading-tight">
@@ -176,14 +182,10 @@ export default function PerformanceDashboard({
               연구 결론
             </h2>
             <span className="rounded-md bg-track px-2 py-1 text-[10.5px] font-bold text-muted">
-              실제 결과 반영 전
+              {isSample ? "실제 결과 반영 전" : "러너 결과 반영"}
             </span>
           </div>
-          <p className="mt-2 text-sm leading-6 text-body">
-            전체 구간에서는 [유의한 차이 없음 / 개선 / 저하]으로 나타났으며, 급변 구간에서는
-            [B 우위 / A 우위 / 차이 없음]이 관찰되었다. 최종 결론은 ML 지표와 Trading 지표를
-            함께 검토해 확정한다.
-          </p>
+          <p className="mt-2 text-sm leading-6 text-body">{conclusion}</p>
         </section>
       </main>
 

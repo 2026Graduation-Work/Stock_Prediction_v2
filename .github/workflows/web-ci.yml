@@ -1,6 +1,6 @@
 name: Web CI
 
-# 프론트엔드(frontend) 변경 시 lint + build 자동 실행.
+# 프론트엔드(frontend) 변경 시 lint + build + 데모 E2E 자동 실행.
 # Python CI(python-ci.yml)와 경로 필터로 분리되어 상호 간섭하지 않는다.
 
 on:
@@ -20,6 +20,7 @@ permissions:
 jobs:
   lint-and-build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     defaults:
       run:
         working-directory: frontend
@@ -49,3 +50,9 @@ jobs:
 
       - name: Build (next build)
         run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Demo onboarding E2E
+        run: pnpm test:e2e

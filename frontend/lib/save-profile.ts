@@ -9,25 +9,26 @@ export const PROFILE_UPDATED_EVENT = "signallab:profile-updated";
 
 export async function saveProfile(profile: ProfilingOutput): Promise<void> {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
-  window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
 
   const client = getSupabaseClient();
-  if (!client) return;
+  if (!client) {
+    persistProfile(profile);
+    return;
+  }
 
-  const { data, error: sessionError } = await client.auth.getSession();
-  assertSupabaseResult(sessionError, "로그인 세션 확인");
-  if (!data.session) return;
+  const { data, error: userAuthError } = await client.auth.getUser();
+  assertSupabaseResult(userAuthError, "로그인 사용자 확인");
+  if (!data.user) throw new Error("로그인 후 설문 결과를 저장할 수 있습니다.");
 
   const now = new Date().toISOString();
-  const metadata = data.session.user.user_metadata;
+  const metadata = data.user.user_metadata;
   const displayName =
     typeof metadata.full_name === "string" && metadata.full_name.trim()
       ? metadata.full_name.trim()
       : profile.user_id;
   const avatarLabel = Array.from(displayName)[0] ?? "";
 
-  const authUserId = data.session.user.id;
+  const authUserId = data.user.id;
   const { data: existingUser, error: existingUserError } = await client
     .from("users")
     .select("id")
@@ -118,6 +119,13 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
     upsertPortfolioHoldings(profile, userId, now),
     upsertWatchlist(profile, userId, now),
   ]);
+
+  persistProfile(storedProfile);
+}
+
+function persistProfile(profile: ProfilingOutput): void {
+  window.localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile));
+  window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));
 }
 
 async function upsertAvoidedAssets(
