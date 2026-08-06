@@ -1,4 +1,5 @@
 import Link from "next/link";
+import AccountControls from "./account-controls";
 import MarketStatusBar from "./market-status-bar";
 import type { InvestorProfileSummary, MarketStatus } from "@/lib/types";
 
@@ -28,7 +29,7 @@ export default function SiteHeader({
 
   return (
     <header className="sticky top-0 z-50 border-b border-line bg-white shadow-[0_1px_2px_rgba(16,24,40,0.03)]">
-      <div className="mx-auto box-border flex h-[60px] w-full max-w-[1440px] items-center gap-4 px-6 lg:px-8">
+      <div className="mx-auto box-border flex min-h-[60px] w-full max-w-[1440px] flex-wrap items-center gap-2 px-4 py-2 sm:h-[60px] sm:flex-nowrap sm:gap-4 sm:px-6 sm:py-0 lg:px-8">
         <Link
           href="/"
           className="flex flex-none items-center gap-2.5 text-ink hover:no-underline"
@@ -36,7 +37,7 @@ export default function SiteHeader({
           <div className="grid size-7 place-items-center rounded-lg bg-brand text-sm font-extrabold text-white">
             S
           </div>
-          <div className="text-[17px] font-extrabold tracking-tight">시그널랩</div>
+          <div className="hidden text-[17px] font-extrabold sm:block">시그널랩</div>
         </Link>
 
         <nav aria-label="주요 화면" className="flex flex-none items-center rounded-lg bg-field p-1">
@@ -60,37 +61,21 @@ export default function SiteHeader({
         </nav>
 
         {hasSearch ? (
-          <div className="flex min-w-0 flex-1 items-center">
+          <div className="order-last flex min-w-0 basis-full items-center sm:order-none sm:flex-1 sm:basis-auto">
             <input
               value={query ?? ""}
               onChange={(event) => onQueryChange?.(event.target.value)}
               placeholder="종목명 또는 코드 검색"
-              className="box-border h-9 w-full min-w-[170px] max-w-[260px] rounded-[8px] border border-edge bg-field px-3.5 text-[13px] text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white"
+              className="box-border h-9 w-full min-w-0 max-w-none rounded-[8px] border border-edge bg-field px-3.5 text-[13px] text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white sm:min-w-[170px] sm:max-w-[260px]"
             />
           </div>
         ) : (
-          <div className="min-w-0 flex-1 truncate text-[13px] font-semibold text-muted">
+          <div className="hidden min-w-0 flex-1 truncate text-[13px] font-semibold text-muted sm:block">
             {sectionLabel}
           </div>
         )}
 
-        <div className="flex flex-none items-center gap-2.5">
-          <div className="flex h-[34px] items-center gap-2 rounded-[8px] border border-line bg-field pl-2 pr-3">
-            <div className="grid size-[22px] place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand">
-              {profile.avatarLabel}
-            </div>
-            <span className="whitespace-nowrap text-[12px] font-semibold">
-              {profile.displayName}
-              <span className="hidden xl:inline"> · {profile.profileTypeLabel}</span>
-            </span>
-          </div>
-          <Link
-            href="/survey"
-            className="inline-flex h-[34px] items-center whitespace-nowrap rounded-[8px] border border-edge bg-white px-3.5 text-[13px] font-semibold text-body hover:border-ghost hover:bg-field hover:no-underline"
-          >
-            설정
-          </Link>
-        </div>
+        <AccountControls profile={profile} />
       </div>
       <MarketStatusBar status={marketStatus} />
     </header>
