@@ -4,7 +4,7 @@ pykrx>=1.0.0
 pandas>=1.5.0
 numpy>=1.20.0
 pyarrow>=10.0.0
-tqdm>=4.65.0
+tqdm>=4.70.0
 
 # ── 머신러닝 모델링 (DT 계열) ───────────────────
 scikit-learn>=1.0.0
