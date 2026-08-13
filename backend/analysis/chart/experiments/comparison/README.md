@@ -1,48 +1,84 @@
-# 심리 피처 A/B 비교실험
+# 심리·뉴스 피처 A/B 비교
 
-연구 질문 **“심리 지수를 반영하면 예측이 나아지는가?”**에 답하기 위한 고정 실험 러너다.
-`stable/aggressive × baseline/treatment` 총 4런을 같은 행 집합·기간·시드·평가 함수로 실행한다.
+기존 chart 정본을 유지한 채 `stable(H20) / aggressive(H5) × A / B` 네 런의 ML 성능을
+비교한다. 모델은 모두 3분류 LightGBM이며, 평가는 기존 공용 함수와 동일하게 class 2
+(`Up`) 확률을 `Up vs rest`로 해석한다.
 
-## 입력 계약
+## 데이터 구성
 
-CSV 또는 Parquet 한 행은 학습·평가에 쓰는 `날짜 × 종목` 관측치를 나타내며 다음 컬럼이 필요하다.
+새로운 H5/H20 통합 parquet를 만들지 않는다. 각 profile은 두 개의 종목별 parquet 디렉터리를
+읽는다. 외부 피처 구성이 같다면 stable/aggressive의 B 경로는 같은 feature store를 가리켜도 된다.
 
-- 키: `Date`(`YYYY-MM-DD`, 시간 정보 없음), `Code`(앞자리 0을 보존한 6자리 문자열)
-- Baseline: `config.yaml`의 `features.baseline` 또는 기준 모델의 `feature_names`
-- Treatment 전용: `synthetic_psychology_index`, `news_sentiment`
-- 정답: `Target_H20`(stable), `Target_H5`(aggressive), 모두 0/1
-- 트레이딩: 신호 다음 거래일의 `Next_Day_Return`
-- 급변구간: 날짜별 시장 변동성 `Market_Volatility`
+- A `baseline_price_dir`: 기존 `data/processed/` (161개 Alpha158)
+- B `treatment_price_dir`: `experiments.features.build_feature_panel`이 만든 feature store
 
-누락값을 러너 안에서 임의 보간하지 않는다. 뉴스가 없는 날짜를 중립값 `0.0`으로 볼지 등은 데이터
-생성 단계에서 명시적으로 결정해야 한다. 필요한 모든 컬럼이 완전한 공통 행만 입력해야 A/B 표본이
-달라지는 문제를 막을 수 있다.
+B feature store 생성법과 외부 parquet의 `Date`, `Code`, `AvailableDate` 계약은 chart 상위
+README의 **외부 피처 Parquet 입력 형식**을 따른다. 원본 processed를 수정하지 않는다.
+
+라벨도 파일에서 가져오지 않는다. 두 경로를 기존 `load_parquet_data(...,
+label_params=...)`로 읽으면서 profile 설정에 따라 다시 만든다.
+
+Train 라벨의 가격 관측은 `train_end`에서 강제로 자른다. 따라서 train 종료 뒤 embargo나 2025
+holdout 가격이 2024년 말 라벨 생성에 들어가지 않으며, 관측 기간이 모자란 train tail은 제거된다.
+반면 test 라벨은 평가 정답이므로 `test_end` 이후의 가격 버퍼를 관측할 수 있다. 이 때문에 H20의
+2025년 말 평가에는 2026년 가격 데이터가 필요하다.
+
+- stable: dynamic sigma, H20, `up_mult=3.75`, `down_mult=3.00`
+- aggressive: dynamic sigma, H5, `up_mult=1.75`, `down_mult=1.50`
+- class: `0=Down`, `1=Neutral`, `2=Up`
+
+A/B 공정성 검사는 profile 내부에서 `Date × Code × Y_Label`이 정확히 같은지 확인한다. H5와
+H20은 라벨 tail과 관측 범위가 다를 수 있으므로 profile 사이의 행 동일성은 요구하지 않는다.
+
+## 컬럼 추가 방법
+
+외부 컬럼의 생성은 chart 담당 범위가 아니다. 전달받은 외부 parquet를 feature-store 설정의
+`features.sources[].columns`에 추가하여 새 profile 이름으로 materialize한다. 그 다음 comparison
+설정의 `features.treatment`에 같은 컬럼명을 추가한다.
+
+```yaml
+features:
+  treatment:
+    - synthetic_psychology_index
+    - news_sentiment
+    - news_volume
+```
+
+comparison 코드를 수정할 필요는 없다. baseline 161개 자체를 변경하는 경우에는 기존 모델의
+feature contract와 서비스 추론까지 함께 바뀌므로 이 절차의 단순 treatment 추가에 해당하지 않는다.
 
 ## 실행
 
-`backend/analysis/chart/`에서 실행한다.
+`backend/analysis/chart/`에서:
 
 ```bash
+# 1. profile별 B feature store를 먼저 만든다(상위 README 참고).
+python -m experiments.features.build_feature_panel --config experiments/configs/local.yaml
+
+# 2. 예제를 복사해 실제 경로와 고정 universe를 설정한다.
 cp experiments/comparison/config.example.yaml experiments/comparison/config.yaml
+
+# 3. 4런 ML 비교를 실행한다.
 python -m experiments.comparison.runner --config experiments/comparison/config.yaml
 ```
 
-현재 저장소에는 원천 `data/processed/`와 결합된 심리 피처 테이블이 없으므로, 실제 결과 실행 전에
-`data/comparison/comparison_input.parquet`를 준비해야 한다. 기존 baseline 예측 캐시는 확률만 담고
-있어 정답·수익률·Treatment 재학습을 대체할 수 없다.
+## 산출물과 지표 경계
 
-## 산출물
+- `four_run_metrics.csv`: profile별 A/B 전체 구간 ML 지표
+- `volatile_subsample_metrics.csv`: 날짜별 종목 `Sigma` 평균 상위 20% 구간 ML 지표
+- `comparison_deltas.csv`: profile·표본별 `B - A`
+- `predictions/*.parquet`: `Date`, `Code`, 3분류 정답, `Prob`(class 2 확률), `Sigma`
+- `experiment_manifest.json`: label 규칙, 실제 피처, profile 내부 행/라벨 hash
 
-- `four_run_metrics.csv`: 전체 구간 4런 지표
-- `volatile_subsample_metrics.csv`: 변동성 상위 20% 날짜의 4런 지표
-- `comparison_deltas.csv`: 성향·표본별 `B - A` 차이
-- `comparison_results.json`: 위 표의 JSON 묶음
-- `experiment_manifest.json`: 시드, 기간, 실제 피처, 행 해시, 급변일 목록
-- `predictions/*.parquet`: 각 런의 감사 가능한 OOS 예측
+ML 지표는 공용 chart 평가 함수의 accuracy, balanced accuracy, macro F1, Brier, ROC AUC,
+PR AUC와 ECE다. 이진 지표를 계산할 때만 `Y_Label == 2`를 양성으로 본다. 학습 자체를 binary로
+바꾸는 의미가 아니다.
 
-ML 지표는 AUC, 0.5 기준 적중률, Brier score, 10-bin ECE다. Trading 지표는 매일 확률 임계값을
-넘는 상위 N종목의 다음 날 동일가중 수익률로 계산한 Sharpe, MDD, 누적수익률, 거래 수다. 급변일은
-테스트 구간의 날짜별 평균 시장 변동성을 내림차순 정렬하여 정확히 상위 20%를 선택한다.
+이 러너는 Sharpe/MDD/수익률을 계산하지 않는다. `Next_Day_Return` 평균은 chart 정본의 체결,
+보유기간, 수수료, barrier 청산 규칙과 다르기 때문이다. 트레이딩 평가는 생성된 각 prediction
+parquet를 해당 profile의 기존 `run_backtest.py --predictions-path ...`에 전달해 별도로 실행한다.
+따라서 ML 비교 결과와 공용 백테스트 결과는 별도 artifact로 보존한다.
 
-테스트용 합성 fixture에서 나온 숫자를 연구 결과로 보고하지 않는다. 실제 결론은 반드시 결합된
-원천 데이터로 생성한 manifest와 함께 제시한다.
+합성 fixture의 결과는 연구 결과로 사용하지 않는다. 공식 실행에서는 6자리 종목 universe와
+2022~2024 train / 2025 test 기간을 config에 고정하고 manifest를 함께 보관한다. H20의 2025년
+말 라벨에는 이후 관측 가격이 필요하므로 processed 데이터 coverage를 실행 전에 확인한다.

@@ -1,50 +1,63 @@
 seed: 42
 
-data:
-  input_path: ../../data/comparison/comparison_input.parquet
-  date_column: Date
-  code_column: Code
-  train_start: "2019-01-01"
-  train_end: "2023-12-31"
-  test_start: "2024-01-08"
-  test_end: "2025-12-31"
-  return_column: Next_Day_Return
-  volatility_column: Market_Volatility
-  universe: []  # 비우면 입력 데이터의 전체 유니버스 사용
-
 features:
-  # v1 baseline 모델이 실제 사용한 Alpha158 컬럼을 읽어 목록 드리프트를 막는다.
+  # 기준 모델이 기록한 161개 feature_names를 A/B 공통 입력으로 사용한다.
   baseline_model_file: ../../core/models/65dc5055_fold0_model.txt
+  # treatment feature store에 materialize된 외부 피처. 컬럼 추가는 이 목록만 바꾼다.
   treatment:
     - synthetic_psychology_index
     - news_sentiment
 
 profiles:
   stable:
-    target_column: Target_H20
-    probability_threshold: 0.65
-    top_n: 5
+    data:
+      baseline_price_dir: ../../data/processed
+      treatment_price_dir: ../../data/feature_store/psychology_news_v1
+      tickers: []  # 공식 실험에서는 고정한 6자리 코드 목록을 넣는다.
+      train_start: "2022-01-01"
+      train_end: "2024-12-31"
+      test_start: "2025-01-08"
+      test_end: "2025-12-31"
+    labels:
+      type: dynamic_sigma
+      horizon: 20
+      up_mult: 3.75
+      down_mult: 3.00
+
   aggressive:
-    target_column: Target_H5
-    probability_threshold: 0.60
-    top_n: 10
+    data:
+      baseline_price_dir: ../../data/processed
+      treatment_price_dir: ../../data/feature_store/psychology_news_v1
+      tickers: []
+      train_start: "2022-01-01"
+      train_end: "2024-12-31"
+      test_start: "2025-01-08"
+      test_end: "2025-12-31"
+    labels:
+      type: dynamic_sigma
+      horizon: 5
+      up_mult: 1.75
+      down_mult: 1.50
 
 model:
+  # 공식 H5/H20 baseline config와 동일한 LightGBM 설정을 네 런에 공통 적용한다.
   params:
-    n_estimators: 500
-    learning_rate: 0.03
+    objective: multiclass
+    num_class: 3
+    n_estimators: 1000
+    learning_rate: 0.01
     max_depth: 5
     num_leaves: 20
-    min_child_samples: 200
+    min_child_samples: 2000
     colsample_bytree: 0.7
     subsample: 0.8
     subsample_freq: 1
     class_weight: balanced
 
 evaluation:
+  # ML 평가는 기존 chart 의미론대로 class 2(Up) vs rest로 계산한다.
   classification_threshold: 0.5
   calibration_bins: 10
   volatile_fraction: 0.2
-  annualization: 252
 
 output_dir: ../results/psychology_ab

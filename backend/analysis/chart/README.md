@@ -204,6 +204,31 @@ manifest에는 입력 외부 파일의 fingerprint, 적용 기간, 결측 처리
 기록된다. 같은 출력 경로에 이미 파일이 있으면 실수로 덮어쓰지 않고 실패하므로,
 피처 구성을 바꿨을 때는 새 profile 이름과 경로를 사용한다.
 
+### 팀 Drive용 processed 스냅샷
+
+2025 final holdout처럼 팀원이 정확히 같은 데이터로 비교해야 할 때는 실시간 universe
+별칭 대신 고정 `universe.csv`와 그 종목들의 기존 `data/processed/<Code>.parquet`을
+전달한다. H5/H20별 라벨 parquet를 새로 만들지 않는다. 학습 시 기존 loader가 각
+config의 dynamic-sigma 규칙으로 3분류 `Y_Label`을 다시 계산한다.
+
+다음 명령은 원본을 수정하지 않고 universe와 processed 계약을 검증해
+`DATA_MANIFEST.json`, `SHA256SUMS`, 정규화된 `universe.csv`를 만든다. `--archive`를
+지정할 때만 대용량 tar.gz를 생성한다.
+
+```bash
+python -m experiments.handoff.package_processed \
+  --processed-dir data/processed \
+  --universe-file /path/to/final_universe.csv \
+  --output-dir /path/to/chart_handoff_v1 \
+  --dataset-id chart_processed_holdout2025_v1 \
+  --archive /path/to/chart_processed_holdout2025_v1.tar.gz
+```
+
+Drive 구조, 받는 사람의 checksum 확인, 외부 피처 컬럼 추가법은
+[`docs/four-run-experiment-handoff.md`](../../../docs/four-run-experiment-handoff.md)를
+따른다. 외부 피처는 `Date`, `Code`, `AvailableDate` 계약으로 별도 보관하고 위의
+feature-store builder로 결합한다.
+
 ## 실험 실행
 
 처음 실행은 아래 순서가 기준이다. `local.yaml`의 `experiment_name`은 결과 폴더
