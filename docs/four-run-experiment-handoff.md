@@ -266,6 +266,11 @@ market_volatility = panel.groupby("Date", sort=True)["Sigma"].mean()
 백테스트 규칙을 그대로 따른다. 이는 모델별 자체 평가 코드를 금지한 SSOT 원칙을
 지키기 위함이다.
 
+상장폐지 종목은 폐지 전까지 prediction을 만들 수 있지만, 미래 H5/H20 outcome을 끝까지
+관측할 수 없는 마지막 tail에는 평가 라벨이 없다. 원본 prediction은 백테스트용으로
+보존하고 ML 평가지표에서만 정답 라벨이 있는 `Date × Code`로 제한한다. 반대로 정답은
+있는데 prediction이 없거나 키가 중복되면 오류로 중단한다.
+
 ## 9. Colab 학습 뒤 받아야 할 모델
 
 Colab에서 공식 config로 다음 두 모델을 학습한다.
