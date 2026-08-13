@@ -1,14 +1,14 @@
 import argparse
 import glob
+import hashlib
 import os
-
-# 프로젝트 루트 경로 설정 및 core 모듈 임포트
 import sys
 from concurrent.futures import ProcessPoolExecutor
 from datetime import datetime
 from multiprocessing import cpu_count
 
 import pandas as pd
+import yaml
 from tqdm import tqdm
 
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -17,6 +17,40 @@ if project_root not in sys.path:
 
 # 각 워커 프로세스에서 재사용될 전역 모델 객체
 _model = None
+
+
+def resolve_model_path(profile, model_path=None, registry_path=None):
+    """명시 경로 또는 registry의 profile에 해당하는 모델을 검증해 반환합니다."""
+    if model_path:
+        resolved = os.path.abspath(model_path)
+        if not os.path.isfile(resolved):
+            raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {resolved}")
+        return resolved
+
+    registry_path = registry_path or os.path.join(
+        project_root, "core", "models", "registry.yaml"
+    )
+    with open(registry_path, encoding="utf-8") as file:
+        registry = yaml.safe_load(file)
+
+    try:
+        entry = registry["models"][profile]
+    except (KeyError, TypeError) as exc:
+        raise ValueError(f"registry에 profile이 없습니다: {profile}") from exc
+
+    resolved = os.path.join(os.path.dirname(registry_path), entry["model_file"])
+    if not os.path.isfile(resolved):
+        raise FileNotFoundError(f"모델 파일을 찾을 수 없습니다: {resolved}")
+
+    expected_sha = entry.get("sha256")
+    if expected_sha:
+        with open(resolved, "rb") as file:
+            actual_sha = hashlib.file_digest(file, "sha256").hexdigest()
+        if actual_sha != expected_sha:
+            raise ValueError(
+                f"모델 SHA-256 불일치: expected={expected_sha}, actual={actual_sha}"
+            )
+    return resolved
 
 
 def init_worker(model_path):
@@ -63,8 +97,8 @@ def process_ticker(file_path, target_date, threshold):
         if prob_series.empty:
             return None
 
-        # 기준일(마지막 날짜)의 Success 확률 추출
-        success_prob = float(prob_series.iloc[-1])
+        # class 2 모델 스코어. 미래 상승을 보장하는 확률이 아닙니다.
+        model_score = float(prob_series.iloc[-1])
         last_row = df_slice.iloc[-1]
 
         return {
@@ -74,8 +108,8 @@ def process_ticker(file_path, target_date, threshold):
             "Close": last_row["Close"],
             "Volume": last_row["Volume"],
             "Change": last_row.get("Change", 0.0),
-            "Success_Prob": success_prob,
-            "Signal": "BUY" if success_prob >= threshold else "HOLD",
+            "Model_Score": model_score,
+            "Review_Flag": "REVIEW" if model_score >= threshold else "NORMAL",
         }
     except Exception:
         return None
@@ -83,13 +117,19 @@ def process_ticker(file_path, target_date, threshold):
 
 def parse_args():
     parser = argparse.ArgumentParser(
-        description="전체 종목 대상 병렬 추론 및 매수 시그널 생성 스크립트 (단일 모델)"
+        description="전체 종목 대상 병렬 모델 스코어 및 재점검 표시 생성"
+    )
+    parser.add_argument(
+        "--profile",
+        choices=("aggressive", "stable"),
+        default="aggressive",
+        help="registry의 모델 profile (aggressive=H5, stable=H20)",
     )
     parser.add_argument(
         "--model-path",
         type=str,
-        default=os.path.join(project_root, "core", "models", "65dc5055_fold0_model.txt"),
-        help="학습 완료된 모델 파일 경로 (기본값: core/models/65dc5055_fold0_model.txt)",
+        default=None,
+        help="모델 직접 지정. 생략하면 --profile에 따라 registry.yaml 사용",
     )
     parser.add_argument(
         "--target-date",
@@ -98,7 +138,10 @@ def parse_args():
         help="예측 기준 영업일 (YYYY-MM-DD). 미지정 시 각 종목의 최신 영업일 기준.",
     )
     parser.add_argument(
-        "--threshold", type=float, default=0.5, help="매수 시그널 최소 확률 임계값 (0.0 ~ 1.0)"
+        "--threshold",
+        type=float,
+        default=0.5,
+        help="사전 합의한 재점검 스코어 임계값 (0.0 ~ 1.0)",
     )
     parser.add_argument("--top-n", type=int, default=30, help="터미널에 출력할 상위 종목 수")
     parser.add_argument(
@@ -120,11 +163,9 @@ def main():
     args = parse_args()
     os.makedirs(args.output_dir, exist_ok=True)
 
-    # 1. 모델 파일 존재 확인
-    if not os.path.exists(args.model_path):
-        print(f"❌ [Error] 모델 파일을 찾을 수 없습니다: {args.model_path}")
-        return
-    print(f"📦 모델 로드: {os.path.basename(args.model_path)}")
+    # 1. registry 또는 명시 경로에서 모델 확인
+    model_path = resolve_model_path(args.profile, args.model_path)
+    print(f"📦 모델 로드: {os.path.basename(model_path)} ({args.profile})")
 
     # 2. 데이터 파일 목록 수집
     raw_dir = os.path.join(project_root, "data", "raw")
@@ -141,7 +182,7 @@ def main():
 
     # 3. ProcessPoolExecutor로 병렬 추론 수행
     with ProcessPoolExecutor(
-        max_workers=num_workers, initializer=init_worker, initargs=(args.model_path,)
+        max_workers=num_workers, initializer=init_worker, initargs=(model_path,)
     ) as executor:
         futures = [
             executor.submit(process_ticker, f, args.target_date, args.threshold) for f in data_files
@@ -159,7 +200,7 @@ def main():
 
     # 4. 결과 정렬 및 저장
     result_df = pd.DataFrame(results)
-    result_df = result_df.sort_values(by="Success_Prob", ascending=False).reset_index(drop=True)
+    result_df = result_df.sort_values(by="Model_Score", ascending=False).reset_index(drop=True)
 
     unique_dates = result_df["Date"].unique()
     file_date_suffix = (
@@ -172,13 +213,13 @@ def main():
     print(f"\n💾 추론 결과 저장 완료: {output_file}")
 
     # 5. 상위 종목 출력
+    display_date = unique_dates[0] if len(unique_dates) == 1 else "복수"
     print("\n" + "=" * 85)
-    print(
-        f"📊 상승 예측 확률 상위 {args.top_n}개 종목 (기준 영업일: {unique_dates[0] if len(unique_dates) == 1 else '복수'})"
-    )
+    print(f"📊 class 2 모델 스코어 상위 {args.top_n}개 종목 (기준 영업일: {display_date})")
     print("=" * 85)
     print(
-        f"{'순위':<4} | {'종목코드':<8} | {'종목명':<16} | {'기준일':<10} | {'종가':<10} | {'전일대비':<8} | {'상승성공확률':<12} | {'시그널':<6}"
+        f"{'순위':<4} | {'종목코드':<8} | {'종목명':<16} | {'기준일':<10} | "
+        f"{'종가':<10} | {'전일대비':<8} | {'모델스코어':<12} | {'재점검':<6}"
     )
     print("-" * 85)
 
@@ -186,13 +227,16 @@ def main():
         change_pct = f"{row['Change']:+.2f}%" if "Change" in row else "N/A"
         name_trunc = row["Name"][:12] if len(row["Name"]) <= 12 else row["Name"][:10] + ".."
         print(
-            f"{idx + 1:<4} | {row['Code']:<8} | {name_trunc:<16} | {row['Date']:<10} | {int(row['Close']):,d}원 | {change_pct:<8} | {row['Success_Prob'] * 100:.2f}% | {row['Signal']:<6}"
+            f"{idx + 1:<4} | {row['Code']:<8} | {name_trunc:<16} | "
+            f"{row['Date']:<10} | {int(row['Close']):,d}원 | {change_pct:<8} | "
+            f"{row['Model_Score']:.4f} | {row['Review_Flag']:<6}"
         )
 
     print("=" * 85)
-    buy_signals = result_df[result_df["Signal"] == "BUY"]
+    review_rows = result_df[result_df["Review_Flag"] == "REVIEW"]
     print(
-        f"💡 총 {len(result_df)}개 종목 중 'BUY' 시그널 발생: {len(buy_signals)}개 (임계치: {args.threshold * 100:.1f}%)"
+        f"💡 총 {len(result_df)}개 중 재점검 대상: {len(review_rows)}개 "
+        f"(임계: {args.threshold:.2f}, 매수·매도 지시가 아님)"
     )
     print("=" * 85)
 

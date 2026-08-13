@@ -91,6 +91,9 @@ backend/analysis/chart/experiments/train_src/cache/
 backend/analysis/chart/experiments/results/*
 !backend/analysis/chart/experiments/results/
 !backend/analysis/chart/experiments/results/README.md
+!backend/analysis/chart/experiments/results/legacy_screening/
+backend/analysis/chart/experiments/results/legacy_screening/*
+!backend/analysis/chart/experiments/results/legacy_screening/SELECTION_REPORT.md
 backend/analysis/chart/experiments/experiment_run_log.txt
 backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/experiments/configs/
@@ -106,4 +109,5 @@ backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/data/raw/005930.parquet
 !backend/analysis/chart/data/processed/005930.parquet
 !backend/analysis/chart/data/ticker_metadata.csv
+backend/analysis/chart/data/raw/corp_code_mapping.json
 !backend/analysis/chart/core/models/

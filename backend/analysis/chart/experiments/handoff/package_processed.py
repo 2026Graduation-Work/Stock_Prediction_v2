@@ -172,7 +172,7 @@ def _write_package_readme(path: Path, dataset_id: str) -> None:
         "Parquet에 저장된 `Y_Label`을 H5/H20 최종 target으로 직접 사용하지 마세요. "
         "공식 실험 config와 `experiments/train_src/loaders.py`로 3분류 라벨을 다시 "
         "계산합니다. 외부 피처는 원본을 수정하지 말고 feature-store builder로 "
-        "결합합니다. 자세한 내용은 저장소의 `docs/four-run-experiment-handoff.md`를 "
+        "결합합니다. 자세한 내용은 저장소의 `backend/analysis/chart/ONBOARDING.md`를 "
         "참조하세요.\n",
         encoding="utf-8",
     )
