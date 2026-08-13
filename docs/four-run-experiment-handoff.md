@@ -317,3 +317,19 @@ stable:     H20, train 2022~2024, test 2025, u3.75/d3.00
 - [ ] 전체·급변 구간을 공용 평가 함수와 기존 backtest로 평가했다.
 - [ ] 4개 OOS prediction, config snapshot, experiment manifest가 있다.
 - [ ] negative result를 포함해 과장 없이 연구 결론을 기록했다.
+
+## 11. 2025 baseline 실행 결과
+
+학습 commit `cf104489a54b6795c8aa3b6b7426f7771c0526ca`, KOSPI 2024-12-30
+스냅샷으로 실행했다. 모델은 161개 피처·3분류·1000 iteration 계약과 SHA-256을
+확인해 `core/models/`에 반입했다.
+
+| profile | ML rows | ROC AUC | PR AUC | Rank IC | 수익률 | Sharpe | MDD | 거래 수 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| aggressive H5 | 214,349 | 0.6022 | 0.4874 | 0.1137 | -3.04% | -1.77 | -3.36% | 15 |
+| stable H20 | 213,384 | 0.5821 | 0.4754 | 0.0685 | 2.77% | 1.08 | -1.00% | 8 |
+
+백테스트는 공용 engine, 수수료 0.105%, 신호 1일 지연, `up=1.8/down=1.2`,
+hard stop `1.5`를 사용했다. 외부 KRX 다운로드가 불가능해 benchmark는 해당 universe의
+동일가중 종가수익률 fallback을 사용했다. 거래 수가 매우 적고 두 모델 모두 benchmark
+수익률 약 25.1%를 하회하므로 H20의 양수 성과도 일반화 근거로 과대해석하지 않는다.

@@ -7,17 +7,17 @@
 
 ## 2025 holdout 모델 반입
 
-현재 저장소에는 2022~2024 학습·2025 holdout 모델이 없다. Colab 실행이 성공한
-뒤 Drive export의 다음 두 파일만 실제 해시와 평가 결과를 확인하고 반입한다.
+다음 두 모델은 2022~2024 학습·2025 final holdout 실행 결과의 SHA-256과 161개
+피처·3분류 계약을 확인한 뒤 반입했다. 실제 profile 매핑과 해시는
+[`registry.yaml`](registry.yaml)이 정본이다.
 
 ```text
 baseline_h5_u175_d150_train2022_2024_holdout2025.txt
 baseline_h20_u375_d300_train2022_2024_holdout2025.txt
 ```
 
-[`registry.example.yaml`](registry.example.yaml)을 `registry.yaml`로 복사하고
-`sha256`을 `artifact_manifest.json`의 값으로 교체한다. 존재하지 않는 모델을
-가리키는 registry는 만들지 않는다.
+새 모델로 교체할 때는 Colab `artifact_manifest.json`의 commit·SHA-256과 공용 ML 및
+백테스트 결과를 검증한 뒤 모델과 registry를 함께 갱신한다.
 
 ## Python 추론
 
