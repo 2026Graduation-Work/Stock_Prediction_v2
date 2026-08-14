@@ -3,12 +3,28 @@
 이 문서가 chart 파트의 실행·재현·수정 기준이다. 모든 명령은
 `backend/analysis/chart/`에서 실행한다.
 
+## A/B comparison 빠른 실행
+
+- A: `data/processed/`의 기존 161피처
+- B: A에 추가 피처를 결합한 `data/feature_store/<name>/`
+- stable은 H20, aggressive는 H5로 각각 A/B를 비교한다.
+
+```bash
+cp experiments/comparison/config.example.yaml experiments/comparison/config.yaml
+# config.yaml에서 treatment_price_dir, tickers, features.treatment를 수정
+python -m experiments.comparison.runner --config experiments/comparison/config.yaml
+```
+
+결과는 `experiments/results/psychology_ab/`에 저장된다. A/B 사이에는 추가 피처만 달라야
+하며 Date·Code·라벨·기존 161피처가 다르면 실행이 중단된다. 완료 시 네 prediction에
+대응하는 공용 backtest config와 실행 명령도 출력된다.
+
 ## 1. 현재 정본
 
-| profile | 모델 | 라벨 | 학습 | 평가 | 모델 파일 |
-| --- | --- | --- | --- | --- | --- |
-| `aggressive` | H5 | dynamic sigma `u1.75/d1.50` | 2022~2024 | 2025 | `core/models/baseline_h5_u175_d150_train2022_2024_holdout2025.txt` |
-| `stable` | H20 | dynamic sigma `u3.75/d3.00` | 2022~2024 | 2025 | `core/models/baseline_h20_u375_d300_train2022_2024_holdout2025.txt` |
+| profile      | 모델 | 라벨                        | 학습      | 평가 | 모델 파일                                                           |
+| ------------ | ---- | --------------------------- | --------- | ---- | ------------------------------------------------------------------- |
+| `aggressive` | H5   | dynamic sigma `u1.75/d1.50` | 2022~2024 | 2025 | `core/models/baseline_h5_u175_d150_train2022_2024_holdout2025.txt`  |
+| `stable`     | H20  | dynamic sigma `u3.75/d3.00` | 2022~2024 | 2025 | `core/models/baseline_h20_u375_d300_train2022_2024_holdout2025.txt` |
 
 - LightGBM 3분류: `0=down`, `1=neutral`, `2=up`
 - 서비스 스코어: class 2 확률
@@ -16,15 +32,6 @@
 - 모델 매핑·SHA-256 정본: `core/models/registry.yaml`
 - 고정 universe: `experiments/configs/universes/kospi_all_2024-12-30.csv`
 - 공식 config: `experiments/configs/holdout_2025_h5.yaml`, `holdout_2025_h20.yaml`
-
-2025 결과 요약:
-
-| 모델 | ROC AUC | Rank IC | 수익률 | Sharpe | MDD | 거래 수 |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| H5 | 0.6022 | 0.1137 | -3.04% | -1.77 | -3.36% | 15 |
-| H20 | 0.5821 | 0.0685 | 2.77% | 1.08 | -1.00% | 8 |
-
-거래 수가 적고 동일가중 benchmark 약 25.1%를 하회하므로 성과를 과대해석하지 않는다.
 
 ## 2. 파일 구조와 역할
 
@@ -60,7 +67,7 @@ backend/analysis/chart/
 │   ├── handoff/                 # universe·Drive 패키지 생성
 │   └── results/legacy_screening/# 과거 H5/H20 선정 근거·결과(로컬 보관)
 ├── notebooks/
-│   └── chart_holdout_2025_colab.ipynb
+│   └── chart_holdout_2025_colab.ipynb # 로컬·Drive 전용, Git 제외
 └── requirements.txt
 ```
 
@@ -94,6 +101,43 @@ python data_collectors/preprocess_data.py --mode full
 python data_collectors/price_collector.py --mode update
 python data_collectors/preprocess_data.py --mode update
 ```
+
+### Drive 스냅샷 사용
+
+Drive에는 전체 3,000여 종목 대신 공식 universe에 포함된 KOSPI processed만 공유한다.
+최종 배치 위치는 아래와 같다.
+
+```text
+backend/analysis/chart/data/processed/<6자리 Code>.parquet
+```
+
+#### 방법 A: processed 폴더 사용
+
+로컬에서 필요한 종목만 받거나 Drive를 직접 연결할 때 사용한다.
+
+```text
+Drive/chart/processed_kospi_holdout2025/<Code>.parquet
+```
+
+받은 parquet를 `data/processed/`에 복사한다. 전체 KOSPI 학습이면 폴더 전체를 받고, 일부
+종목 실험이면 해당 종목 파일만 받아도 된다.
+
+#### 방법 B: archive 사용
+
+Colab 또는 전체 KOSPI 데이터를 한 번에 복사할 때 사용한다. archive는 필수가 아니며,
+수천 개 파일의 전송 누락과 Drive I/O를 줄이기 위한 선택 사항이다.
+
+```bash
+mkdir -p data
+tar -xzf /다운로드/경로/chart_processed_holdout2025_v1.tar.gz -C data
+find data/processed -maxdepth 1 -name '*.parquet' | head
+```
+
+archive 내부가 `processed/<Code>.parquet` 구조이므로 `data/`에 압축을 풀어야 한다.
+Parquet 자체가 압축돼 있어 archive의 주목적은 용량 절감이 아니다.
+
+학습·평가·백테스트에는 processed만 필요하다. 기존 모델로 서비스 추론까지 실행하려면
+직접 수집으로 만든 `data/raw/<Code>.parquet`도 필요하다.
 
 학습 입력은 `data/processed/<Code>.parquet`이다. 파일 안의 기존 `Y_Label`은 최종
 target이 아니다. `experiments/train_src/loaders.py`가 실행 config에 따라 H5/H20
@@ -148,7 +192,24 @@ H20은 `--profile stable`로 실행한다. `--model-path`는 registry 밖의 모
 ```bash
 cp experiments/configs/holdout_2025_h5.yaml experiments/configs/local_h5.yaml
 cp experiments/configs/holdout_2025_h20.yaml experiments/configs/local_h20.yaml
+```
 
+`local_h5.yaml` 수정 예시:
+
+```yaml
+experiment_name: "local_holdout_2025_h5_20260814"
+
+data:
+  price_dir: "/content/drive/MyDrive/stock_prediction/data/processed"
+  version: "chart_processed_holdout2025_v1"
+```
+
+로컬 저장소 데이터면 `price_dir: "data/processed"`를 사용한다. H20도 같은 세 필드만
+바꾸고 `labels`·`model`·`strategy`·`backtest`는 공식 config 값을 유지한다.
+
+실행:
+
+```bash
 python experiments/train.py --config experiments/configs/local_h5.yaml
 python experiments/run_experiment_analysis.py --config experiments/configs/local_h5.yaml
 
@@ -162,21 +223,6 @@ python experiments/run_experiment_analysis.py --config experiments/configs/local
 python experiments/run_ml_evaluation.py --config experiments/configs/local_h5.yaml
 python experiments/run_backtest.py --config experiments/configs/local_h5.yaml
 ```
-
-### Colab
-
-`notebooks/chart_holdout_2025_colab.ipynb`를 연다.
-
-수정할 값:
-
-```python
-REPO_URL = "https://github.com/<ORG>/<REPO>.git"
-COMMIT_SHA = "실행할 정확한 commit SHA"
-DATA_SOURCE = DRIVE_ROOT / "input/chart_processed_holdout2025_v1.tar.gz"
-```
-
-모든 셀을 순서대로 실행한다. 결과는 Drive의 `outputs/<commit>/`에 모델, prediction,
-config, coverage, ML 평가, 백테스트, manifest, checksum으로 저장한다.
 
 ## 7. Config 핵심 필드
 
@@ -200,7 +246,7 @@ labels:
 model:
   type: LGBM
   objective: multiclass
-  params: {...}
+  params: { ... }
 
 training:
   skip_validation: true
@@ -239,6 +285,16 @@ experiments/results/<experiment_name>/
 - benchmark source와 비용·보유기간
 - 모델 SHA-256과 실행 commit
 
+결과 대시보드:
+
+```bash
+streamlit run experiments/result_dashboard/app.py
+```
+
+브라우저에서 왼쪽 `결과 분석할 실험` 목록의 `experiment_name`을 선택한다. 목록에 없다면
+`experiments/results/<experiment_name>/`가 생성됐는지 먼저 확인한다. 대시보드에서는 ML
+지표, fold별 백테스트, benchmark 비교, 거래 내역과 피처 중요도를 확인한다.
+
 ## 9. 추가 피처 붙이기
 
 기존 161피처 parquet를 수정하지 않는다. 추가 피처는 별도 parquet로 받는다.
@@ -270,7 +326,7 @@ features:
       path: data/external/external.parquet
       apply_period: one_day
       columns: [feature_a, feature_b]
-      missing: {policy: zero, add_indicator: true}
+      missing: { policy: zero, add_indicator: true }
 ```
 
 생성·학습:
@@ -307,21 +363,7 @@ python experiments/run_experiment_analysis.py --config experiments/configs/local
 학습 모델의 `feature_name()`과 `core.inference.FEATURE_COLS`의 이름·순서·개수가 정확히
 같아야 한다.
 
-## 11. 라벨·모델·전략을 수정할 때
-
-| 변경 | 수정 위치 |
-| --- | --- |
-| horizon·barrier | config의 `labels` |
-| LightGBM 파라미터 | config의 `model.params` |
-| 학습·평가 기간 | config의 `data.splits` |
-| 종목 목록 | config의 `data.tickers`, universe CSV |
-| Top-N·임계 | config의 `strategy` |
-| 체결·비용·청산 | config의 `backtest` |
-| 완전히 새로운 라벨식 | `experiments/train_src/loaders.py`와 테스트 |
-
-라벨 변경 시 저장된 `Y_Label`을 직접 수정하지 않는다. loader가 실행 시 재생성한다.
-
-## 12. Baseline/Treatment 비교
+## 11. Baseline/Treatment 비교
 
 실제 외부 데이터가 있을 때만 사용한다.
 
@@ -336,54 +378,5 @@ python -m experiments.comparison.runner \
 - stable H20과 aggressive H5를 각각 A/B 비교
 - 같은 profile 내부의 키·라벨·baseline 피처 동일성을 자동 검사
 - ML 평가는 공용 평가 함수 사용
-- trading 평가는 생성된 prediction을 `run_backtest.py --predictions-path`에 전달
-
-## 13. Universe와 Drive 패키지
-
-Universe 재생성:
-
-```bash
-python -m experiments.handoff.build_kospi_universe \
-  --cutoff 2024-12-30 \
-  --processed-dir data/processed \
-  --output experiments/configs/universes/kospi_all_2024-12-30.csv
-```
-
-Drive archive 생성:
-
-```bash
-python -m experiments.handoff.package_processed \
-  --processed-dir data/processed \
-  --universe-file experiments/configs/universes/kospi_all_2024-12-30.csv \
-  --output-dir /path/to/metadata \
-  --dataset-id chart_kospi_holdout2025_v1 \
-  --archive /path/to/chart_processed_holdout2025_v1.tar.gz
-```
-
-- archive `.sha256`: 업로드 파일 검증
-- `DATA_MANIFEST.json`: universe·기간·행·피처·정책 기록
-- `SHA256SUMS`: 압축 해제 파일 일괄 검증
-
-세 파일은 학습 필수 입력이 아니라 Drive 재현성 자료다.
-
-## 14. 과거 파일 통합 위치
-
-- 정본 코드·데이터: `backend/analysis/chart/`
-- 과거 스크리닝 근거: `experiments/results/legacy_screening/SELECTION_REPORT.md`
-- 이전 대용량 cache 백업: `chart_handoff_output/legacy_analysis_chart_backup/chart/`
-
-루트의 구형 `analysis/chart/`는 더 이상 사용하지 않는다. 백업은 현재 코드·데이터 검증 후
-용량이 필요할 때 수동 삭제한다.
-
-## 15. 변경 완료 체크
-
-```text
-[ ] config와 universe가 고정됐다.
-[ ] 학습 라벨이 train_end 이후 가격을 보지 않는다.
-[ ] prediction과 평가 라벨 키가 정합하다.
-[ ] 공용 ML 평가와 공용 backtest를 사용했다.
-[ ] 모델은 161피처·3분류 계약을 만족한다.
-[ ] 모델 SHA와 실행 commit을 registry에 기록했다.
-[ ] ruff check . / pytest가 통과했다.
-[ ] 사용자 노출 문구는 자동 매매 지시나 확정적 상승 확률로 표현하지 않는다.
-```
+- `backtest_configs/`에 네 prediction별 공용 backtest config 자동 생성
+- runner가 마지막에 출력하는 네 `run_backtest.py` 명령으로 trading 평가 실행

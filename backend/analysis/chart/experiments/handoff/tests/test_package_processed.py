@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import tarfile
 from pathlib import Path
 
@@ -53,6 +54,12 @@ def test_prepare_handoff_package_writes_manifest_checksums_and_archive(tmp_path:
     assert (output / "SHA256SUMS").is_file()
     assert archive.is_file()
     assert archive.with_name(f"{archive.name}.sha256").is_file()
+    stored_manifest = json.loads((output / "DATA_MANIFEST.json").read_text(encoding="utf-8"))
+    assert stored_manifest == manifest
+    assert stored_manifest["archive"] == {
+        "file": "chart_processed.tar.gz",
+        "sha256_file": "chart_processed.tar.gz.sha256",
+    }
     with tarfile.open(archive, "r:gz") as handle:
         assert sorted(handle.getnames()) == [
             "DATA_MANIFEST.json",
@@ -62,6 +69,8 @@ def test_prepare_handoff_package_writes_manifest_checksums_and_archive(tmp_path:
             "processed/005930.parquet",
             "universe.csv",
         ]
+        archived_manifest = json.load(handle.extractfile("DATA_MANIFEST.json"))
+    assert archived_manifest == stored_manifest
 
     lines = (output / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
     expected = hashlib.sha256((processed / "005930.parquet").read_bytes()).hexdigest()

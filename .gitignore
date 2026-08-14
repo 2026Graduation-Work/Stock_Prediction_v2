@@ -95,6 +95,7 @@ backend/analysis/chart/experiments/results/*
 backend/analysis/chart/experiments/results/legacy_screening/*
 !backend/analysis/chart/experiments/results/legacy_screening/SELECTION_REPORT.md
 backend/analysis/chart/experiments/experiment_run_log.txt
+backend/analysis/chart/notebooks/
 backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/experiments/configs/
 !backend/analysis/chart/experiments/configs/base.yaml

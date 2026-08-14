@@ -1,6 +1,7 @@
 import argparse
 import glob
 import hashlib
+import math
 import os
 import sys
 from concurrent.futures import ProcessPoolExecutor
@@ -115,7 +116,27 @@ def process_ticker(file_path, target_date, threshold):
         return None
 
 
-def parse_args():
+def _unit_interval(value):
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("0.0 이상 1.0 이하 숫자여야 합니다") from exc
+    if not math.isfinite(parsed) or not 0.0 <= parsed <= 1.0:
+        raise argparse.ArgumentTypeError("0.0 이상 1.0 이하 숫자여야 합니다")
+    return parsed
+
+
+def _positive_int(value):
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("1 이상의 정수여야 합니다") from exc
+    if parsed < 1:
+        raise argparse.ArgumentTypeError("1 이상의 정수여야 합니다")
+    return parsed
+
+
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description="전체 종목 대상 병렬 모델 스코어 및 재점검 표시 생성"
     )
@@ -139,11 +160,13 @@ def parse_args():
     )
     parser.add_argument(
         "--threshold",
-        type=float,
+        type=_unit_interval,
         default=0.5,
         help="사전 합의한 재점검 스코어 임계값 (0.0 ~ 1.0)",
     )
-    parser.add_argument("--top-n", type=int, default=30, help="터미널에 출력할 상위 종목 수")
+    parser.add_argument(
+        "--top-n", type=_positive_int, default=30, help="터미널에 출력할 상위 종목 수"
+    )
     parser.add_argument(
         "--output-dir",
         type=str,
@@ -152,11 +175,11 @@ def parse_args():
     )
     parser.add_argument(
         "--workers",
-        type=int,
+        type=_positive_int,
         default=None,
         help="병렬 워커 수. 미지정 시 CPU 코어 수에 맞춰 동적 결정.",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def main():

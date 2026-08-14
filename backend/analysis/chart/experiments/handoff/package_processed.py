@@ -273,6 +273,12 @@ def prepare_handoff_package(
         },
         "files": file_reports,
     }
+    archive = Path(archive_path).resolve() if archive_path is not None else None
+    if archive is not None:
+        manifest["archive"] = {
+            "file": archive.name,
+            "sha256_file": f"{archive.name}.sha256",
+        }
     manifest_path = destination / "DATA_MANIFEST.json"
     with manifest_path.open("w", encoding="utf-8") as handle:
         json.dump(manifest, handle, ensure_ascii=False, indent=2, sort_keys=True)
@@ -290,15 +296,10 @@ def prepare_handoff_package(
     ]
     _write_checksums(destination / "SHA256SUMS", checksums)
 
-    if archive_path is not None:
-        archive = Path(archive_path).resolve()
+    if archive is not None:
         _write_archive(archive, processed_files, destination)
         archive_checksum = archive.with_name(f"{archive.name}.sha256")
         _write_checksums(archive_checksum, [(_sha256(archive), archive.name)])
-        manifest["archive"] = {
-            "path": str(archive),
-            "sha256_file": str(archive_checksum),
-        }
     return manifest
 
 
