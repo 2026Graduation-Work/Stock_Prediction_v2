@@ -108,6 +108,11 @@ def _clip(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
+def impact_score(article_count: int, mean_sentiment: float) -> int:
+    """뉴스 영향력 1~10 — 기사 수·감성 강도의 결정론 규칙 (일별·기간 모드 공용)."""
+    return int(_clip(3 + min(4, article_count // 3) + round(abs(mean_sentiment) * 3), 1, 10))
+
+
 def _text_of(item: dict) -> str:
     return f"{item.get('title', '')} {item.get('summary', '')}".strip()
 
@@ -184,7 +189,7 @@ def news_agent(state: dict) -> dict:
 
     # 영향력 점수는 결정론 규칙으로 산출한다.
     # (AGENTS.md: 점수 산출은 100% 결정론, LLM은 설명 텍스트 생성에만)
-    impact = int(_clip(3 + min(4, len(texts) // 3) + round(abs(mean) * 3), 1, 10))
+    impact = impact_score(len(texts), mean)
 
     # 핵심 이벤트(설명 전용). LLM 문구를 실제 기사에 그라운딩해 출처 news_id를 붙인다.
     llm_events = _extract_events(relevant, company)

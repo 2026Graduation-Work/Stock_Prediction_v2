@@ -124,3 +124,76 @@ class ValueSignal(BaseModel):
 
     # 검증 (규칙 기반, 결정론)
     validation: ValidationResult = Field(default_factory=ValidationResult)
+
+
+class DailyNewsMetrics(BaseModel):
+    """기간 요약 출력 내부의 일별 감사 행.
+
+    기간 집계(감성·분산·영향력·신선도)를 이 행들만으로 재계산할 수 있어야 한다
+    — 기간 출력의 self-auditing 은 이 리스트가 담보한다.
+    """
+
+    date: str
+    article_count: int = 0        # 관련성 통과 기사 수
+    article_count_raw: int = 0    # 필터 전 그날 전체 기사 수
+    news_sentiment: float = 0.0
+    news_sentiment_std: float = 0.0
+    news_impact_score: int = 5
+    staleness: float = Field(0.0, ge=0, le=1)
+
+
+class PeriodValueSignal(BaseModel):
+    """기간(월/년) 요약 출력 — 다운스트림 모델용 기간 피처 1건.
+
+    ValueSignal(일별 1행)과 피처 축·점수 공식을 공유하되 집계 단위만 기간이다.
+    - 뉴스: 기간 내 '관련 기사 전체'의 기사 단위 평균/분산(= 기사수 가중).
+      영향력·신선도는 기사 있는 날들의 일별 값 평균.
+    - 재무: '기간 종료일' 기준 point-in-time — 종료일에 이미 공시된 사업보고서만 사용.
+    - composite/signal/confidence: ValueSignal 도크스트링의 공식과 동일.
+    days_covered 는 결측 지시자다: 워크북이 기간을 아예 못 덮으면(0) 뉴스 축 전체가
+    무데이터이며, article_count=0 과 함께 validation 에러로 드러난다.
+    """
+
+    # 식별자
+    ticker: str
+    period: str          # 입력 그대로: 'YYYY' 또는 'YYYY-MM'
+    period_start: str
+    period_end: str
+    company_name: str = ""
+
+    # 뉴스 (기간 집계)
+    news_sentiment: float = 0.0
+    news_impact_score: int = 5
+    news_sentiment_std: float = 0.0
+    news_staleness: float = 0.0
+    key_events: list[KeyEvent] = Field(default_factory=list)  # 감성 절댓값 상위 (규칙)
+    article_count: int = 0        # 기간 내 관련성 통과 기사 총수
+    article_count_raw: int = 0    # 기간 내 필터 전 전체 기사 총수
+    avg_daily_articles: float = 0.0  # 관련 기사 일평균 — 월 길이·종목 노출량 정규화
+    period_days: int = 0
+    days_with_articles: int = 0   # 관련 기사가 1건 이상인 날 수
+    days_covered: int = 0         # 워크북이 커버한 날 수 (결측 지시자)
+
+    # 재무 (기간 종료일 기준 point-in-time)
+    financial_health_score: float = 5.0
+    valuation_score: float = 5.0
+    financial_metrics: FinancialMetrics = Field(default_factory=FinancialMetrics)
+    financial_fiscal_year: int | None = None
+    # 재무 나이(개월): 기간 종료월 − 사업연도 종료월(12월 결산 가정).
+    # 같은 FY2020 재무라도 2021-01엔 1개월, 2022-01엔 13개월 묵은 정보다 —
+    # 이 신선도 차이가 모델이 쓸 수 있는 신호라 연도 대신 나이로 노출한다.
+    financial_age_months: int | None = None
+
+    # 종합 판단 (일별과 동일 공식)
+    composite_score: float = Field(5.0, ge=0, le=10)
+    value_investment_signal: Signal = "HOLD"
+    confidence: float = Field(0.5, ge=0, le=1)
+    reasoning: str = ""
+
+    # 출처 (기간 모드 뉴스는 빅카인즈 엑셀 전용 — 폴백 없음)
+    news_source: str = ""       # bigkinds / none
+    financial_source: str = ""  # dart / sample
+
+    # 검증 + 일별 감사 행
+    validation: ValidationResult = Field(default_factory=ValidationResult)
+    daily_metrics: list[DailyNewsMetrics] = Field(default_factory=list)

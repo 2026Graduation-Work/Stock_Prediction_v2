@@ -20,6 +20,7 @@ import json
 import re
 import warnings
 from email.utils import parsedate_to_datetime
+from functools import lru_cache
 from pathlib import Path
 
 from .config import SETTINGS
@@ -301,17 +302,31 @@ def select_fiscal_year(date: str) -> int:
     return d.year - 1 if d >= cutoff else d.year - 2
 
 
-def _fetch_price(ticker: str, date: str) -> float | None:
-    """date 이전 마지막 종가 (FinanceDataReader, 키 불필요)."""
-    try:
-        import FinanceDataReader as fdr
+@lru_cache(maxsize=16)
+def _price_history(ticker: str):
+    """종목 전체 시세를 프로세스당 1회만 받는다.
 
-        end = dt.date.fromisoformat(date)
-        start = end - dt.timedelta(days=SETTINGS.price_lookback_days)
-        df = fdr.DataReader(ticker, start.isoformat(), end.isoformat())
+    배치(날짜 루프)에서 날짜마다 120일 창을 재요청하면 수천 콜이 되는데,
+    전체 이력은 한 번에 ~수천 행이라 1콜로 끝난다. 실패는 캐시되지 않는다
+    (lru_cache는 예외를 저장하지 않음) — 일시 장애가 배치 전체를 오염시키지 않는다.
+    """
+    import FinanceDataReader as fdr
+
+    return fdr.DataReader(ticker, "2010-01-01")
+
+
+def _fetch_price(ticker: str, date: str) -> float | None:
+    """date 이전(120일 창 안) 마지막 종가 (FinanceDataReader, 키 불필요)."""
+    try:
+        df = _price_history(ticker)
         if df is None or len(df) == 0:
             return None
-        return float(df["Close"].iloc[-1])
+        end = dt.date.fromisoformat(date)
+        start = end - dt.timedelta(days=SETTINGS.price_lookback_days)
+        window = df.loc[start.isoformat() : end.isoformat()]
+        if len(window) == 0:
+            return None
+        return float(window["Close"].iloc[-1])
     except Exception:
         return None
 
@@ -330,13 +345,25 @@ _DART_MAP = {
 def _fetch_dart_financials(ticker: str, date: str) -> dict:
     """OpenDartReader로 기준일 시점 공시된 사업보고서 재무제표를 표준 dict로 변환.
 
+    재무는 (종목, 사업연도)당 하나뿐이므로 실제 API 호출은 연도 키로 캐시한다 —
+    배치(날짜 루프)에서 같은 사업연도를 날짜마다 재요청하면 10년×365일이
+    수만 콜이 되지만, 캐시하면 (종목 × 사업연도) 수만큼만 호출된다.
+    호출자가 dict를 변형하므로(price 주입) 캐시 원본은 복사해서 준다.
+    """
+    year = select_fiscal_year(date)  # 기준일 시점 공시된 사업연도 (look-ahead 방지)
+    return dict(_fetch_dart_by_fiscal_year(ticker, year))
+
+
+@lru_cache(maxsize=64)
+def _fetch_dart_by_fiscal_year(ticker: str, year: int) -> dict:
+    """DART 사업보고서 1건 조회 (프로세스당 (종목, 연도) 1회).
+
     DART 계정명/구조가 회사마다 달라 best-effort 매핑이며,
     매핑 실패 항목은 결측(None)으로 남아 지표가 부분 계산된다.
     """
     import OpenDartReader
 
     dart = OpenDartReader(SETTINGS.dart_api_key)
-    year = select_fiscal_year(date)  # 기준일 시점 공시된 사업연도 (look-ahead 방지)
     fs = dart.finstate_all(ticker, year)  # 연결재무제표 전체 계정
     if fs is None or len(fs) == 0:
         raise RuntimeError("DART 재무제표 없음")
