@@ -282,6 +282,43 @@ def test_fetch_dart_financials_uses_point_in_time_fiscal_year(
     assert out["shares_outstanding"] == 1000.0
 
 
+def test_dart_falls_back_to_separate_statements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """연결(CFS)이 없는 법인은 별도(OFS)로 폴백한다.
+
+    실측: 에코프로비엠 FY2018~19는 자회사가 없어 연결재무제표가 존재하지 않는다.
+    """
+
+    class _OfsOnlyDart:
+        seen: list[str] = []
+
+        def __init__(self, key):
+            pass
+
+        def finstate_all(self, corp, bsns_year, fs_div="CFS", **kw):
+            _OfsOnlyDart.seen.append(fs_div)
+            if fs_div == "CFS":
+                return None  # 연결 없음
+            return pd.DataFrame([
+                {"account_nm": "매출액", "thstrm_amount": "300", "frmtrm_amount": "270"},
+            ])
+
+        def report(self, corp, kind, year, **kw):
+            return pd.DataFrame([{"se": "보통주", "istc_totqy": "1000"}])
+
+    _OfsOnlyDart.seen = []
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _OfsOnlyDart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(collectors_mod.SETTINGS, dart_api_key="x"),
+    )
+    out = collectors_mod._fetch_dart_financials("247540", "2019-06-03")
+
+    assert _OfsOnlyDart.seen[:2] == ["CFS", "OFS"]  # 연결 시도 → 별도 폴백
+    assert out["revenue"] == 300.0
+
+
 def test_parse_common_shares_skips_dash_rows_and_prefers_common() -> None:
     """FY2015 실응답처럼 값이 '-'뿐인 프레임은 None, 정상 프레임은 보통주 행."""
     dash_only = pd.DataFrame(

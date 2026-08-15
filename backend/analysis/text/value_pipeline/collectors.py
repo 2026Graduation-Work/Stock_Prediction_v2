@@ -343,6 +343,7 @@ _DART_MAP = {
     "매출액": "revenue", "수익(매출액)": "revenue", "영업수익": "revenue",
     "영업이익": "operating_profit", "영업이익(손실)": "operating_profit",
     "당기순이익": "net_income", "당기순이익(손실)": "net_income",
+    "연결당기순이익": "net_income",  # 현대차 등 일부 연결재무제표의 표기 (실측 FY2016)
     "자산총계": "total_assets", "부채총계": "total_liabilities", "자본총계": "total_equity",
     "유동자산": "current_assets", "유동부채": "current_liabilities",
     "재고자산": "inventories", "이익잉여금": "retained_earnings",
@@ -372,7 +373,13 @@ def _fetch_dart_by_fiscal_year(ticker: str, year: int) -> dict:
     import OpenDartReader
 
     dart = OpenDartReader(SETTINGS.dart_api_key)
-    fs = dart.finstate_all(ticker, year)  # 연결재무제표 전체 계정
+    fs = dart.finstate_all(ticker, year)  # 연결재무제표(CFS) 전체 계정
+    if fs is None or len(fs) == 0:
+        # 자회사가 없는 법인은 연결이 아예 없다 (실측: 에코프로비엠 FY2018~19는
+        # 별도만 존재, FY2020부터 연결). 별도(OFS)로 폴백한다 — 연도에 따라
+        # 별도→연결로 바뀌는 시계열 혼합이 생길 수 있으나, 행 안에서는 한 기준이라
+        # 회계 항등식 검증은 유효하다.
+        fs = dart.finstate_all(ticker, year, fs_div="OFS")
     if fs is None or len(fs) == 0:
         raise RuntimeError("DART 재무제표 없음")
 
