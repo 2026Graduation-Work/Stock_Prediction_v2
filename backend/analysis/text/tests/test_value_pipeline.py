@@ -275,8 +275,70 @@ def test_fetch_dart_financials_uses_point_in_time_fiscal_year(
     out = collectors_mod._fetch_dart_financials("005930", "2022-06-15")
 
     assert _FakeDart.seen["finstate_year"] == 2021
-    assert _FakeDart.seen["report_year"] == 2021   # 발행주식수도 같은 사업연도
+    # 발행주식수는 사업연도가 아니라 '가장 최근' 공시 기준 — FDR 수정주가와
+    # 분할 기준을 맞추기 위해서다 (액면분할 50배 왜곡 회귀 방지).
+    assert _FakeDart.seen["report_year"] == dt.date.today().year - 1
     assert out["fiscal_year"] == 2021
+    assert out["shares_outstanding"] == 1000.0
+
+
+def test_parse_common_shares_skips_dash_rows_and_prefers_common() -> None:
+    """FY2015 실응답처럼 값이 '-'뿐인 프레임은 None, 정상 프레임은 보통주 행."""
+    dash_only = pd.DataFrame(
+        [{"se": "합계", "istc_totqy": "-"}, {"se": "비고", "istc_totqy": "-"}]
+    )
+    assert collectors_mod._parse_common_shares(dash_only) is None
+
+    normal = pd.DataFrame([
+        {"se": "보통주", "istc_totqy": "140,679,337"},
+        {"se": "우선주", "istc_totqy": "20,513,427"},
+        {"se": "합계", "istc_totqy": "161,192,764"},
+    ])
+    assert collectors_mod._parse_common_shares(normal) == 140679337.0
+    # 보통주 행이 없으면 합계로 폴백
+    total_only = pd.DataFrame([{"se": "합계", "istc_totqy": "161,192,764"}])
+    assert collectors_mod._parse_common_shares(total_only) == 161192764.0
+    assert collectors_mod._parse_common_shares(None) is None
+
+
+def test_latest_shares_searches_back_past_empty_years(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """최근 연도가 '-'뿐이면(공시 전 등) 유효값이 나올 때까지 거슬러 찾는다."""
+    latest = dt.date.today().year - 1
+
+    class _Dart:
+        seen: list[int] = []
+
+        def __init__(self, key):
+            pass
+
+        def report(self, corp, kind, year, **kw):
+            _Dart.seen.append(year)
+            if year == latest:  # 최근 연도는 값 없음
+                return pd.DataFrame([{"se": "합계", "istc_totqy": "-"}])
+            return pd.DataFrame([{"se": "보통주", "istc_totqy": "5,969,782,550"}])
+
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _Dart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(collectors_mod.SETTINGS, dart_api_key="x"),
+    )
+    assert collectors_mod._fetch_latest_shares("005930") == 5969782550.0
+    assert _Dart.seen == [latest, latest - 1]  # 내림차순 탐색
+
+
+def test_validation_catches_split_regime_mismatch() -> None:
+    """수정주가(분할 반영) × 분할 전 주식수 → per/pbr이 분할 배수만큼 과소.
+
+    실사고: 삼성 50:1 분할 소급수정 주가 37,460원 × FY2016 주식수 1.4억 주
+    → per 0.28, pbr 0.03이 옛 하한(0.1/0.005)을 통과해 ok=true로 새어나갔다.
+    """
+    bad = _fin(shares_outstanding=1.4e8, price=37460.0)
+    v = _validate(_OK_NEWS, {"metrics": metrics_mod.compute_metrics(bad),
+                             "fiscal_year": 2021}, bad)
+    assert not v["ok"]
+    assert any("상식 범위" in e for e in v["errors"])
 
 
 def test_collect_financials_raises_when_no_data(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -17,7 +17,9 @@ def _clear_collector_caches():
     from analysis.text.value_pipeline import collectors
 
     collectors._fetch_dart_by_fiscal_year.cache_clear()
+    collectors._fetch_latest_shares.cache_clear()
     collectors._price_history.cache_clear()
     yield
     collectors._fetch_dart_by_fiscal_year.cache_clear()
+    collectors._fetch_latest_shares.cache_clear()
     collectors._price_history.cache_clear()

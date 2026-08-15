@@ -394,18 +394,16 @@ def _fetch_dart_by_fiscal_year(ticker: str, year: int) -> dict:
             except ValueError:
                 pass
 
-    # 발행주식수 — 재무제표와 같은 사업연도를 써야 EPS/BPS가 정합적이다.
-    try:
-        sh = dart.report(ticker, "주식총수", year)
-        if sh is None or len(sh) == 0:
-            raise RuntimeError("주식총수 보고서가 비어 있음")
-        out["shares_outstanding"] = float(str(sh.iloc[0]["istc_totqy"]).replace(",", ""))
-    except Exception as e:
-        warnings.warn(
-            f"발행주식수 조회 실패({ticker} FY{year}): {e} "
-            f"→ per/pbr/altman_z가 결측이 됩니다.",
-            stacklevel=2,
-        )
+    # 발행주식수 — 보고서 연도가 아니라 '가장 최근 공시된' 주식총수를 쓴다.
+    # FDR 주가는 액면분할이 소급 수정(adjusted)된 값이라, 분할 전 연도의 주식수를
+    # 곱하면 시총·per·pbr이 분할 비율만큼 왜곡된다(삼성 50:1 → per 0.28로 계산되는
+    # 실사고). 최신 주식수는 수정주가와 같은 분할 기준이므로 정합적이다.
+    # 주식수는 시그널이 아니라 단위 환산자라 point-in-time 원칙과 충돌하지 않는다.
+    # 한계: 이후 자사주 소각·증자분만큼 오차가 남는다(삼성 2017~18 구간 ±20% 수준
+    # — 기존 5,000% 왜곡 대비 허용 가능. VALIDATION 문서 '알려진 한계' 참조).
+    shares = _fetch_latest_shares(ticker)
+    if shares is not None:
+        out["shares_outstanding"] = shares
 
     # 업종 평균 PER/PBR은 별도 소스 필요 → 샘플 기본값 유지
     sample = _load_sample(f"{ticker}_financials.json") or {}
@@ -413,3 +411,59 @@ def _fetch_dart_by_fiscal_year(ticker: str, year: int) -> dict:
     out.setdefault("sector_pbr", sample.get("sector_pbr"))
     out["fiscal_year"] = year  # 감사용: 어느 사업연도를 썼는지 출력에 남긴다
     return out
+
+
+def _parse_common_shares(frame) -> float | None:
+    """DART '주식총수' 응답에서 보통주(없으면 합계) 발행주식수를 뽑는다.
+
+    연도에 따라 응답 포맷이 다르다 — FY2015는 값 없이 '-'만 온다(실측).
+    비수치('-', 빈 값) 행은 건너뛰고, 보통주 행을 우선, 없으면 합계 행을 쓴다.
+    구분(se) 컬럼 자체가 없는 변형 포맷은 첫 번째 유효 숫자 행으로 폴백한다.
+    """
+    if frame is None or len(frame) == 0:
+        return None
+
+    def _numeric(row) -> float | None:
+        raw = str(row.get("istc_totqy", "")).replace(",", "").strip()
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        return value if value > 0 else None
+
+    rows = [row for _, row in frame.iterrows()]
+    for want in ("보통주", "합계"):
+        for row in rows:
+            if want in str(row.get("se", "")) and _numeric(row) is not None:
+                return _numeric(row)
+    for row in rows:  # se 컬럼이 없는 변형 포맷
+        if _numeric(row) is not None:
+            return _numeric(row)
+    return None
+
+
+@lru_cache(maxsize=64)
+def _fetch_latest_shares(ticker: str) -> float | None:
+    """가장 최근 공시된 발행주식수(보통주). 최근 연도부터 6개 연도를 거슬러 찾는다.
+
+    '최근'을 쓰는 이유는 _fetch_dart_by_fiscal_year의 주석 참조(수정주가 정합).
+    유효값이 하나도 없으면 None → per/pbr/altman_z가 결측으로 남는다(정직한 결측).
+    """
+    import OpenDartReader
+
+    dart = OpenDartReader(SETTINGS.dart_api_key)
+    start = dt.date.today().year - 1  # 직전 연도 보고서부터 (당해년도는 미공시)
+    for year in range(start, start - 6, -1):
+        try:
+            frame = dart.report(ticker, "주식총수", year)
+        except Exception:
+            continue
+        shares = _parse_common_shares(frame)
+        if shares is not None:
+            return shares
+    warnings.warn(
+        f"발행주식수 조회 실패({ticker}): 최근 6개 연도 주식총수에 유효값 없음 "
+        f"→ per/pbr/altman_z가 결측이 됩니다.",
+        stacklevel=2,
+    )
+    return None
