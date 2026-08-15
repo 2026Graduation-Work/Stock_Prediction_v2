@@ -144,6 +144,15 @@ def _text_of(item: dict) -> str:
 
 
 # ── News Agent ─────────────────────────────────────────────────
+# 종목별 관련성 키워드 override — 접미사 휴리스틱으로 안 잡히는 회사만 명시한다.
+# AGENTS.md '알려진 한계 6'이 요구하는 "종목별 relevance_key 검증"의 결과물이다.
+# 에코프로비엠: 언론이 그룹명 '에코프로'로 쓰는 기사가 많다(실측: 전량 탈락하던
+# 1,010일 중 126일이 이 키워드로 복구). 삼성전자→'삼성'과 같은 그룹명 방식이다.
+_RELEVANCE_KEY_OVERRIDES = {
+    "에코프로비엠": "에코프로",
+}
+
+
 def relevance_key(company: str) -> str:
     """회사명에서 관련성 판정용 키워드를 만든다.
 
@@ -151,8 +160,11 @@ def relevance_key(company: str) -> str:
     주가 기사라, 그것만 남기면 표본이 편향된다(실측: 2022-06-15에 10건만 남고
     감성 -0.80). ASML·롤러블폰 기사는 '삼성'이라고만 쓴다.
     법인격 접미사를 떼어 회사 그룹명을 키워드로 쓴다.
+    접미사 규칙으로 안 되는 종목은 _RELEVANCE_KEY_OVERRIDES에 명시한다.
     """
     key = (company or "").replace(" ", "")
+    if key in _RELEVANCE_KEY_OVERRIDES:
+        return _RELEVANCE_KEY_OVERRIDES[key]
     for suffix in ("전자", "그룹", "주식회사", "(주)", "홀딩스"):
         if len(key) > len(suffix) and key.endswith(suffix):
             return key[: -len(suffix)]
@@ -377,10 +389,17 @@ def validation_agent(state: dict) -> dict:
             errors.append(f"{k}={v:.4g} 이 상식 범위 [{lo}, {hi}] 밖 → 단위 오류 의심")
 
     # 4) 파생 항목 정합성
+    #
+    # '이익잉여금 ≤ 자본총계'는 넣지 않는다 — 회계 항등식이 아니다.
+    # 자본총계 = 자본금 + 이익잉여금 + 기타포괄손익 − 자기주식이라, 자기주식을
+    # 많이 보유한 회사는 이익잉여금이 자본총계를 넘는 것이 정상이다
+    # (실측: 네이버 FY2022 이익잉여금 23.65조 > 자본총계 23.45조, 자산=부채+자본
+    # 항등식은 0.0000% 오차로 성립. 이 잘못된 규칙이 멀쩡한 731행을 폐기했다).
+    # 매핑 오류 탐지는 자산총계 상한(아래)과 항등식 검사(1번)가 담당한다.
     for a, b, label in [
         ("current_assets", "total_assets", "유동자산 ≤ 자산총계"),
         ("current_liabilities", "total_liabilities", "유동부채 ≤ 부채총계"),
-        ("retained_earnings", "total_equity", "이익잉여금 ≤ 자본총계"),
+        ("retained_earnings", "total_assets", "이익잉여금 ≤ 자산총계"),
     ]:
         x, y = f.get(a), f.get(b)
         if x is not None and y is not None and x > y * 1.005:

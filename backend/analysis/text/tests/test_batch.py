@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import math
 import sys
 from pathlib import Path
 
@@ -164,6 +165,50 @@ def test_daily_feature_extraction_contract() -> None:
     assert row["financial_age_months"] == 6
     for banned in ("composite_score", "value_investment_signal", "confidence"):
         assert banned not in row
+
+
+def test_news_missing_row_survives_with_nan_sentiment() -> None:
+    """관련 기사 0건은 '결측'이지 '오염'이 아니다 — 재무 피처는 살리고 감성만 NaN.
+
+    행을 통째로 버리면 조용한 날이 많은 소형주가 데이터셋에서 사실상 사라져
+    대형주 편향이 생긴다(실측: 에코프로비엠 2,467일 중 1,888일이 이 사유).
+    """
+    signal = _daily_signal(
+        news_sentiment=0.0, news_impact_score=3, news_sentiment_std=0.0,
+        news_staleness=0.0, article_count=0, article_count_raw=2,
+        validation={"ok": False, "errors": ["관련 기사 0건(수집 2건) → … '무데이터'."],
+                    "warnings": []},
+    )
+    assert features_mod.row_status(signal) == "news_missing"
+    row = features_mod.extract_row(signal)
+
+    assert row is not None
+    # 감성 파생 피처는 NaN — 0.0을 '중립'으로 학습하면 안 된다
+    for col in ("news_sentiment", "news_impact_score", "news_sentiment_std",
+                "news_staleness"):
+        assert math.isnan(row[col]), col
+    # 기사 수는 0이 사실(결측 지시자), 재무 피처는 그대로 유효
+    assert row["article_count"] == 0
+    assert row["financial_health_score"] == 8.0
+    assert row["per"] == 10.0
+
+
+def test_corrupt_row_is_still_dropped() -> None:
+    """회계 오류 등 '오염' 행은 계속 버린다 — 결측과 구분된다."""
+    corrupt = _daily_signal(
+        validation={"ok": False,
+                    "errors": ["회계 항등식 위배: 자산 != 부채+자본"], "warnings": []},
+    )
+    assert features_mod.row_status(corrupt) == "invalid"
+    assert features_mod.extract_row(corrupt) is None
+
+    # 결측 + 오염이 섞이면 오염으로 본다
+    both = _daily_signal(
+        validation={"ok": False,
+                    "errors": ["관련 기사 0건 → '무데이터'.", "룩어헤드: FY2025 재무"],
+                    "warnings": []},
+    )
+    assert features_mod.row_status(both) == "invalid"
 
 
 def test_feature_table_rejects_mixed_daily_and_period(tmp_path: Path) -> None:

@@ -671,6 +671,37 @@ def test_run_pipeline_news_and_financial_only(monkeypatch: pytest.MonkeyPatch) -
 
 
 # ── 관련성 필터 (결정론 규칙) ──────────────────────────────────────
+def test_relevance_key_override_for_group_named_coverage() -> None:
+    """접미사 규칙으로 안 잡히는 종목은 override 테이블로 명시한다.
+
+    에코프로비엠은 언론이 그룹명 '에코프로'로 쓰는 기사가 많다
+    (실측: 전량 탈락하던 1,010일 중 126일 복구).
+    """
+    assert agents_mod.relevance_key("에코프로비엠") == "에코프로"
+    news = [{"news_id": "n1", "title": "에코프로 시가총액 11조원 돌파",
+             "summary": "공매도 급등락", "url": "", "press": "", "date": "2023-03-15"}]
+    assert agents_mod.relevant_indices(news, "에코프로비엠") == [0]
+
+
+def test_validation_allows_retained_earnings_above_equity() -> None:
+    """이익잉여금 > 자본총계는 회계 오류가 아니다 — 자기주식 차감 때문.
+
+    실측: 네이버 FY2022 이익잉여금 23.65조 > 자본총계 23.45조인데 자산=부채+자본
+    항등식은 0.0000% 오차로 성립. 옛 규칙이 멀쩡한 731행을 폐기했다.
+    """
+    naver = _fin(retained_earnings=3.1e14)  # 자본총계 3.0e14보다 크다
+    v = _validate(_OK_NEWS, {"metrics": metrics_mod.compute_metrics(naver),
+                             "fiscal_year": 2021}, naver)
+    assert v["ok"], v["errors"]
+
+    # 자산총계를 넘으면 그건 진짜 매핑 오류다
+    broken = _fin(retained_earnings=5.0e14)  # 자산 4.0e14 초과
+    v2 = _validate(_OK_NEWS, {"metrics": metrics_mod.compute_metrics(broken),
+                              "fiscal_year": 2021}, broken)
+    assert not v2["ok"]
+    assert any("이익잉여금 ≤ 자산총계" in e for e in v2["errors"])
+
+
 def test_relevance_key_strips_corporate_suffix() -> None:
     """'삼성전자'로 제목만 매칭하면 폭락일에 주가 기사만 남아 표본이 편향된다.
 

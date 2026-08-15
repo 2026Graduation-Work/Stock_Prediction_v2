@@ -18,11 +18,17 @@
 - financial_age_months — 일별 행에는 스키마에 없으므로 date와 financial_fiscal_year
   로 계산해 붙인다(12월 결산 가정, 기간 행과 동일 정의).
 
-규약:
-- validation.ok == False 인 행은 테이블에서 제외한다 (오염 행 하나가 없는 것보다
-  나쁘다 — 없으면 결측이지만, 오염 행은 모델이 학습해버린다).
+규약 — '결측'과 '오염'을 구분한다:
+- **오염 행은 제외한다.** 회계 항등식 위배·룩어헤드·단위 오류 등은 숫자 자체를
+  믿을 수 없으므로 버린다 (오염 행 하나가 없는 것보다 나쁘다 — 없으면 결측이지만,
+  오염 행은 모델이 학습해버린다).
+- **결측 행은 살린다.** 실패 사유가 '관련 기사 0건'뿐이면 뉴스가 없었을 뿐 재무
+  피처는 멀쩡하다. 감성 파생 피처만 NaN으로 두고 행은 유지한다 — 소형주는 조용한
+  날이 많아(실측: 에코프로비엠 2,467일 중 1,888일) 행을 통째로 버리면 그 종목이
+  데이터셋에서 사실상 사라져 대형주 편향이 생긴다.
+  기사 수(article_count 등)는 0이 사실이므로 그대로 둔다 — 결측 지시자다.
 - 결측(None)은 NaN으로 남긴다. 0으로 채우지 않는다 — LightGBM은 NaN을 네이티브로
-  처리하며, 0 대치는 '적자'와 '데이터 없음'을 섞는다.
+  처리하며, 0 대치는 '적자'와 '데이터 없음'을, 감성에서는 '무데이터'와 '중립'을 섞는다.
 
 사용:
     python -m value_pipeline.features out/005930/*.json --out features_daily.csv
@@ -70,8 +76,31 @@ DAILY_FEATURE_COLUMNS = [
 ]
 
 
+# 관련 기사 0건 에러의 표식 (agents.validation_agent가 쓰는 문구).
+# '무데이터'가 아니라 이 문구로 매칭하는 이유: 워크북 자체가 없는 경우
+# (period.py의 커버리지 에러)도 '무데이터'라고 쓰는데, 그건 '뉴스가 없었다'가
+# 아니라 '보지 않았다'라서 결측으로 살리면 안 된다 — 오염으로 버려야 한다.
+_MISSING_NEWS_MARKER = "관련 기사 0건"
+# 기사가 0건이면 값이 없는 것이라 NaN으로 두는 감성 파생 피처.
+# 기사 수 계열은 0이 사실이므로 여기 넣지 않는다(결측 지시자 역할).
+_SENTIMENT_FEATURES = frozenset(
+    {"news_sentiment", "news_impact_score", "news_sentiment_std", "news_staleness"}
+)
+
+
 def _nan_if_none(v: float | int | None) -> float:
     return float(v) if v is not None else math.nan
+
+
+def row_status(signal: dict) -> str:
+    """'ok' | 'news_missing' | 'invalid' — 행을 어떻게 다뤄야 하는지."""
+    validation = signal.get("validation") or {}
+    if validation.get("ok", False):
+        return "ok"
+    errors = validation.get("errors") or []
+    if errors and all(_MISSING_NEWS_MARKER in e for e in errors):
+        return "news_missing"  # 뉴스가 없었을 뿐 — 재무 피처는 유효
+    return "invalid"
 
 
 def _financial_age_months(asof_date: str, fiscal_year: int | None) -> float:
@@ -96,11 +125,13 @@ def columns_for(kind: str) -> tuple[list[str], list[str]]:
 def extract_row(signal: dict) -> dict | None:
     """ValueSignal/PeriodValueSignal dict → 조인 키 + 피처의 평탄 dict.
 
-    validation.ok가 False면 None을 반환한다 — 호출자가 그 행을 버리게 한다.
+    오염 행(invalid)이면 None을 반환한다 — 호출자가 그 행을 버리게 한다.
+    결측 행(news_missing)은 감성 파생 피처를 NaN으로 두고 행을 살린다.
     """
-    validation = signal.get("validation") or {}
-    if not validation.get("ok", False):
+    status = row_status(signal)
+    if status == "invalid":
         return None
+    news_missing = status == "news_missing"
 
     kind = signal_kind(signal)
     key_columns, feature_columns = columns_for(kind)
@@ -110,6 +141,10 @@ def extract_row(signal: dict) -> dict | None:
     metrics = signal.get("financial_metrics") or {}
     asof = signal["period_end"] if kind == "period" else signal["date"]
     for col in feature_columns:
+        if news_missing and col in _SENTIMENT_FEATURES:
+            # 기사가 없었으므로 감성은 '0.0(중립)'이 아니라 값이 없는 것이다
+            row[col] = math.nan
+            continue
         if col == "days_with_articles_ratio":
             value = (
                 signal.get("days_with_articles", 0) / period_days if period_days else None
@@ -133,6 +168,7 @@ def build_feature_table(paths: Sequence[Path]) -> tuple[list[dict], list[str], s
     rows: list[dict] = []
     skipped: list[str] = []
     mode = ""
+    news_missing = 0
     for p in sorted(paths):
         path = Path(p)
         signal = json.loads(path.read_text(encoding="utf-8"))
@@ -142,12 +178,19 @@ def build_feature_table(paths: Sequence[Path]) -> tuple[list[dict], list[str], s
         elif kind != mode:
             skipped.append(f"{path.name}: {mode} 테이블에 {kind} 행 혼입 — 제외")
             continue
+        status = row_status(signal)
         row = extract_row(signal)
         if row is None:
             errors = (signal.get("validation") or {}).get("errors", [])
-            skipped.append(f"{path.name}: 검증 실패 행 제외 — {errors[:1]}")
+            skipped.append(f"{path.name}: 오염 행 제외 — {errors[:1]}")
             continue
+        if status == "news_missing":
+            news_missing += 1
         rows.append(row)
+    if news_missing:  # 조용한 축소 금지 — 감성 결측 비중을 항상 알린다
+        skipped.append(
+            f"(참고) 뉴스 결측 행 {news_missing}건은 감성 피처만 NaN으로 두고 유지"
+        )
     return rows, skipped, mode
 
 
@@ -163,7 +206,8 @@ def main(argv: list[str] | None = None) -> int:
     inputs = [Path(p) for p in args.inputs if not Path(p).name.startswith("_manifest")]
     rows, skipped, mode = build_feature_table(inputs)
     for msg in skipped:
-        print(f"[제외] {msg}", file=sys.stderr)
+        print(f"[제외] {msg}" if not msg.startswith("(참고)") else f"[정보] {msg}",
+              file=sys.stderr)
     if not rows:
         print("[오류] 사용할 수 있는 행이 없습니다.", file=sys.stderr)
         return 1

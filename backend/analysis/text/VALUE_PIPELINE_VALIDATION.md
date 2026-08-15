@@ -81,12 +81,20 @@ DART는 (종목, 사업연도)당 1콜·FDR은 종목당 1콜). **LLM은 강제 
 
 **학습용 피처 추출** — 모델(LightGBM)은 JSON을 직접 읽지 않고 `features.py`를 거친다.
 무엇을 모델에 넣고 빼는지의 SSOT이며, 일별(ValueSignal)·기간(PeriodValueSignal)
-모두 지원한다(혼입은 거부). 규칙은 세 가지다:
+모두 지원한다(혼입은 거부). 규칙은 네 가지다:
 
 - `composite_score`·`value_investment_signal`·`confidence`는 **입력에서 제외**
   (다른 피처들의 고정 공식 조합 = 정보량 0. 화면 표시용으로만)
-- `validation.ok == false` 행은 테이블에서 제외
+- **오염 행은 제외**: 회계 항등식 위배·룩어헤드·단위 오류·워크북 미커버 등
+- **결측 행은 유지**: 실패 사유가 '관련 기사 0건'뿐이면 감성 파생 피처
+  (`news_sentiment`·`news_impact_score`·`news_sentiment_std`·`news_staleness`)만
+  NaN으로 두고 행은 살린다. 재무 피처는 유효하고, 기사 수는 0이 사실이다.
+  → 조용한 날이 많은 소형주가 데이터셋에서 사라져 **대형주 편향**이 생기는 것을 막는다
+  (실측: 에코프로비엠 2,467일 중 1,888일이 이 사유. 행을 버리면 579행만 남는다)
 - 결측(None)은 NaN 유지 — 0 대치 금지 (LightGBM native 처리)
+
+> '뉴스가 없었다'(결측, 유지)와 '보지 않았다'(워크북 미커버 = 수집 실패, 폐기)는
+> 다르다. 후자는 무데이터인지 아닌지조차 알 수 없으므로 살리지 않는다.
 
 ```bash
 python -m value_pipeline.features out/005930/*.json --out features_daily.csv

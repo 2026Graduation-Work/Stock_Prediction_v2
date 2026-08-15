@@ -211,7 +211,11 @@ def test_period_row_is_self_auditing(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_period_without_workbook_fails_validation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """워크북이 기간을 아예 못 덮으면 무데이터 — 정상 행처럼 보이면 안 된다."""
+    """워크북이 기간을 아예 못 덮으면 무데이터 — 정상 행처럼 보이면 안 된다.
+
+    '뉴스가 없었다'(결측, 행 유지)와 달리 '보지 않았다'(수집 실패)이므로
+    features.py도 이 행을 오염으로 보고 버린다.
+    """
     _patch_sources(monkeypatch, {}, _fin(), covered="none")
     out = period_mod.run_period_pipeline("005930", "2022-06", "삼성전자")
 
