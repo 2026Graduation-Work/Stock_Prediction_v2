@@ -1,5 +1,3 @@
-# core/config.py의 fallback 예시. 현재 aggressive(H5) 정본 설정과 동일하다.
-# 학습·평가는 experiments/configs/holdout_2025_h5.yaml을 복사해 실행한다.
 experiment_name: "holdout_2025_h5_u175_d150"
 description: "Final H5 chart baseline: train 2022-2024, untouched 2025 holdout."
 tags: ["baseline", "final_holdout", "dynamic_sigma", "h5"]
@@ -8,8 +6,10 @@ data:
   tickers: ""
   universe: "kospi_all_2024-12-30_snapshot"
   price_dir: "data/processed"
-  version: "set-data-snapshot-id"
+  # Drive snapshot을 교체하면 notebook의 실행 사본에 고유 version을 넣는다.
+  version: "drive-snapshot-set-me"
   start_date: "2022-01-01"
+  # ML 라벨 평가는 2025-12-31 뒤의 관측 버퍼를 원본 parquet에서 읽는다.
   end_date: "2025-12-31"
   split_strategy: "single"
   embargo_days: 7
@@ -54,6 +54,8 @@ model:
     random_state: 42
     n_jobs: -1
 
+# 2025가 유일한 최종 OOS 검증 구간이므로 내부 6개월 validation을 생략한다.
+# train.py는 이때 라벨 관측을 2024-12-31에서 닫아 2025 누수를 차단한다.
 training:
   skip_validation: true
 

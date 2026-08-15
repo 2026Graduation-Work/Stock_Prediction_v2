@@ -1,5 +1,5 @@
-"""Reproducible baseline-versus-psychology comparison experiment."""
+"""Reproducible multiclass baseline-versus-treatment comparison experiment."""
 
-from .metrics import evaluate_predictions, select_volatile_dates
+from .metrics import expected_calibration_error, select_volatile_dates
 
-__all__ = ["evaluate_predictions", "select_volatile_dates"]
+__all__ = ["expected_calibration_error", "select_volatile_dates"]

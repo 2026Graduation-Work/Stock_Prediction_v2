@@ -3,7 +3,7 @@
 import pandas as pd
 import pytest
 
-from experiments.train import _evaluate_validation
+from experiments.train import _evaluate_validation, _training_windows
 
 
 class _FixedProbModel:
@@ -51,3 +51,37 @@ def test_validation_rejects_missing_trade_metadata() -> None:
             frame,
             ["feature"],
         )
+
+
+def test_final_holdout_uses_full_training_period_without_label_leakage() -> None:
+    split = {
+        "train_start": "2022-01-01",
+        "train_end": "2024-12-31",
+        "test_start": "2025-01-08",
+        "test_end": "2025-12-31",
+    }
+
+    assert _training_windows(split, embargo_days=7, skip_validation=True) == (
+        "2024-12-31",
+        "2024-12-31",
+        "2024-12-31",
+        "2024-12-31",
+        None,
+    )
+
+
+def test_standard_run_keeps_internal_validation_window() -> None:
+    split = {
+        "train_start": "2022-01-01",
+        "train_end": "2024-12-31",
+        "test_start": "2025-01-08",
+        "test_end": "2025-12-31",
+    }
+
+    assert _training_windows(split, embargo_days=7, skip_validation=False) == (
+        "2024-06-30",
+        "2024-07-06",
+        "2024-07-07",
+        "2024-12-31",
+        "2025-01-07",
+    )
