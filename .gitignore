@@ -102,3 +102,9 @@ backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/data/processed/005930.parquet
 !backend/analysis/chart/data/ticker_metadata.csv
 !backend/analysis/chart/core/models/
+
+# ---------- backend/analysis/text (value_pipeline) ----------
+# OpenDartReader 회사코드 캐시 (실행 시 자동 생성)
+docs_cache/
+# value_pipeline CLI 산출물 (기본 저장 위치가 실행 디렉터리)
+backend/analysis/text/*.json

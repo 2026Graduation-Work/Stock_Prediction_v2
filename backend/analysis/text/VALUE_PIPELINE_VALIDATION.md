@@ -43,6 +43,53 @@ python -m value_pipeline.run --ticker 005930 --name 삼성전자 --date 2022-06-
 
 출력: `{ticker}_{date}.json` (cwd 기준). `--out`으로 변경 가능.
 
+### 1.1 기간 모드 (`--period`)
+
+```bash
+python -m value_pipeline.run --ticker 005930 --name 삼성전자 --period 2022-01   # 월
+python -m value_pipeline.run --ticker 005930 --name 삼성전자 --period 2022      # 년
+```
+
+기간 전체를 요약한 `PeriodValueSignal` **1건**을 낸다 (`{ticker}_{period}.json`).
+일별 행과 피처 축·점수 공식은 동일하고 집계 단위만 다르다.
+
+| 축 | 규칙 |
+|---|---|
+| 뉴스 | 기간 내 날짜 순회, **빅카인즈 엑셀 전용**(네이버 폴백 없음). 관련성 필터 후 기사 단위 가중 집계 |
+| 재무 | **기간 종료일 기준 point-in-time** — `collect_financials(ticker, period_end)` 재사용 |
+| LLM | **아예 호출 안 함** — 핵심 이벤트도 규칙(감성 절댓값 상위). 기간 경로는 100% 결정론 |
+| 감사 | `daily_metrics`(일별 행)만으로 기간 집계 재계산 가능. `days_covered`=워크북 커버 일수(결측 지시자) |
+
+종료 코드·검증 규칙은 일별과 동일(재무 실패 exit 2, 검증 실패 exit 3).
+확인: `test_period_pipeline.py` (`test_period_financials_use_period_end`,
+`test_period_aggregates_are_article_weighted`, `test_period_signal_field_contract` 등)
+
+### 1.2 대량 생성 (`value_pipeline.batch`) — 학습 데이터셋용
+
+```bash
+python -m value_pipeline.batch --ticker 005930 --name 삼성전자 \
+    --start 2016-01-01 --end 2025-12-31 --out-dir out/005930
+```
+
+날짜 루프를 **한 프로세스**에서 돌린다(FinBERT 로드 1회, 워크북 파싱 캐시,
+DART는 (종목, 사업연도)당 1콜·FDR은 종목당 1콜). **LLM은 강제 OFF** — 대량 생성이
+무료 한도를 태우는 실수를 구조적으로 차단하며 숫자는 LLM 유무와 무관하다.
+하루 실패는 기록 후 계속 진행하고, 요약은 `_manifest_*.json`에 남는다.
+중단된 배치는 `--skip-existing`으로 재개.
+
+**학습용 피처 추출** — 모델(LightGBM)은 JSON을 직접 읽지 않고 `features.py`를 거친다.
+무엇을 모델에 넣고 빼는지의 SSOT이며, 일별(ValueSignal)·기간(PeriodValueSignal)
+모두 지원한다(혼입은 거부). 규칙은 세 가지다:
+
+- `composite_score`·`value_investment_signal`·`confidence`는 **입력에서 제외**
+  (다른 피처들의 고정 공식 조합 = 정보량 0. 화면 표시용으로만)
+- `validation.ok == false` 행은 테이블에서 제외
+- 결측(None)은 NaN 유지 — 0 대치 금지 (LightGBM native 처리)
+
+```bash
+python -m value_pipeline.features out/005930/*.json --out features_daily.csv
+```
+
 ---
 
 ## 2. PASS/FAIL 기준
