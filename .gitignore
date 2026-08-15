@@ -91,6 +91,7 @@ backend/analysis/chart/experiments/train_src/cache/
 backend/analysis/chart/experiments/results/*
 !backend/analysis/chart/experiments/results/
 !backend/analysis/chart/experiments/results/README.md
+!backend/analysis/chart/experiments/results/2026-06-progress-roadmap.md
 !backend/analysis/chart/experiments/results/legacy_screening/
 backend/analysis/chart/experiments/results/legacy_screening/*
 !backend/analysis/chart/experiments/results/legacy_screening/SELECTION_REPORT.md
