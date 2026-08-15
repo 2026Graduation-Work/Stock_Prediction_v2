@@ -19,7 +19,9 @@ from analysis.text import preprocess as pp
 from analysis.text.value_pipeline import agents as agents_mod
 from analysis.text.value_pipeline import collectors as collectors_mod
 from analysis.text.value_pipeline import graph as graph_mod
+from analysis.text.value_pipeline import llm as llm_mod
 from analysis.text.value_pipeline import metrics as metrics_mod
+from analysis.text.value_pipeline import run as run_mod
 from analysis.text.value_pipeline import schema as schema_mod
 from analysis.text.value_pipeline import staleness as staleness_mod
 
@@ -830,6 +832,54 @@ def test_corpus_workbooks_still_accept_legacy_newsresult(tmp_path: Path) -> None
         {"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
          "제목": "기사", "본문": "본문", "URL": "", "분석제외 여부": ""}])
     assert len(pp.find_corpus_workbooks(raw, "005930")) == 1
+
+
+# ── LLM 런타임 스위치 (--no-llm) ───────────────────────────────────
+@pytest.fixture()
+def _llm_switch_reset():
+    """스위치는 모듈 전역이라 테스트 간 누수 방지를 위해 반드시 원복한다."""
+    yield
+    llm_mod.set_llm_enabled(True)
+
+
+def test_set_llm_enabled_blocks_api_even_with_key(
+    monkeypatch: pytest.MonkeyPatch, _llm_switch_reset
+) -> None:
+    """--no-llm은 키가 .env에 있어도 API 경로를 차단해야 한다."""
+    monkeypatch.setattr(
+        llm_mod, "SETTINGS",
+        dataclasses.replace(llm_mod.SETTINGS, gemini_api_key="dummy-key"),
+    )
+    llm_mod.set_llm_enabled(False)
+    assert llm_mod.get_llm() is None  # 키가 있어도 None → structured가 폴백
+
+    from pydantic import BaseModel
+
+    class _Probe(BaseModel):
+        text: str = ""
+
+    # 캐시에 없는 프롬프트 → 차단 상태에선 API 대신 None(규칙 폴백 신호)
+    assert llm_mod.structured("no-llm 스위치 프로브 프롬프트", _Probe) is None
+
+
+def test_cli_no_llm_flag_wires_the_switch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _llm_switch_reset, capsys
+) -> None:
+    """run.py --no-llm 이 실행 전에 스위치를 내리는지 확인."""
+    seen: dict[str, bool] = {}
+
+    def fake_pipeline(ticker, date, name):
+        seen["disabled_during_run"] = llm_mod._FORCE_DISABLED
+        return {"validation": {"ok": True, "errors": [], "warnings": []}}
+
+    monkeypatch.setattr(run_mod, "run_pipeline", fake_pipeline)
+    rc = run_mod.main(
+        ["--date", "2022-06-15", "--no-llm", "--out", str(tmp_path / "o.json")]
+    )
+
+    assert rc == 0
+    assert seen["disabled_during_run"] is True
+    capsys.readouterr()  # 결과 JSON stdout 출력 소거
 
 
 # ── staleness (Tetlock 2011) ───────────────────────────────────────
