@@ -26,6 +26,7 @@ import sys
 from pathlib import Path
 
 from .collectors import FinancialsUnavailableError
+from .config import SETTINGS
 from .graph import run_pipeline
 from .llm import set_llm_enabled
 
@@ -93,6 +94,8 @@ def run_batch(
         "errors": errors,
         "skipped_existing": skipped,
         "llm": "disabled",
+        # 재현 조건 기록: 이 값이 다르면 같은 명령이라도 per/pbr가 다를 수 있다
+        "shares_asof_year": SETTINGS.shares_asof_year,
     }
     manifest_path = out_dir / f"_manifest_{ticker}_{start}_{end}.json"
     manifest_path.write_text(

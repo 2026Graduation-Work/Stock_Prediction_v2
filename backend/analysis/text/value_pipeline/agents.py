@@ -113,6 +113,32 @@ def impact_score(article_count: int, mean_sentiment: float) -> int:
     return int(_clip(3 + min(4, article_count // 3) + round(abs(mean_sentiment) * 3), 1, 10))
 
 
+def synthesize_scores(
+    valuation: float,
+    health: float,
+    news_sentiment: float,
+    impact: int,
+    sentiment_std: float,
+    real_sources: int,
+) -> tuple[float, str, float]:
+    """(composite, signal, confidence) 결정론 공식 — 일별·기간 모드 공용.
+
+    schema.ValueSignal 도크스트링의 공식 그 자체다. 한 곳에만 두는 이유:
+    일별(synthesis_agent)과 기간(period.py)에 복제되어 있으면 한쪽만 고치는
+    사고가 난다(PR #67 리뷰 Q2). 양쪽 self-auditing 테스트가 이 공식을 못박는다.
+    """
+    fundamental = valuation * 0.6 + health * 0.4              # 0~10
+    sentiment_adj = news_sentiment * (impact / 10.0) * 2.0    # ±2 내외
+    composite = _clip(fundamental + sentiment_adj, 0.0, 10.0)
+    signal = _to_signal(composite)
+
+    # 신뢰도: 데이터 품질 + 시그널 마진 - 뉴스 의견분산 (LLM 자기보고 대신 직접 산출)
+    quality = 0.5 + 0.125 * real_sources                      # 0.5~0.75 (2소스)
+    margin = abs(composite - 5.0) / 5.0                       # 0~1 (확신 강도)
+    confidence = round(_clip(quality + 0.2 * margin - 0.15 * sentiment_std, 0.2, 0.95), 3)
+    return composite, signal, confidence
+
+
 def _text_of(item: dict) -> str:
     return f"{item.get('title', '')} {item.get('summary', '')}".strip()
 
@@ -198,12 +224,14 @@ def news_agent(state: dict) -> dict:
         event_backend = "llm"
     else:  # 규칙 기반 폴백: 감성 절댓값이 큰 헤드라인을 핵심 이벤트로
         ranked = sorted(
-            zip(relevant, scores, strict=False), key=lambda x: abs(x[1]), reverse=True
+            zip(relevant, scores, strict=True), key=lambda x: abs(x[1]), reverse=True
         )
+        # 제목 필터를 슬라이스보다 먼저 — 상위 5건 중 무제목이 있어도 5건을 채운다
+        # (로더가 무제목 기사를 이미 걸러 실제로는 방어적 정리다. PR #67 리뷰 3)
+        titled = [it for it, _ in ranked if it.get("title")]
         key_events = [
             KeyEvent(event=str(it.get("title", "")), news_ids=[str(it.get("news_id", ""))])
-            for it, _ in ranked[:5]
-            if it.get("title")
+            for it in titled[:5]
         ]
         event_backend = "rule"
 
@@ -432,24 +460,17 @@ def synthesis_agent(state: dict) -> dict:
     news_sent = news.get("news_sentiment", 0.0)
     impact = news.get("news_impact_score", 5)
 
-    # 펀더멘털(가치투자 핵심) + 뉴스 감성 보정.
-    # 소셜(대중) 심리 소스가 제거되어 감성 축은 뉴스(전문가 매체) 단일 소스로 산출한다.
-    fundamental = valuation * 0.6 + health * 0.4              # 0~10
-    sentiment_adj = news_sent * (impact / 10.0) * 2.0         # ±2 내외
-    composite = _clip(fundamental + sentiment_adj, 0.0, 10.0)
-    signal = _to_signal(composite)
-
-    # 신뢰도: 데이터 품질 + 시그널 마진 - 뉴스 의견분산 (LLM 자기보고 대신 직접 산출).
-    # 실데이터 소스는 뉴스·재무 2개뿐이라 base/계수를 2소스 기준으로 재조정한다.
+    # 펀더멘털(가치투자 핵심) + 뉴스 감성 보정 — 공식은 synthesize_scores 한 곳에만.
+    # 실데이터 소스는 뉴스·재무 2개뿐이라 base/계수가 2소스 기준으로 잡혀 있다.
     real_sources = sum(
         1
         for s in (state.get("news_source"), state.get("financial_source"))
         if s and s != "sample"
     )
-    quality = 0.5 + 0.125 * real_sources                      # 0.5~0.75 (2소스)
-    margin = abs(composite - 5.0) / 5.0                        # 0~1 (확신 강도)
-    disagreement = news.get("news_sentiment_std", 0.0)
-    confidence = round(_clip(quality + 0.2 * margin - 0.15 * disagreement, 0.2, 0.95), 3)
+    composite, signal, confidence = synthesize_scores(
+        valuation, health, news_sent, impact,
+        news.get("news_sentiment_std", 0.0), real_sources,
+    )
 
     # 근거: LLM 있으면 생성, 없으면 템플릿
     events = [e.get("event", "") for e in (news.get("key_events") or [])][:4]

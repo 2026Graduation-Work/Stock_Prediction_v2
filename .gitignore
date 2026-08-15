@@ -106,5 +106,6 @@ backend/analysis/chart/experiments/configs/*
 # ---------- backend/analysis/text (value_pipeline) ----------
 # OpenDartReader 회사코드 캐시 (실행 시 자동 생성)
 docs_cache/
-# value_pipeline CLI 산출물 (기본 저장 위치가 실행 디렉터리)
-backend/analysis/text/*.json
+# value_pipeline CLI 산출물은 기본 저장 위치가 out/ 이며, out/은 위 Node 섹션의
+# `out/` 패턴(임의 깊이 매칭)으로 이미 무시된다. 디렉터리 전체(*.json)를 덮으면
+# tracked 파일·*.example.json 계약 파일까지 가려지므로 넓은 패턴을 쓰지 않는다.

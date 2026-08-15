@@ -275,9 +275,9 @@ def test_fetch_dart_financials_uses_point_in_time_fiscal_year(
     out = collectors_mod._fetch_dart_financials("005930", "2022-06-15")
 
     assert _FakeDart.seen["finstate_year"] == 2021
-    # 발행주식수는 사업연도가 아니라 '가장 최근' 공시 기준 — FDR 수정주가와
-    # 분할 기준을 맞추기 위해서다 (액면분할 50배 왜곡 회귀 방지).
-    assert _FakeDart.seen["report_year"] == dt.date.today().year - 1
+    # 발행주식수는 사업연도가 아니라 스냅샷 기준연도(SHARES_ASOF_YEAR) 공시 기준 —
+    # FDR 수정주가와 분할 기준을 맞추기 위해서다 (액면분할 50배 왜곡 회귀 방지).
+    assert _FakeDart.seen["report_year"] == collectors_mod.SETTINGS.shares_asof_year
     assert out["fiscal_year"] == 2021
     assert out["shares_outstanding"] == 1000.0
 
@@ -301,31 +301,71 @@ def test_parse_common_shares_skips_dash_rows_and_prefers_common() -> None:
     assert collectors_mod._parse_common_shares(None) is None
 
 
+class _SharesDart:
+    """주식총수 조회 대역 — 탐색 순서를 기록하고, 특정 연도만 값이 없다."""
+
+    seen: list[int] = []
+    empty_years: set[int] = set()
+
+    def __init__(self, key):
+        pass
+
+    def report(self, corp, kind, year, **kw):
+        _SharesDart.seen.append(year)
+        if year in _SharesDart.empty_years:
+            return pd.DataFrame([{"se": "합계", "istc_totqy": "-"}])
+        return pd.DataFrame([{"se": "보통주", "istc_totqy": "5,969,782,550"}])
+
+
 def test_latest_shares_searches_back_past_empty_years(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """최근 연도가 '-'뿐이면(공시 전 등) 유효값이 나올 때까지 거슬러 찾는다."""
-    latest = dt.date.today().year - 1
-
-    class _Dart:
-        seen: list[int] = []
-
-        def __init__(self, key):
-            pass
-
-        def report(self, corp, kind, year, **kw):
-            _Dart.seen.append(year)
-            if year == latest:  # 최근 연도는 값 없음
-                return pd.DataFrame([{"se": "합계", "istc_totqy": "-"}])
-            return pd.DataFrame([{"se": "보통주", "istc_totqy": "5,969,782,550"}])
-
-    monkeypatch.setitem(sys.modules, "OpenDartReader", _Dart)
+    """기준연도가 '-'뿐이면(공시 전 등) 유효값이 나올 때까지 거슬러 찾는다."""
+    asof = collectors_mod.SETTINGS.shares_asof_year
+    _SharesDart.seen, _SharesDart.empty_years = [], {asof}
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _SharesDart)
     monkeypatch.setattr(
         collectors_mod, "SETTINGS",
         dataclasses.replace(collectors_mod.SETTINGS, dart_api_key="x"),
     )
     assert collectors_mod._fetch_latest_shares("005930") == 5969782550.0
-    assert _Dart.seen == [latest, latest - 1]  # 내림차순 탐색
+    assert _SharesDart.seen == [asof, asof - 1]  # 내림차순 탐색
+
+
+def test_latest_shares_do_not_depend_on_today(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """회귀 못박기(PR #67 리뷰 1): 기준연도가 today()에 묶이면 실행 연도에 따라
+    같은 입력의 per/pbr → signal이 달라져 재현성이 깨진다. 탐색 시작 연도는
+    SHARES_ASOF_YEAR 고정값이어야 한다."""
+    _SharesDart.seen, _SharesDart.empty_years = [], set()
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _SharesDart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(
+            collectors_mod.SETTINGS, dart_api_key="x", shares_asof_year=2023
+        ),
+    )
+    collectors_mod._fetch_latest_shares("005930")
+    assert _SharesDart.seen == [2023]  # today가 아니라 고정 스냅샷 연도에서 시작
+    assert _SharesDart.seen[0] != dt.date.today().year - 1
+
+
+def test_latest_shares_warns_when_snapshot_year_is_stale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """고정 연도가 낡으면(이후 분할 미반영 위험) 숫자는 유지하되 경고를 낸다."""
+    _SharesDart.seen, _SharesDart.empty_years = [], set()
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _SharesDart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(
+            collectors_mod.SETTINGS, dart_api_key="x", shares_asof_year=2020
+        ),
+    )
+    with pytest.warns(UserWarning, match="낡았습니다"):
+        assert collectors_mod._fetch_latest_shares("005930") == 5969782550.0
+    assert _SharesDart.seen == [2020]  # 경고만 — 탐색 기준은 고정값 유지(재현성)
 
 
 def test_validation_catches_split_regime_mismatch() -> None:

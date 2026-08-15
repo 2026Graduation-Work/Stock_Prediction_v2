@@ -38,7 +38,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--name", default="", help="회사명 (뉴스 검색 정확도 향상용)")
     ap.add_argument(
         "--out", default="",
-        help="출력 JSON 경로 (기본: <ticker>_<date>.json, 기간 모드는 <ticker>_<period>.json)",
+        help="출력 JSON 경로 (기본: out/<ticker>_<date>.json, 기간 모드는 out/<ticker>_<period>.json)",
     )
     ap.add_argument(
         "--no-llm", action="store_true",
@@ -79,8 +79,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"[중단] {e}", file=sys.stderr)
         return 2
 
-    default_out = f"{args.ticker}_{args.period or args.date}.json"
-    out_path = Path(args.out) if args.out else Path(default_out)
+    # 기본 저장 위치는 out/ — 저장소 트리에 산출물이 섞이지 않게 한다
+    # (.gitignore는 out/만 무시하면 되고, *.example.json 같은 계약 파일을 덮지 않는다)
+    default_out = Path("out") / f"{args.ticker}_{args.period or args.date}.json"
+    out_path = Path(args.out) if args.out else default_out
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(json.dumps(result, ensure_ascii=False, indent=2))

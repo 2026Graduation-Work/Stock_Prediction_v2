@@ -312,16 +312,23 @@ def _price_history(ticker: str):
     """
     import FinanceDataReader as fdr
 
-    return fdr.DataReader(ticker, "2010-01-01")
+    return fdr.DataReader(ticker, SETTINGS.price_history_start)
 
 
 def _fetch_price(ticker: str, date: str) -> float | None:
     """date 이전(120일 창 안) 마지막 종가 (FinanceDataReader, 키 불필요)."""
     try:
+        end = dt.date.fromisoformat(date)
+        if end < dt.date.fromisoformat(SETTINGS.price_history_start):
+            warnings.warn(
+                f"{date}는 시세 캐시 시작일({SETTINGS.price_history_start}) 이전 "
+                f"→ 주가 결측. PRICE_HISTORY_START로 시작일을 조정하세요.",
+                stacklevel=2,
+            )
+            return None
         df = _price_history(ticker)
         if df is None or len(df) == 0:
             return None
-        end = dt.date.fromisoformat(date)
         start = end - dt.timedelta(days=SETTINGS.price_lookback_days)
         window = df.loc[start.isoformat() : end.isoformat()]
         if len(window) == 0:
@@ -348,7 +355,8 @@ def _fetch_dart_financials(ticker: str, date: str) -> dict:
     재무는 (종목, 사업연도)당 하나뿐이므로 실제 API 호출은 연도 키로 캐시한다 —
     배치(날짜 루프)에서 같은 사업연도를 날짜마다 재요청하면 10년×365일이
     수만 콜이 되지만, 캐시하면 (종목 × 사업연도) 수만큼만 호출된다.
-    호출자가 dict를 변형하므로(price 주입) 캐시 원본은 복사해서 준다.
+    호출자가 dict를 변형하므로(price 주입) 캐시 원본은 얕은 복사로 분리한다
+    — 값이 전부 스칼라라는 전제이며, 중첩 값을 넣게 되면 deepcopy로 바꿀 것.
     """
     year = select_fiscal_year(date)  # 기준일 시점 공시된 사업연도 (look-ahead 방지)
     return dict(_fetch_dart_by_fiscal_year(ticker, year))
@@ -434,25 +442,37 @@ def _parse_common_shares(frame) -> float | None:
     rows = [row for _, row in frame.iterrows()]
     for want in ("보통주", "합계"):
         for row in rows:
-            if want in str(row.get("se", "")) and _numeric(row) is not None:
-                return _numeric(row)
+            if want in str(row.get("se", "")) and (value := _numeric(row)) is not None:
+                return value
     for row in rows:  # se 컬럼이 없는 변형 포맷
-        if _numeric(row) is not None:
-            return _numeric(row)
+        if (value := _numeric(row)) is not None:
+            return value
     return None
 
 
 @lru_cache(maxsize=64)
 def _fetch_latest_shares(ticker: str) -> float | None:
-    """가장 최근 공시된 발행주식수(보통주). 최근 연도부터 6개 연도를 거슬러 찾는다.
+    """스냅샷 기준연도(SHARES_ASOF_YEAR)부터 6개 연도를 거슬러 찾은 발행주식수(보통주).
 
-    '최근'을 쓰는 이유는 _fetch_dart_by_fiscal_year의 주석 참조(수정주가 정합).
+    최신 기준을 쓰는 이유는 _fetch_dart_by_fiscal_year의 주석 참조(수정주가 정합).
+    기준연도를 today()가 아니라 고정 상수로 두는 이유: 실행 연도에 따라 같은 입력의
+    per/pbr → valuation → signal이 달라지면 재현성이 깨진다(PR #67 리뷰 지적.
+    같은 계열 사고의 회귀 테스트: test_select_fiscal_year_does_not_depend_on_today).
     유효값이 하나도 없으면 None → per/pbr/altman_z가 결측으로 남는다(정직한 결측).
     """
     import OpenDartReader
 
+    start = SETTINGS.shares_asof_year
+    stale_by = dt.date.today().year - 1 - start
+    if stale_by > 0:
+        warnings.warn(
+            f"SHARES_ASOF_YEAR={start}가 최신 공시 가능 연도(FY{start + stale_by})보다 "
+            f"{stale_by}년 낡았습니다. 이후 액면분할·증자가 있었다면 값을 올리고 "
+            f"데이터셋을 재생성하세요 (숫자는 고정값 기준으로 재현 가능하게 유지됩니다).",
+            stacklevel=2,
+        )
+
     dart = OpenDartReader(SETTINGS.dart_api_key)
-    start = dt.date.today().year - 1  # 직전 연도 보고서부터 (당해년도는 미공시)
     for year in range(start, start - 6, -1):
         try:
             frame = dart.report(ticker, "주식총수", year)

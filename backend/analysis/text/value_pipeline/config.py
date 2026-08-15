@@ -43,6 +43,17 @@ class Settings:
 
     news_lookback_days: int = 3
     price_lookback_days: int = 120
+    # 발행주식수 스냅샷 기준연도 — 이 연도 주식총수부터 내림차순으로 탐색한다.
+    # today() 기반이면 실행 연도에 따라 같은 입력의 per/pbr가 달라져 재현성이
+    # 깨진다(PR #67 리뷰). 새 액면분할·대규모 증자가 생기면 이 값을 올리고
+    # 데이터셋을 재생성할 것 — 낡으면 collectors가 warning을 낸다.
+    shares_asof_year: int = field(
+        default_factory=lambda: int(os.getenv("SHARES_ASOF_YEAR", "2025"))
+    )
+    # FDR 시세 캐시 시작일 — 이보다 과거 기준일은 주가 결측(warning)이 된다.
+    price_history_start: str = field(
+        default_factory=lambda: os.getenv("PRICE_HISTORY_START", "2010-01-01")
+    )
     # 뉴스 감성에 쓸 최대 기사 수 (관련성 라벨링 후 적용).
     # 병리적인 날을 막는 안전 상한일 뿐, 실제로는 걸리지 않아야 한다 —
     # 감성은 평균이라 관련 기사가 많을수록 추정이 정확해지고, FinBERT는 로컬이라

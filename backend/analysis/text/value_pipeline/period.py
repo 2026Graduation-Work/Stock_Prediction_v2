@@ -22,12 +22,11 @@ import re
 
 from . import collectors, staleness
 from .agents import (
-    _clip,
     _text_of,
-    _to_signal,
     financial_agent,
     impact_score,
     relevant_indices,
+    synthesize_scores,
     validation_agent,
 )
 from .config import SETTINGS
@@ -113,7 +112,8 @@ def run_period_pipeline(ticker: str, period: str, company_name: str = "") -> dic
         scores, _backend = score_texts(texts)
         mean, std = aggregate(scores)
         stale = staleness.staleness_score(texts, prior_texts)
-        scored_items.extend(zip(scores, relevant, strict=False))
+        # 길이 불일치는 텍스트 구성 계약 위반 — 조용히 잘리는 대신 그날 에러로 드러낸다
+        scored_items.extend(zip(scores, relevant, strict=True))
 
         daily.append(
             DailyNewsMetrics(
@@ -145,26 +145,21 @@ def run_period_pipeline(ticker: str, period: str, company_name: str = "") -> dic
     )
 
     # 핵심 이벤트: 감성 절댓값 상위 헤드라인 (규칙 기반 — LLM 미사용, 출처 포함).
+    # 제목 필터를 슬라이스보다 먼저 적용해 5건을 채운다 (PR #67 리뷰 3).
     ranked = sorted(scored_items, key=lambda x: abs(x[0]), reverse=True)
+    titled = [it for _, it in ranked if it.get("title")]
     key_events = [
         KeyEvent(event=str(it.get("title", "")), news_ids=[str(it.get("news_id", ""))])
-        for _, it in ranked[:5]
-        if it.get("title")
+        for it in titled[:5]
     ]
 
-    # ── 종합 (일별 synthesis_agent와 동일 공식) ──────────────────
+    # ── 종합 — 공식은 agents.synthesize_scores 한 곳에만 존재한다 ──
     valuation = fin_result["valuation_score"]
     health = fin_result["financial_health_score"]
-    composite = _clip(
-        valuation * 0.6 + health * 0.4 + p_mean * (p_impact / 10.0) * 2.0, 0.0, 10.0
-    )
-    signal = _to_signal(composite)
-
     news_source = "bigkinds" if days_covered else "none"
     real_sources = sum(1 for s in (news_source, fin_src) if s not in ("sample", "none"))
-    margin = abs(composite - 5.0) / 5.0
-    confidence = round(
-        _clip(0.5 + 0.125 * real_sources + 0.2 * margin - 0.15 * p_std, 0.2, 0.95), 3
+    composite, signal, confidence = synthesize_scores(
+        valuation, health, p_mean, p_impact, p_std, real_sources
     )
 
     # ── 검증: 일별 validation_agent의 재무·건수 규칙을 그대로 재사용하고,
