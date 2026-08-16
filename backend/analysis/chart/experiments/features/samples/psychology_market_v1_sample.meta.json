@@ -1,0 +1,68 @@
+{
+  "config": {
+    "disposition_squash_ratio": 0.1,
+    "disposition_window": 60,
+    "fear_greed_window": 20,
+    "herding_window": 20,
+    "overreaction_long_window": 60,
+    "overreaction_short_window": 5,
+    "overreaction_squash_z": 2.0
+  },
+  "environment": {
+    "numpy": "2.4.6",
+    "pandas": "3.0.5",
+    "python": "3.11.15"
+  },
+  "feature_profile": "psychology_market_v1",
+  "features": {
+    "raw": [
+      "psych_fear_greed",
+      "psych_herding",
+      "psych_overreaction",
+      "psych_disposition"
+    ],
+    "recommended_treatment": [
+      "psych_fear_greed",
+      "psych_herding",
+      "psych_overreaction",
+      "psych_disposition"
+    ],
+    "summary_axes": [
+      "psych_greed_fear_axis",
+      "psych_crowd_pressure_axis"
+    ]
+  },
+  "generator_version": "1.0.0",
+  "input": {
+    "codes": 3,
+    "end_date": "2024-06-17",
+    "fingerprint_sha256": "4864638a4b2a246b6f2098473c03b3ec98887189977bad1631d9786d0465d269",
+    "rows": 360,
+    "start_date": "2024-01-02"
+  },
+  "output": {
+    "codes": 3,
+    "dropped_warmup_rows": 192,
+    "end_date": "2024-06-17",
+    "fingerprint_sha256": "52c2822a9d8e9b0cf8941e6b2c45ead04e84045612e51e4775dce35a1d5bb53e",
+    "rows": 168,
+    "start_date": "2024-04-01"
+  },
+  "selection": {
+    "codes": null,
+    "end": null,
+    "start": null
+  },
+  "source": {
+    "codes": [
+      "000001",
+      "000002",
+      "000003"
+    ],
+    "kind": "synthetic_demo_panel",
+    "periods": 120,
+    "seed": 20260817,
+    "warning": "합성 데이터입니다. 연구 결과로 보고하지 마세요."
+  },
+  "warmup_trading_days": 65
+}
