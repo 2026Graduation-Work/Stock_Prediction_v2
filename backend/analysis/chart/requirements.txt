@@ -13,7 +13,7 @@ pyyaml>=6.0
 
 # ── 백테스트 및 시뮬레이션 ─────────────────────
 # (로컬 실험용 vectorbt 및 의존 패키지)
-vectorbt>=0.25.0
+vectorbt>=1.1.0
 matplotlib>=3.5.0
 yfinance>=0.2.0
 quantstats>=0.0.59
