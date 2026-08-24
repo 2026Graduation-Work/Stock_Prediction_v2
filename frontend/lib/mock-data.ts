@@ -11,7 +11,7 @@ import type {
 } from "./types";
 
 export const marketStatus: MarketStatus = {
-  date: "2026-07-07",
+  date: "2025-10-02",
   source: "mock",
   condition: "caution",
   volatilityScore: 61,
@@ -20,30 +20,30 @@ export const marketStatus: MarketStatus = {
     {
       symbol: "KOSPI",
       label: "KOSPI",
-      value: 2790.3,
-      change: 31,
-      changePercent: 1.12,
+      value: 3549.21,
+      change: 93.38,
+      changePercent: 2.7,
     },
     {
       symbol: "KOSDAQ",
       label: "KOSDAQ",
-      value: 829.43,
-      change: 4.55,
-      changePercent: 0.55,
+      value: 854.25,
+      change: 8.91,
+      changePercent: 1.05,
     },
     {
       symbol: "KOSPI200",
       label: "KOSPI 200",
-      value: 371.9,
-      change: 4.28,
-      changePercent: 1.16,
+      value: 493.41,
+      change: 14.04,
+      changePercent: 2.93,
     },
     {
       symbol: "USD/KRW",
       label: "원/달러",
-      value: 1220,
-      change: -2,
-      changePercent: -0.16,
+      value: 1401.82,
+      change: -1.33,
+      changePercent: -0.09,
     },
   ],
 };
@@ -168,7 +168,7 @@ export const stockDetails: Record<string, StockDetail> = {
     ...celltrion,
     currentPrice: 190_800,
     changePercent: 1.2,
-    asOf: "2026-07-07",
+    asOf: "2025-10-02",
     priceHistory: priceSeries(
       [176_200, 183_400, 178_900, 187_300, 183_900, 192_300, 187_400, 190_800],
       1_400,
@@ -212,7 +212,7 @@ export const stockDetails: Record<string, StockDetail> = {
     ...samsungElectronics,
     currentPrice: 92_300,
     changePercent: 0.8,
-    asOf: "2026-07-07",
+    asOf: "2025-10-02",
     priceHistory: priceSeries(
       [84_300, 87_900, 86_200, 89_800, 88_400, 91_200, 90_100, 92_300],
       600,
@@ -258,7 +258,7 @@ export const stockDetails: Record<string, StockDetail> = {
     ...hyundaiMotor,
     currentPrice: 265_000,
     changePercent: 2.1,
-    asOf: "2026-07-07",
+    asOf: "2025-10-02",
     priceHistory: priceSeries(
       [238_000, 246_000, 242_500, 252_000, 249_000, 258_000, 254_500, 265_000],
       2_200,
