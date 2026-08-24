@@ -250,13 +250,6 @@ function FourRunTable({
               }`}
             >
               {metric.label}
-              <span className="ml-1 text-[10px] text-faint">
-                {metric.direction === "higher"
-                  ? "↑"
-                  : metric.direction === "lower"
-                    ? "↓"
-                    : "·"}
-              </span>
             </th>
           ))}
         </tr>
