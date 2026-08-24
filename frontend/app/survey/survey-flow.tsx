@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import {
+  AVOIDED_ASSET_DESCRIPTIONS,
   AVOIDED_ASSET_LABELS,
   horizonCodeForScore,
   horizonScoreForMonths,
@@ -114,7 +115,7 @@ const QUESTIONS: SurveyQuestion[] = [
     description: "직접 선택한 항목만 추천 후보에서 제외됩니다. 복수 선택할 수 있어요.",
     type: "multi",
     choices: (Object.entries(AVOIDED_ASSET_LABELS) as [RiskFlag, string][]).map(
-      ([id, label]) => ({ id, label }),
+      ([id, label]) => ({ id, label, detail: AVOIDED_ASSET_DESCRIPTIONS[id] }),
     ),
   },
   {
@@ -375,7 +376,18 @@ export default function SurveyFlow() {
                           }
                           className="size-4 flex-none accent-[#2f5fd0]"
                         />
-                        <span>{choice.label}</span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <span>{choice.label}</span>
+                          {choice.detail && (
+                            <span
+                              title={choice.detail}
+                              onClick={(event) => event.preventDefault()}
+                              className="inline-flex size-4 flex-none cursor-help items-center justify-center rounded-full border border-muted text-[10px] font-bold leading-none text-muted"
+                            >
+                              ?
+                            </span>
+                          )}
+                        </span>
                       </label>
                     );
                   })}
