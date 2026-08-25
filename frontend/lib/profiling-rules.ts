@@ -66,6 +66,15 @@ export const AVOIDED_ASSET_LABELS: Record<RiskFlag, string> = {
   preferred_stock: "우선주",
 };
 
+export const AVOIDED_ASSET_DESCRIPTIONS: Record<RiskFlag, string> = {
+  spac: "합병 대상 기업이 아직 정해지지 않은 상장 서류상의 회사예요.",
+  managed_stock: "부실 위험으로 거래소가 별도 관리하며 상장폐지될 수 있는 종목이에요.",
+  low_liquidity: "거래량이 적어 원하는 가격에 사고팔기 어려운 종목이에요.",
+  penny_stock: "주가가 매우 낮고 변동성과 투기성이 큰 종목이에요.",
+  high_volatility: "짧은 기간에 주가가 크게 오르내리는 종목이에요.",
+  preferred_stock: "의결권 대신 배당을 우선 받는 주식으로 보통주와 가격 흐름이 다를 수 있어요.",
+};
+
 export const HORIZON_MODEL_RULES = [
   { minimum: 67, modelHorizon: "H5", style: "aggressive" },
   { minimum: 34, modelHorizon: "H10", style: "neutral" },
