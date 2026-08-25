@@ -220,6 +220,21 @@ function SectionHeading({
   );
 }
 
+function MetricInfoBadge({ description }: { description?: string }) {
+  if (!description) return null;
+  return (
+    <span
+      title={description}
+      tabIndex={0}
+      role="img"
+      aria-label={description}
+      className="inline-flex size-3.5 flex-none cursor-help items-center justify-center rounded-full border border-edge bg-white text-[9px] font-bold leading-none text-faint"
+    >
+      ?
+    </span>
+  );
+}
+
 function FourRunTable({
   rows,
   deltas,
@@ -249,7 +264,10 @@ function FourRunTable({
                 index === ML_METRICS.length - 1 ? "border-r border-line" : ""
               }`}
             >
-              {metric.label}
+              <span className="inline-flex items-center justify-end gap-1">
+                {metric.label}
+                <MetricInfoBadge description={metric.description} />
+              </span>
             </th>
           ))}
         </tr>
@@ -404,7 +422,10 @@ function SamplePanel({
             {METRICS.map((metric) => (
               <tr key={metric.key} className="border-t border-line-soft">
                 <th className="px-3 py-2 text-left text-[10.5px] font-bold text-body">
-                  {metric.shortLabel}
+                  <span className="inline-flex items-center gap-1">
+                    {metric.shortLabel}
+                    <MetricInfoBadge description={metric.description} />
+                  </span>
                 </th>
                 {(["stable", "aggressive"] as const).map((comparisonProfile) => (
                   <PairCell
