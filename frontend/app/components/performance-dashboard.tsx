@@ -393,7 +393,12 @@ function SamplePanel({
                 }}
                 formatter={(value) => Number(value).toFixed(3)}
               />
-              <Legend iconType="square" iconSize={8} wrapperStyle={{ fontSize: 10 }} />
+              <Legend
+                iconType="square"
+                iconSize={8}
+                wrapperStyle={{ fontSize: 10 }}
+                itemSorter={null}
+              />
               {CHART_SERIES.map((series) => (
                 <Bar
                   key={series.key}
