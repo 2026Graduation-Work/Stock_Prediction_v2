@@ -119,11 +119,11 @@ export const avoidanceNotice = {
 
 export const portfolioHoldings: PortfolioHolding[] = [
   {
-    code: "005930",
-    name: "삼성전자",
+    code: "000270",
+    name: "기아",
     signalLight: "positive",
     quantity: 15,
-    avgBuyPrice: 71_200,
+    avgBuyPrice: 104_200,
   },
   {
     code: "035720",
@@ -140,11 +140,11 @@ export const portfolioHoldings: PortfolioHolding[] = [
     avgBuyPrice: 182_000,
   },
   {
-    code: "005380",
-    name: "현대차",
+    code: "000660",
+    name: "SK하이닉스",
     signalLight: "strong_positive",
     quantity: 5,
-    avgBuyPrice: 235_000,
+    avgBuyPrice: 395_500,
   },
 ];
 
