@@ -16,7 +16,7 @@ pyyaml>=6.0
 vectorbt>=0.25.0
 matplotlib>=3.5.0
 yfinance>=0.2.0
-quantstats>=0.0.59
+quantstats>=0.0.81
 
 # ── 실험 분석 대시보드 ─────────────────────────
 streamlit>=1.60.0
