@@ -113,3 +113,20 @@ backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/data/ticker_metadata.csv
 backend/analysis/chart/data/raw/corp_code_mapping.json
 !backend/analysis/chart/core/models/
+
+# ---------- backend/analysis/text (value_pipeline) ----------
+# OpenDartReader 회사코드 캐시 (실행 시 자동 생성)
+docs_cache/
+# value_pipeline CLI 산출물은 기본 저장 위치가 out/ 이며, out/은 위 Node 섹션의
+# `out/` 패턴(임의 깊이 매칭)으로 이미 무시된다. 디렉터리 전체(*.json)를 덮으면
+# tracked 파일·*.example.json 계약 파일까지 가려지므로 넓은 패턴을 쓰지 않는다.
+#
+# 예외: 학습용 피처 CSV는 추적한다 (차트 블록이 조인해 쓰는 블록 간 공유물).
+# 숫자 피처와 (ticker, date)뿐이라 기사 원문이 없고 4종목 합쳐 2MB다.
+# 일별 JSON(12,000+개, 13MB+)은 계속 제외한다 — key_events에 기사 제목 원문이
+# 들어 있고, CSV로 언제든 재생성할 수 있다.
+# 상위 out/이 ignore이므로 디렉토리부터 unignore한다 (차트 블록과 동일 방식).
+!backend/analysis/text/out/
+backend/analysis/text/out/*
+!backend/analysis/text/out/features_*.csv
+!backend/analysis/text/out/README.md

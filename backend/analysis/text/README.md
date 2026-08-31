@@ -29,7 +29,12 @@
   LangGraph 오케스트레이션:
   `START → ingest → {news_agent ‖ financial_agent} → validation_agent → synthesis_agent → END`.
   뉴스 수집은 `preprocess.load_daily_news()`(빅카인즈 point-in-time 로더)를 우선 사용한다.
-  실행: `backend/analysis/text/`에서 `python -m value_pipeline.run`.
+  실행: `backend/analysis/text/`에서 `python -m value_pipeline.run` (일별 1행).
+  기간 요약은 `--period 2022-01`(월)·`--period 2022`(년) — 재무는 기간 종료일 기준
+  point-in-time, 뉴스는 기간 전체 기사 가중 집계 1건. `--no-llm`으로 키가 있어도
+  LLM 호출 차단(숫자 불변). 학습 데이터셋 대량 생성은 `python -m value_pipeline.batch`
+  (LLM 강제 OFF + 수집 캐시), 모델 입력 변환은 `python -m value_pipeline.features`
+  (피처 선택 규칙의 SSOT).
   **검증 기준: [VALUE_PIPELINE_VALIDATION.md](VALUE_PIPELINE_VALIDATION.md)** — 출력을 데이터셋에
   넣기 전에 반드시 이 문서의 PASS/FAIL 기준을 따를 것.
 - `preprocess.py` — 빅카인즈 수동 다운로드 엑셀을 병합·정제하여 FinBERT 입력 CSV 생성.

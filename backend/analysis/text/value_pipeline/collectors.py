@@ -20,6 +20,7 @@ import json
 import re
 import warnings
 from email.utils import parsedate_to_datetime
+from functools import lru_cache
 from pathlib import Path
 
 from .config import SETTINGS
@@ -301,17 +302,38 @@ def select_fiscal_year(date: str) -> int:
     return d.year - 1 if d >= cutoff else d.year - 2
 
 
-def _fetch_price(ticker: str, date: str) -> float | None:
-    """date 이전 마지막 종가 (FinanceDataReader, 키 불필요)."""
-    try:
-        import FinanceDataReader as fdr
+@lru_cache(maxsize=16)
+def _price_history(ticker: str):
+    """종목 전체 시세를 프로세스당 1회만 받는다.
 
+    배치(날짜 루프)에서 날짜마다 120일 창을 재요청하면 수천 콜이 되는데,
+    전체 이력은 한 번에 ~수천 행이라 1콜로 끝난다. 실패는 캐시되지 않는다
+    (lru_cache는 예외를 저장하지 않음) — 일시 장애가 배치 전체를 오염시키지 않는다.
+    """
+    import FinanceDataReader as fdr
+
+    return fdr.DataReader(ticker, SETTINGS.price_history_start)
+
+
+def _fetch_price(ticker: str, date: str) -> float | None:
+    """date 이전(120일 창 안) 마지막 종가 (FinanceDataReader, 키 불필요)."""
+    try:
         end = dt.date.fromisoformat(date)
-        start = end - dt.timedelta(days=SETTINGS.price_lookback_days)
-        df = fdr.DataReader(ticker, start.isoformat(), end.isoformat())
+        if end < dt.date.fromisoformat(SETTINGS.price_history_start):
+            warnings.warn(
+                f"{date}는 시세 캐시 시작일({SETTINGS.price_history_start}) 이전 "
+                f"→ 주가 결측. PRICE_HISTORY_START로 시작일을 조정하세요.",
+                stacklevel=2,
+            )
+            return None
+        df = _price_history(ticker)
         if df is None or len(df) == 0:
             return None
-        return float(df["Close"].iloc[-1])
+        start = end - dt.timedelta(days=SETTINGS.price_lookback_days)
+        window = df.loc[start.isoformat() : end.isoformat()]
+        if len(window) == 0:
+            return None
+        return float(window["Close"].iloc[-1])
     except Exception:
         return None
 
@@ -321,6 +343,7 @@ _DART_MAP = {
     "매출액": "revenue", "수익(매출액)": "revenue", "영업수익": "revenue",
     "영업이익": "operating_profit", "영업이익(손실)": "operating_profit",
     "당기순이익": "net_income", "당기순이익(손실)": "net_income",
+    "연결당기순이익": "net_income",  # 현대차 등 일부 연결재무제표의 표기 (실측 FY2016)
     "자산총계": "total_assets", "부채총계": "total_liabilities", "자본총계": "total_equity",
     "유동자산": "current_assets", "유동부채": "current_liabilities",
     "재고자산": "inventories", "이익잉여금": "retained_earnings",
@@ -330,14 +353,33 @@ _DART_MAP = {
 def _fetch_dart_financials(ticker: str, date: str) -> dict:
     """OpenDartReader로 기준일 시점 공시된 사업보고서 재무제표를 표준 dict로 변환.
 
+    재무는 (종목, 사업연도)당 하나뿐이므로 실제 API 호출은 연도 키로 캐시한다 —
+    배치(날짜 루프)에서 같은 사업연도를 날짜마다 재요청하면 10년×365일이
+    수만 콜이 되지만, 캐시하면 (종목 × 사업연도) 수만큼만 호출된다.
+    호출자가 dict를 변형하므로(price 주입) 캐시 원본은 얕은 복사로 분리한다
+    — 값이 전부 스칼라라는 전제이며, 중첩 값을 넣게 되면 deepcopy로 바꿀 것.
+    """
+    year = select_fiscal_year(date)  # 기준일 시점 공시된 사업연도 (look-ahead 방지)
+    return dict(_fetch_dart_by_fiscal_year(ticker, year))
+
+
+@lru_cache(maxsize=64)
+def _fetch_dart_by_fiscal_year(ticker: str, year: int) -> dict:
+    """DART 사업보고서 1건 조회 (프로세스당 (종목, 연도) 1회).
+
     DART 계정명/구조가 회사마다 달라 best-effort 매핑이며,
     매핑 실패 항목은 결측(None)으로 남아 지표가 부분 계산된다.
     """
     import OpenDartReader
 
     dart = OpenDartReader(SETTINGS.dart_api_key)
-    year = select_fiscal_year(date)  # 기준일 시점 공시된 사업연도 (look-ahead 방지)
-    fs = dart.finstate_all(ticker, year)  # 연결재무제표 전체 계정
+    fs = dart.finstate_all(ticker, year)  # 연결재무제표(CFS) 전체 계정
+    if fs is None or len(fs) == 0:
+        # 자회사가 없는 법인은 연결이 아예 없다 (실측: 에코프로비엠 FY2018~19는
+        # 별도만 존재, FY2020부터 연결). 별도(OFS)로 폴백한다 — 연도에 따라
+        # 별도→연결로 바뀌는 시계열 혼합이 생길 수 있으나, 행 안에서는 한 기준이라
+        # 회계 항등식 검증은 유효하다.
+        fs = dart.finstate_all(ticker, year, fs_div="OFS")
     if fs is None or len(fs) == 0:
         raise RuntimeError("DART 재무제표 없음")
 
@@ -367,18 +409,16 @@ def _fetch_dart_financials(ticker: str, date: str) -> dict:
             except ValueError:
                 pass
 
-    # 발행주식수 — 재무제표와 같은 사업연도를 써야 EPS/BPS가 정합적이다.
-    try:
-        sh = dart.report(ticker, "주식총수", year)
-        if sh is None or len(sh) == 0:
-            raise RuntimeError("주식총수 보고서가 비어 있음")
-        out["shares_outstanding"] = float(str(sh.iloc[0]["istc_totqy"]).replace(",", ""))
-    except Exception as e:
-        warnings.warn(
-            f"발행주식수 조회 실패({ticker} FY{year}): {e} "
-            f"→ per/pbr/altman_z가 결측이 됩니다.",
-            stacklevel=2,
-        )
+    # 발행주식수 — 보고서 연도가 아니라 '가장 최근 공시된' 주식총수를 쓴다.
+    # FDR 주가는 액면분할이 소급 수정(adjusted)된 값이라, 분할 전 연도의 주식수를
+    # 곱하면 시총·per·pbr이 분할 비율만큼 왜곡된다(삼성 50:1 → per 0.28로 계산되는
+    # 실사고). 최신 주식수는 수정주가와 같은 분할 기준이므로 정합적이다.
+    # 주식수는 시그널이 아니라 단위 환산자라 point-in-time 원칙과 충돌하지 않는다.
+    # 한계: 이후 자사주 소각·증자분만큼 오차가 남는다(삼성 2017~18 구간 ±20% 수준
+    # — 기존 5,000% 왜곡 대비 허용 가능. VALIDATION 문서 '알려진 한계' 참조).
+    shares = _fetch_latest_shares(ticker)
+    if shares is not None:
+        out["shares_outstanding"] = shares
 
     # 업종 평균 PER/PBR은 별도 소스 필요 → 샘플 기본값 유지
     sample = _load_sample(f"{ticker}_financials.json") or {}
@@ -386,3 +426,71 @@ def _fetch_dart_financials(ticker: str, date: str) -> dict:
     out.setdefault("sector_pbr", sample.get("sector_pbr"))
     out["fiscal_year"] = year  # 감사용: 어느 사업연도를 썼는지 출력에 남긴다
     return out
+
+
+def _parse_common_shares(frame) -> float | None:
+    """DART '주식총수' 응답에서 보통주(없으면 합계) 발행주식수를 뽑는다.
+
+    연도에 따라 응답 포맷이 다르다 — FY2015는 값 없이 '-'만 온다(실측).
+    비수치('-', 빈 값) 행은 건너뛰고, 보통주 행을 우선, 없으면 합계 행을 쓴다.
+    구분(se) 컬럼 자체가 없는 변형 포맷은 첫 번째 유효 숫자 행으로 폴백한다.
+    """
+    if frame is None or len(frame) == 0:
+        return None
+
+    def _numeric(row) -> float | None:
+        raw = str(row.get("istc_totqy", "")).replace(",", "").strip()
+        try:
+            value = float(raw)
+        except ValueError:
+            return None
+        return value if value > 0 else None
+
+    rows = [row for _, row in frame.iterrows()]
+    for want in ("보통주", "합계"):
+        for row in rows:
+            if want in str(row.get("se", "")) and (value := _numeric(row)) is not None:
+                return value
+    for row in rows:  # se 컬럼이 없는 변형 포맷
+        if (value := _numeric(row)) is not None:
+            return value
+    return None
+
+
+@lru_cache(maxsize=64)
+def _fetch_latest_shares(ticker: str) -> float | None:
+    """스냅샷 기준연도(SHARES_ASOF_YEAR)부터 6개 연도를 거슬러 찾은 발행주식수(보통주).
+
+    최신 기준을 쓰는 이유는 _fetch_dart_by_fiscal_year의 주석 참조(수정주가 정합).
+    기준연도를 today()가 아니라 고정 상수로 두는 이유: 실행 연도에 따라 같은 입력의
+    per/pbr → valuation → signal이 달라지면 재현성이 깨진다(PR #67 리뷰 지적.
+    같은 계열 사고의 회귀 테스트: test_select_fiscal_year_does_not_depend_on_today).
+    유효값이 하나도 없으면 None → per/pbr/altman_z가 결측으로 남는다(정직한 결측).
+    """
+    import OpenDartReader
+
+    start = SETTINGS.shares_asof_year
+    stale_by = dt.date.today().year - 1 - start
+    if stale_by > 0:
+        warnings.warn(
+            f"SHARES_ASOF_YEAR={start}가 최신 공시 가능 연도(FY{start + stale_by})보다 "
+            f"{stale_by}년 낡았습니다. 이후 액면분할·증자가 있었다면 값을 올리고 "
+            f"데이터셋을 재생성하세요 (숫자는 고정값 기준으로 재현 가능하게 유지됩니다).",
+            stacklevel=2,
+        )
+
+    dart = OpenDartReader(SETTINGS.dart_api_key)
+    for year in range(start, start - 6, -1):
+        try:
+            frame = dart.report(ticker, "주식총수", year)
+        except Exception:
+            continue
+        shares = _parse_common_shares(frame)
+        if shares is not None:
+            return shares
+    warnings.warn(
+        f"발행주식수 조회 실패({ticker}): 최근 6개 연도 주식총수에 유효값 없음 "
+        f"→ per/pbr/altman_z가 결측이 됩니다.",
+        stacklevel=2,
+    )
+    return None

@@ -108,11 +108,51 @@ def _clip(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
 
 
+def impact_score(article_count: int, mean_sentiment: float) -> int:
+    """뉴스 영향력 1~10 — 기사 수·감성 강도의 결정론 규칙 (일별·기간 모드 공용)."""
+    return int(_clip(3 + min(4, article_count // 3) + round(abs(mean_sentiment) * 3), 1, 10))
+
+
+def synthesize_scores(
+    valuation: float,
+    health: float,
+    news_sentiment: float,
+    impact: int,
+    sentiment_std: float,
+    real_sources: int,
+) -> tuple[float, str, float]:
+    """(composite, signal, confidence) 결정론 공식 — 일별·기간 모드 공용.
+
+    schema.ValueSignal 도크스트링의 공식 그 자체다. 한 곳에만 두는 이유:
+    일별(synthesis_agent)과 기간(period.py)에 복제되어 있으면 한쪽만 고치는
+    사고가 난다(PR #67 리뷰 Q2). 양쪽 self-auditing 테스트가 이 공식을 못박는다.
+    """
+    fundamental = valuation * 0.6 + health * 0.4              # 0~10
+    sentiment_adj = news_sentiment * (impact / 10.0) * 2.0    # ±2 내외
+    composite = _clip(fundamental + sentiment_adj, 0.0, 10.0)
+    signal = _to_signal(composite)
+
+    # 신뢰도: 데이터 품질 + 시그널 마진 - 뉴스 의견분산 (LLM 자기보고 대신 직접 산출)
+    quality = 0.5 + 0.125 * real_sources                      # 0.5~0.75 (2소스)
+    margin = abs(composite - 5.0) / 5.0                       # 0~1 (확신 강도)
+    confidence = round(_clip(quality + 0.2 * margin - 0.15 * sentiment_std, 0.2, 0.95), 3)
+    return composite, signal, confidence
+
+
 def _text_of(item: dict) -> str:
     return f"{item.get('title', '')} {item.get('summary', '')}".strip()
 
 
 # ── News Agent ─────────────────────────────────────────────────
+# 종목별 관련성 키워드 override — 접미사 휴리스틱으로 안 잡히는 회사만 명시한다.
+# AGENTS.md '알려진 한계 6'이 요구하는 "종목별 relevance_key 검증"의 결과물이다.
+# 에코프로비엠: 언론이 그룹명 '에코프로'로 쓰는 기사가 많다(실측: 전량 탈락하던
+# 1,010일 중 126일이 이 키워드로 복구). 삼성전자→'삼성'과 같은 그룹명 방식이다.
+_RELEVANCE_KEY_OVERRIDES = {
+    "에코프로비엠": "에코프로",
+}
+
+
 def relevance_key(company: str) -> str:
     """회사명에서 관련성 판정용 키워드를 만든다.
 
@@ -120,8 +160,11 @@ def relevance_key(company: str) -> str:
     주가 기사라, 그것만 남기면 표본이 편향된다(실측: 2022-06-15에 10건만 남고
     감성 -0.80). ASML·롤러블폰 기사는 '삼성'이라고만 쓴다.
     법인격 접미사를 떼어 회사 그룹명을 키워드로 쓴다.
+    접미사 규칙으로 안 되는 종목은 _RELEVANCE_KEY_OVERRIDES에 명시한다.
     """
     key = (company or "").replace(" ", "")
+    if key in _RELEVANCE_KEY_OVERRIDES:
+        return _RELEVANCE_KEY_OVERRIDES[key]
     for suffix in ("전자", "그룹", "주식회사", "(주)", "홀딩스"):
         if len(key) > len(suffix) and key.endswith(suffix):
             return key[: -len(suffix)]
@@ -184,7 +227,7 @@ def news_agent(state: dict) -> dict:
 
     # 영향력 점수는 결정론 규칙으로 산출한다.
     # (AGENTS.md: 점수 산출은 100% 결정론, LLM은 설명 텍스트 생성에만)
-    impact = int(_clip(3 + min(4, len(texts) // 3) + round(abs(mean) * 3), 1, 10))
+    impact = impact_score(len(texts), mean)
 
     # 핵심 이벤트(설명 전용). LLM 문구를 실제 기사에 그라운딩해 출처 news_id를 붙인다.
     llm_events = _extract_events(relevant, company)
@@ -193,12 +236,14 @@ def news_agent(state: dict) -> dict:
         event_backend = "llm"
     else:  # 규칙 기반 폴백: 감성 절댓값이 큰 헤드라인을 핵심 이벤트로
         ranked = sorted(
-            zip(relevant, scores, strict=False), key=lambda x: abs(x[1]), reverse=True
+            zip(relevant, scores, strict=True), key=lambda x: abs(x[1]), reverse=True
         )
+        # 제목 필터를 슬라이스보다 먼저 — 상위 5건 중 무제목이 있어도 5건을 채운다
+        # (로더가 무제목 기사를 이미 걸러 실제로는 방어적 정리다. PR #67 리뷰 3)
+        titled = [it for it, _ in ranked if it.get("title")]
         key_events = [
             KeyEvent(event=str(it.get("title", "")), news_ids=[str(it.get("news_id", ""))])
-            for it, _ in ranked[:5]
-            if it.get("title")
+            for it in titled[:5]
         ]
         event_backend = "rule"
 
@@ -281,8 +326,11 @@ def financial_agent(state: dict) -> dict:
 _PLAUSIBLE = {  # 지표별 상식 범위 — 벗어나면 단위/매핑 오류 의심
     # 하한이 중요하다: 발행주식수가 과소하면 EPS가 폭증해 PER이 0에 수렴한다.
     # 단위 오류는 지표를 크게 만드는 만큼 작게도 만든다.
-    "per": (0.1, 500.0),
-    "pbr": (0.005, 100.0),
+    # 하한 근거: '수정주가 × 분할 전 주식수' 사고(삼성 50:1 → per 0.28, pbr 0.03이
+    # 옛 하한 0.1/0.005를 통과해 ok=true로 새어나간 실사고)를 잡도록 올렸다.
+    # 실존 극단값(경기순환주 PER ~1, 심저평가주 PBR ~0.15)보다는 낮게 유지한다.
+    "per": (0.5, 500.0),
+    "pbr": (0.1, 100.0),
     "roe": (-1.0, 2.0),
     "debt_ratio": (0.0, 50.0),
     "altman_z": (-5.0, 30.0),
@@ -341,10 +389,17 @@ def validation_agent(state: dict) -> dict:
             errors.append(f"{k}={v:.4g} 이 상식 범위 [{lo}, {hi}] 밖 → 단위 오류 의심")
 
     # 4) 파생 항목 정합성
+    #
+    # '이익잉여금 ≤ 자본총계'는 넣지 않는다 — 회계 항등식이 아니다.
+    # 자본총계 = 자본금 + 이익잉여금 + 기타포괄손익 − 자기주식이라, 자기주식을
+    # 많이 보유한 회사는 이익잉여금이 자본총계를 넘는 것이 정상이다
+    # (실측: 네이버 FY2022 이익잉여금 23.65조 > 자본총계 23.45조, 자산=부채+자본
+    # 항등식은 0.0000% 오차로 성립. 이 잘못된 규칙이 멀쩡한 731행을 폐기했다).
+    # 매핑 오류 탐지는 자산총계 상한(아래)과 항등식 검사(1번)가 담당한다.
     for a, b, label in [
         ("current_assets", "total_assets", "유동자산 ≤ 자산총계"),
         ("current_liabilities", "total_liabilities", "유동부채 ≤ 부채총계"),
-        ("retained_earnings", "total_equity", "이익잉여금 ≤ 자본총계"),
+        ("retained_earnings", "total_assets", "이익잉여금 ≤ 자산총계"),
     ]:
         x, y = f.get(a), f.get(b)
         if x is not None and y is not None and x > y * 1.005:
@@ -424,24 +479,17 @@ def synthesis_agent(state: dict) -> dict:
     news_sent = news.get("news_sentiment", 0.0)
     impact = news.get("news_impact_score", 5)
 
-    # 펀더멘털(가치투자 핵심) + 뉴스 감성 보정.
-    # 소셜(대중) 심리 소스가 제거되어 감성 축은 뉴스(전문가 매체) 단일 소스로 산출한다.
-    fundamental = valuation * 0.6 + health * 0.4              # 0~10
-    sentiment_adj = news_sent * (impact / 10.0) * 2.0         # ±2 내외
-    composite = _clip(fundamental + sentiment_adj, 0.0, 10.0)
-    signal = _to_signal(composite)
-
-    # 신뢰도: 데이터 품질 + 시그널 마진 - 뉴스 의견분산 (LLM 자기보고 대신 직접 산출).
-    # 실데이터 소스는 뉴스·재무 2개뿐이라 base/계수를 2소스 기준으로 재조정한다.
+    # 펀더멘털(가치투자 핵심) + 뉴스 감성 보정 — 공식은 synthesize_scores 한 곳에만.
+    # 실데이터 소스는 뉴스·재무 2개뿐이라 base/계수가 2소스 기준으로 잡혀 있다.
     real_sources = sum(
         1
         for s in (state.get("news_source"), state.get("financial_source"))
         if s and s != "sample"
     )
-    quality = 0.5 + 0.125 * real_sources                      # 0.5~0.75 (2소스)
-    margin = abs(composite - 5.0) / 5.0                        # 0~1 (확신 강도)
-    disagreement = news.get("news_sentiment_std", 0.0)
-    confidence = round(_clip(quality + 0.2 * margin - 0.15 * disagreement, 0.2, 0.95), 3)
+    composite, signal, confidence = synthesize_scores(
+        valuation, health, news_sent, impact,
+        news.get("news_sentiment_std", 0.0), real_sources,
+    )
 
     # 근거: LLM 있으면 생성, 없으면 템플릿
     events = [e.get("event", "") for e in (news.get("key_events") or [])][:4]

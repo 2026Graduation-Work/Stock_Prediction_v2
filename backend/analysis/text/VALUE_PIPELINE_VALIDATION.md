@@ -32,6 +32,7 @@ python -m value_pipeline.run --ticker 005930 --name 삼성전자 --date 2022-06-
 |---|---|---|
 | `USE_FINBERT` | `1` | `0`이면 39단어 사전 폴백 — **데이터셋 구축 시 절대 금지** |
 | `LLM_REPLAY_ONLY` | `0` | `1`이면 LLM 캐시 미스가 에러 — **백테스트 재생 시 반드시 `1`** |
+| `SHARES_ASOF_YEAR` | `2025` | 발행주식수 스냅샷 기준연도(재현성 고정). 새 액면분할·대규모 증자 시 올리고 **데이터셋 재생성** — 낡으면 warning |
 
 **종료 코드**
 
@@ -41,7 +42,63 @@ python -m value_pipeline.run --ticker 005930 --name 삼성전자 --date 2022-06-
 | 2 | 재무 확보 실패 → 시그널 생성 거부 (`FinancialsUnavailableError`) |
 | 3 | 실행은 됐으나 **검증 실패** → 이 행을 쓰지 말 것 |
 
-출력: `{ticker}_{date}.json` (cwd 기준). `--out`으로 변경 가능.
+출력: `out/{ticker}_{date}.json` (cwd 기준 `out/` 하위 — 저장소 트리에 산출물이
+섞이지 않게 하며, `out/`은 .gitignore로 무시된다). `--out`으로 변경 가능.
+
+### 1.1 기간 모드 (`--period`)
+
+```bash
+python -m value_pipeline.run --ticker 005930 --name 삼성전자 --period 2022-01   # 월
+python -m value_pipeline.run --ticker 005930 --name 삼성전자 --period 2022      # 년
+```
+
+기간 전체를 요약한 `PeriodValueSignal` **1건**을 낸다 (`{ticker}_{period}.json`).
+일별 행과 피처 축·점수 공식은 동일하고 집계 단위만 다르다.
+
+| 축 | 규칙 |
+|---|---|
+| 뉴스 | 기간 내 날짜 순회, **빅카인즈 엑셀 전용**(네이버 폴백 없음). 관련성 필터 후 기사 단위 가중 집계 |
+| 재무 | **기간 종료일 기준 point-in-time** — `collect_financials(ticker, period_end)` 재사용 |
+| LLM | **아예 호출 안 함** — 핵심 이벤트도 규칙(감성 절댓값 상위). 기간 경로는 100% 결정론 |
+| 감사 | `daily_metrics`(일별 행)만으로 기간 집계 재계산 가능. `days_covered`=워크북 커버 일수(결측 지시자) |
+
+종료 코드·검증 규칙은 일별과 동일(재무 실패 exit 2, 검증 실패 exit 3).
+확인: `test_period_pipeline.py` (`test_period_financials_use_period_end`,
+`test_period_aggregates_are_article_weighted`, `test_period_signal_field_contract` 등)
+
+### 1.2 대량 생성 (`value_pipeline.batch`) — 학습 데이터셋용
+
+```bash
+python -m value_pipeline.batch --ticker 005930 --name 삼성전자 \
+    --start 2016-01-01 --end 2025-12-31 --out-dir out/005930
+```
+
+날짜 루프를 **한 프로세스**에서 돌린다(FinBERT 로드 1회, 워크북 파싱 캐시,
+DART는 (종목, 사업연도)당 1콜·FDR은 종목당 1콜). **LLM은 강제 OFF** — 대량 생성이
+무료 한도를 태우는 실수를 구조적으로 차단하며 숫자는 LLM 유무와 무관하다.
+하루 실패는 기록 후 계속 진행하고, 요약은 `_manifest_*.json`에 남는다.
+중단된 배치는 `--skip-existing`으로 재개.
+
+**학습용 피처 추출** — 모델(LightGBM)은 JSON을 직접 읽지 않고 `features.py`를 거친다.
+무엇을 모델에 넣고 빼는지의 SSOT이며, 일별(ValueSignal)·기간(PeriodValueSignal)
+모두 지원한다(혼입은 거부). 규칙은 네 가지다:
+
+- `composite_score`·`value_investment_signal`·`confidence`는 **입력에서 제외**
+  (다른 피처들의 고정 공식 조합 = 정보량 0. 화면 표시용으로만)
+- **오염 행은 제외**: 회계 항등식 위배·룩어헤드·단위 오류·워크북 미커버 등
+- **결측 행은 유지**: 실패 사유가 '관련 기사 0건'뿐이면 감성 파생 피처
+  (`news_sentiment`·`news_impact_score`·`news_sentiment_std`·`news_staleness`)만
+  NaN으로 두고 행은 살린다. 재무 피처는 유효하고, 기사 수는 0이 사실이다.
+  → 조용한 날이 많은 소형주가 데이터셋에서 사라져 **대형주 편향**이 생기는 것을 막는다
+  (실측: 에코프로비엠 2,467일 중 1,888일이 이 사유. 행을 버리면 579행만 남는다)
+- 결측(None)은 NaN 유지 — 0 대치 금지 (LightGBM native 처리)
+
+> '뉴스가 없었다'(결측, 유지)와 '보지 않았다'(워크북 미커버 = 수집 실패, 폐기)는
+> 다르다. 후자는 무데이터인지 아닌지조차 알 수 없으므로 살리지 않는다.
+
+```bash
+python -m value_pipeline.features out/005930/*.json --out features_daily.csv
+```
 
 ---
 
@@ -402,3 +459,14 @@ CI엔 `.env`가 없어 헤르메틱성을 못 잡는다.
    근사한다(둘 다 `FinancialMetrics`에서 제외되므로 출력엔 영향 없음).
 5. **업종 평균 PER/PBR 부재.** `sector_per`/`sector_pbr`은 `sample_data/`에서 오는데 그 디렉터리가
    없어 항상 `None` → `valuation_score`가 절대 기준 밴드로 계산된다. 동종업계 대비가 아니다.
+7. **발행주식수는 스냅샷 기준연도(`SHARES_ASOF_YEAR`, 기본 2025) 공시 기준.**
+   FDR 주가가 액면분할 소급수정(adjusted)이라, 보고서 연도의 주식수(분할 전 단위)를
+   곱하면 시총이 분할 배수만큼 왜곡된다(실사고: 삼성 50:1 → 2017년 행 per 0.28,
+   검증 통과). 그래서 주식수만은 스냅샷 연도 공시 값을 쓴다 — 수정주가와 같은 분할
+   기준이고, 주식수는 시그널이 아니라 단위 환산자다. 기준연도를 today()가 아니라
+   고정값으로 두는 이유는 재현성이다(실행 연도가 바뀌어도 같은 출력) — 사업연도는
+   point-in-time을 지키면서 주식수는 스냅샷을 쓰는 **의도된 비대칭**이며, 스냅샷
+   연도가 낡으면 warning이 난다.
+   **잔여 오차**: 이후 자사주 소각·증자분(삼성 2017~18 구간 per가 실제 대비 ±20% 수준).
+   또한 FY2015 주식총수는 DART 응답에 값이 없어('-'), 과거엔 그 구간 per/pbr가 통째로
+   결측이었다 — 최신 기준으로 바꾸며 함께 해소됐다.

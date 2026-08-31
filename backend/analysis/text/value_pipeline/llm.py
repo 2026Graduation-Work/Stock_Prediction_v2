@@ -39,6 +39,22 @@ CACHE_DIR = Path(__file__).parent / "llm_cache"
 # 프롬프트 템플릿을 바꾸면 이 값을 올린다 → 캐시 키가 바뀌어 옛 답이 재사용되지 않는다.
 PROMPT_VERSION = "2"
 
+# 런타임 강제 차단 스위치 (CLI --no-llm). 키 유무와 별개로 API 호출을 막는다.
+# .env에 키를 등록해 둔 채 대량 생성을 돌리다 무료 한도를 태우는 실수를 막는 용도.
+_FORCE_DISABLED = False
+
+
+def set_llm_enabled(enabled: bool) -> None:
+    """LLM API 호출을 런타임에 켜고 끈다 (CLI --no-llm 진입점).
+
+    끄면 '키 없음'과 동일한 의미론이다: 새 API 호출은 안 하지만, 이미 있는
+    캐시는 읽는다(캐시 재생은 결정론적이고 비용이 없다). 숫자는 어차피
+    LLM과 무관하므로 켜든 끄든 동일하다.
+    """
+    global _FORCE_DISABLED
+    _FORCE_DISABLED = not enabled
+    get_llm.cache_clear()  # lru_cache에 이전 상태가 남지 않게
+
 
 class LLMCacheMissError(RuntimeError):
     """재생(replay) 모드인데 캐시에 없음 → LLM 호출 대신 실패."""
@@ -47,7 +63,7 @@ class LLMCacheMissError(RuntimeError):
 @lru_cache(maxsize=1)
 def get_llm():
     """Gemini chat 모델 또는 None."""
-    if not SETTINGS.has_gemini:
+    if _FORCE_DISABLED or not SETTINGS.has_gemini:
         return None
     try:
         from langchain_google_genai import ChatGoogleGenerativeAI
