@@ -1,23 +1,23 @@
 # ── 데이터 수집 및 전처리 ───────────────────────
 finance-datareader>=0.9.202
 pykrx>=1.2.8
-pandas>=1.5.0
+pandas>=1.5.3
 numpy>=2.5.2
-pyarrow>=10.0.0
+pyarrow>=25.0.1
 tqdm>=4.70.0
 
 # ── 머신러닝 모델링 (DT 계열) ───────────────────
-scikit-learn>=1.0.0
-lightgbm>=4.0.0
-pyyaml>=6.0
+scikit-learn>=1.9.0
+lightgbm>=4.7.0
+pyyaml>=6.0.3
 
 # ── 백테스트 및 시뮬레이션 ─────────────────────
 # (로컬 실험용 vectorbt 및 의존 패키지)
-vectorbt>=0.25.0
-matplotlib>=3.5.0
-yfinance>=0.2.0
-quantstats>=0.0.59
+vectorbt>=0.28.5
+matplotlib>=3.11.1
+yfinance>=1.7.0
+quantstats>=0.0.81
 
 # ── 실험 분석 대시보드 ─────────────────────────
-streamlit>=1.60.0
-plotly>=5.10.0
+streamlit>=1.62.0
+plotly>=7.0.0

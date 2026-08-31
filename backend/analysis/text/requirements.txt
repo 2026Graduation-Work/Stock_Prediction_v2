@@ -2,22 +2,22 @@
 # 설치: pip install -r backend/analysis/text/requirements.txt
 
 # ── 전처리·데이터 (필수) ─────────────────────────────────────
-pandas>=2.2.0
+pandas>=2.3.3
 # 로컬 뉴스 엑셀(data/{종목코드}/{종목코드}_{회사명}_YYYYMMDD-YYYYMMDD.xlsx) 읽기
-openpyxl>=3.1.0
+openpyxl>=3.1.5
 
 # ── 파이프라인 핵심 (필수) ───────────────────────────────────
-langgraph>=0.2.0
-langchain-core>=0.3.0
-pydantic>=2.5
+langgraph>=1.2.11
+langchain-core>=1.6.1
+pydantic>=2.13.4
 
 # ── 감성 분석 (필수) ─────────────────────────────────────────
 # 한국어 금융 감성 (KR-FinBERT, snunlp/KR-FinBert-SC).
 # 미설치 시 39단어 사전으로 폴백하지만 두 백엔드는 점수 스케일이 비교 불가능하다.
 # 런 간 혼용 시 조용한 regime break가 생기므로 필수로 둔다.
 # (VALUE_PIPELINE_VALIDATION.md — '감성 백엔드' 기준 참조)
-torch>=2.0.0
-transformers>=4.40.0
+torch>=2.13.0
+transformers>=5.16.1
 
 # ── 재무·시세 (필수) ─────────────────────────────────────────
 # 한국 재무제표 (DART_API_KEY 필요, 무료). 재무 없이는 시그널을 만들지 않는다.
@@ -30,10 +30,10 @@ finance-datareader>=0.9.202
 # Gemini 무료 티어. GEMINI_API_KEY 필요.
 # 뉴스 관련성 라벨링·핵심 이벤트 추출·근거 문장 생성에만 쓴다(점수 산출 아님).
 # 없으면 규칙 기반으로 동작한다.
-langchain-google-genai>=2.0.0
+langchain-google-genai>=4.3.7
 # 뉴스 크롤링 폴백 (키 불필요)
-beautifulsoup4>=4.12.0
+beautifulsoup4>=4.15.0
 # .env 자동 로드
-python-dotenv>=1.0.0
+python-dotenv>=1.2.3
 
 # 참고: requests 는 명시하지 않으며 상위 의존성으로 함께 설치된다.
