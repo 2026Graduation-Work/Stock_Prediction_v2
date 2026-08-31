@@ -7,7 +7,7 @@ pyarrow>=10.0.0
 tqdm>=4.70.0
 
 # ── 머신러닝 모델링 (DT 계열) ───────────────────
-scikit-learn>=1.0.0
+scikit-learn>=1.9.0
 lightgbm>=4.0.0
 pyyaml>=6.0
 
