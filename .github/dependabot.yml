@@ -1,8 +1,19 @@
 # 의존성 정기 업데이트 설정.
-# 리뷰 큐를 막지 않도록 주 1회(월요일 아침, KST)로 제한하고,
-# patch/minor 는 생태계별 1개 PR 로 묶는다. major 는 breaking 가능성이 있어
-# 그룹에서 빠져 개별 PR 로 올라온다.
-# 다만 런타임·엔진 교체 결정이 걸린 패키지는 major 를 ignore 로 막는다
+#
+# 목표: 리뷰 큐를 막지 않는 것. 그래서 생태계별로 "월 1회, PR 1개"만 올라오게 한다.
+#
+# 그룹에 update-types 필터를 두지 않는 이유:
+#   requirements.txt 가 전부 `pandas>=1.5.0` 같은 하한선(>=) 형식이라
+#   Dependabot 이 이 변경의 semver 레벨(major/minor/patch)을 판정하지 못한다.
+#   update-types 필터가 걸린 그룹은 레벨을 못 정하는 업데이트를 그룹에서
+#   떨어뜨리고, 그러면 패키지마다 개별 PR 이 하나씩 열린다 (#71 #73 #87~#90 이 그 사례).
+#   필터를 빼면 patterns:"*" 가 전부를 받아 한 PR 로 묶인다.
+#
+# 이 그룹은 applies-to: version-updates 라서 보안 업데이트는 묶이지 않는다.
+# 실제 취약점 PR 은 월 주기와 무관하게 즉시, 개별로 올라온다.
+#
+# major 도 이제 같은 PR 에 함께 묶인다. 다만 머지 자체가 불가능하거나
+# 런타임 교체 결정이 걸린 패키지는 아래 ignore 로 막는다
 # (해제 조건은 각 ignore 항목 주석 참조).
 version: 2
 
@@ -12,16 +23,13 @@ updates:
   - package-ecosystem: "npm"
     directory: "/frontend"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "Asia/Seoul"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
-    # major 는 사람이 판단해야 하는 결정이라 자동화에서 뺀다.
-    # (minor/patch 는 그대로 받으므로 보안 패치 경로는 살아 있다)
     ignore:
       # @types/node 는 실제 Node 런타임 major 를 따라가야 한다.
       # 타입만 앞서가면 tsc 가 런타임에 없는 API 를 통과시켜 배포 후에 터진다.
@@ -32,13 +40,10 @@ updates:
           - "version-update:semver-major"
 
     groups:
-      frontend-minor-patch:
+      frontend-all:
         applies-to: version-updates
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   # ── backend (Python, requirements*.txt) ─────────────────────
   # chart / text / survey 세 블록을 한 항목으로 묶어 PR 상한을 공유한다.
@@ -48,15 +53,13 @@ updates:
       - "/backend/analysis/text"
       - "/backend/profiling/survey"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "Asia/Seoul"
-    open-pull-requests-limit: 3
+    open-pull-requests-limit: 1
     commit-message:
       prefix: "chore(deps)"
       prefix-development: "chore(deps-dev)"
-    # major 는 사람이 판단해야 하는 결정이라 자동화에서 뺀다.
     ignore:
       # vectorbt 1.x 는 pandas>=3.0.3 을 요구하는데 pykrx 가 pandas<3.0 이라
       # requirements.txt 가 아예 해결 불가(ResolutionImpossible)가 된다.
@@ -65,32 +68,33 @@ updates:
       - dependency-name: "vectorbt"
         update-types:
           - "version-update:semver-major"
+      # pandas 3.x 도 같은 이유로 막는다. pykrx 가 pandas<3.0 을 고정하고 있어
+      # chart 블록의 requirements.txt 가 해결 불가가 된다 (#89).
+      # text 블록은 pykrx 를 안 쓰지만 두 블록의 pandas major 를 어긋나게 두면
+      # 같은 코드가 블록마다 다르게 동작하므로 함께 묶어 둔다 (#90).
+      # 해제 조건: pykrx 가 pandas 3 을 지원하거나 pykrx 를 걷어낼 때.
+      - dependency-name: "pandas"
+        update-types:
+          - "version-update:semver-major"
 
     groups:
-      backend-minor-patch:
+      backend-all:
         applies-to: version-updates
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
 
   # ── CI 워크플로 (.github/workflows) ─────────────────────────
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-      day: "monday"
+      interval: "monthly"
       time: "09:00"
       timezone: "Asia/Seoul"
-    open-pull-requests-limit: 2
+    open-pull-requests-limit: 1
     commit-message:
       prefix: "chore(ci)"
     groups:
-      github-actions-minor-patch:
+      github-actions-all:
         applies-to: version-updates
         patterns:
           - "*"
-        update-types:
-          - "minor"
-          - "patch"
