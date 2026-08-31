@@ -24,7 +24,7 @@ transformers>=4.40.0
 # 버전 미고정: 최신 0.3.x는 Python>=3.13 요구 → Python 3.12면 uv가 3.12 호환 버전 자동 선택
 opendartreader
 # 한국 시세/상장정보 (키 불필요)
-finance-datareader>=0.9.50
+finance-datareader>=0.9.202
 
 # ── 선택 (있으면 자동으로 실데이터/고성능 경로 사용) ──────────
 # Gemini 무료 티어. GEMINI_API_KEY 필요.
