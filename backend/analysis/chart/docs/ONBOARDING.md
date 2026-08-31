@@ -37,6 +37,7 @@ python -m experiments.comparison.runner --config experiments/comparison/config.y
 
 ```text
 backend/analysis/chart/
+├── README.md                   # chart 진입점과 문서 목차
 ├── core/
 │   ├── features.py              # 서비스 추론용 161개 피처 계산
 │   ├── inference.py             # 모델 로드, class 2 스코어 추론
@@ -46,6 +47,10 @@ backend/analysis/chart/
 ├── data_collectors/
 │   ├── price_collector.py       # raw OHLCV 수집·갱신
 │   └── preprocess_data.py       # raw → 종목별 processed 161피처
+├── docs/
+│   ├── ONBOARDING.md            # 실행·재현·수정 정본
+│   ├── PROGRESS.md              # 날짜순 진행 기록
+│   └── EXPERIMENT_RESULTS.md    # 대표 실험 결과 정본
 ├── data/                        # Git 제외
 │   ├── raw/<Code>.parquet
 │   ├── processed/<Code>.parquet
