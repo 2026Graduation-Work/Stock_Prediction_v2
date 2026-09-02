@@ -1,7 +1,8 @@
 import argparse
+import json
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import FinanceDataReader as fdr
 import pandas as pd
@@ -11,9 +12,168 @@ from tqdm import tqdm
 # 데이터 저장 경로 설정
 DATA_DIR = "./data/raw"
 os.makedirs(DATA_DIR, exist_ok=True)
+TRADING_CALENDAR_CACHE_PATH = "./data/krx_trading_calendar.json"
+_KOSPI_INDEX_TICKER = "1001"
+_TRADING_CALENDAR_SOURCE = "KOSPI index trading days"
+_TRADING_CALENDAR_PROVIDERS = {
+    "fdr": "FinanceDataReader KS11",
+    "pykrx": "KRX KOSPI index 1001 via pykrx",
+}
 
 # 기본 전체 수집 시작일 (최근 10년 기준, 실행 연도 자동 반영)
 _DEFAULT_START_DATE = f"{datetime.now().year - 10}-01-01"
+
+
+class TradingCalendarError(RuntimeError):
+    """KRX 거래일을 신뢰할 수 있는 출처에서 확정하지 못했을 때 발생합니다."""
+
+
+def _load_trading_calendar_cache(
+    start_date: pd.Timestamp, end_date: pd.Timestamp
+) -> set:
+    """요청 범위를 모두 포함하는 경우에만 로컬 거래일 캐시를 반환합니다."""
+    if not os.path.exists(TRADING_CALENDAR_CACHE_PATH):
+        return set()
+
+    try:
+        with open(TRADING_CALENDAR_CACHE_PATH, encoding="utf-8") as cache_file:
+            payload = json.load(cache_file)
+
+        if payload.get("source") != _TRADING_CALENDAR_SOURCE:
+            return set()
+        coverage_start = pd.Timestamp(payload["coverage_start"]).normalize()
+        coverage_end = pd.Timestamp(payload["coverage_end"]).normalize()
+        if coverage_start > start_date or coverage_end < end_date:
+            return set()
+
+        trading_days = {
+            pd.Timestamp(value).date()
+            for value in payload["trading_days"]
+            if start_date <= pd.Timestamp(value).normalize() <= end_date
+        }
+        if not trading_days:
+            return set()
+        return trading_days
+    except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return set()
+
+
+def _save_trading_calendar_cache(
+    start_date: pd.Timestamp,
+    end_date: pd.Timestamp,
+    trading_days: set,
+    provider: str,
+) -> None:
+    """검증된 KRX 거래일과 조회 범위를 원자적으로 저장합니다."""
+    coverage_start = start_date
+    coverage_end = end_date
+    cached_days = set()
+    if os.path.exists(TRADING_CALENDAR_CACHE_PATH):
+        try:
+            with open(TRADING_CALENDAR_CACHE_PATH, encoding="utf-8") as cache_file:
+                cached_payload = json.load(cache_file)
+            cached_start = pd.Timestamp(cached_payload["coverage_start"]).normalize()
+            cached_end = pd.Timestamp(cached_payload["coverage_end"]).normalize()
+            ranges_connect = (
+                start_date <= cached_end + pd.Timedelta(days=1)
+                and end_date >= cached_start - pd.Timedelta(days=1)
+            )
+            if cached_payload.get("source") == _TRADING_CALENDAR_SOURCE and ranges_connect:
+                coverage_start = min(start_date, cached_start)
+                coverage_end = max(end_date, cached_end)
+                cached_days = {
+                    cached_day
+                    for value in cached_payload["trading_days"]
+                    if (cached_day := pd.Timestamp(value).date()) < start_date.date()
+                    or cached_day > end_date.date()
+                }
+        except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError):
+            cached_days = set()
+
+    merged_days = trading_days | cached_days
+    os.makedirs(os.path.dirname(TRADING_CALENDAR_CACHE_PATH), exist_ok=True)
+    payload = {
+        "source": _TRADING_CALENDAR_SOURCE,
+        "provider": provider,
+        "coverage_start": coverage_start.strftime("%Y-%m-%d"),
+        "coverage_end": coverage_end.strftime("%Y-%m-%d"),
+        "fetched_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "trading_days": sorted(day.isoformat() for day in merged_days),
+    }
+    temporary_path = f"{TRADING_CALENDAR_CACHE_PATH}.tmp"
+    with open(temporary_path, "w", encoding="utf-8") as cache_file:
+        json.dump(payload, cache_file, ensure_ascii=False, indent=2)
+    os.replace(temporary_path, TRADING_CALENDAR_CACHE_PATH)
+
+
+def get_krx_trading_days(start_date: str, end_date: str) -> set:
+    """KOSPI 지수 거래일을 조회하고, 실패할 때는 완전한 캐시만 사용합니다.
+
+    개별 종목 파일이나 단순 평일(``freq="B"``)은 시장 휴장일을 확정할 수
+    없으므로 fallback으로 사용하지 않습니다.
+    """
+    start = pd.Timestamp(start_date).normalize()
+    end = pd.Timestamp(end_date).normalize()
+    if start > end:
+        raise ValueError("start_date는 end_date보다 늦을 수 없습니다.")
+
+    provider_calls = (
+        (
+            "fdr",
+            lambda: fdr.DataReader(
+                "KS11", start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")
+            ),
+        ),
+        (
+            "pykrx",
+            lambda: krx.get_index_ohlcv_by_date(
+                start.strftime("%Y%m%d"),
+                end.strftime("%Y%m%d"),
+                _KOSPI_INDEX_TICKER,
+                name_display=False,
+            ),
+        ),
+    )
+    provider_errors = []
+    for provider_key, fetch_index in provider_calls:
+        try:
+            index_df = fetch_index()
+            if index_df.empty:
+                raise ValueError("응답이 비어 있습니다.")
+
+            index_dates = pd.to_datetime(index_df.index, errors="coerce")
+            if index_dates.isna().any():
+                raise ValueError("응답에 잘못된 날짜가 있습니다.")
+
+            trading_days = {
+                timestamp.date()
+                for timestamp in index_dates
+                if start <= timestamp.normalize() <= end
+            }
+            if not trading_days:
+                raise ValueError("요청 범위에 유효한 거래일이 없습니다.")
+
+            provider = _TRADING_CALENDAR_PROVIDERS[provider_key]
+            try:
+                _save_trading_calendar_cache(start, end, trading_days, provider)
+            except OSError as exc:
+                print(f"  ⚠️ KRX 거래일 캐시 저장 실패, 조회 결과를 계속 사용합니다: {exc}")
+            return trading_days
+        except Exception as exc:
+            provider_errors.append(f"{_TRADING_CALENDAR_PROVIDERS[provider_key]}: {exc}")
+
+    cached_days = _load_trading_calendar_cache(start, end)
+    if cached_days:
+        print(
+            "  ⚠️ KOSPI 지수 거래일 조회 실패, "
+            f"검증 범위를 충족하는 캐시 사용: {'; '.join(provider_errors)}"
+        )
+        return cached_days
+    raise TradingCalendarError(
+        "KOSPI 지수 거래일 조회에 실패했고 요청 범위를 덮는 캐시도 없습니다. "
+        "잘못된 평일 추정을 피하기 위해 작업을 중단합니다. "
+        f"공급자 오류: {'; '.join(provider_errors)}"
+    )
 
 
 def get_all_tickers() -> pd.DataFrame:
@@ -114,43 +274,33 @@ def _fetch_ohlcv_fdr(code: str, start_date: str, end_date: str) -> pd.DataFrame:
 
 def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
     """
-    FinanceDataReader의 StockListing을 활용하여 최신 거래일 시세를 일괄 다운로드 후 업데이트합니다.
-    이 함수는 개별 종목 API 호출 없이 단 한번에 오늘 시세를 전 종목에 업데이트합니다.
+    KOSPI 지수로 확정한 최신 거래일의 FDR 전 종목 시세를 일괄 업데이트합니다.
+
+    날짜가 없는 StockListing 값을 실행일로 간주하지 않고, 동일 공급자의 KOSPI
+    지수에 존재하는 최신 거래일을 기준일로 사용합니다.
     """
-    print("\n⚡ [FDR 벌크 업데이트] 최신 영업일 시세 일괄 수집 진행...")
+    print("\n⚡ [FDR 벌크 업데이트] 최신 거래일 시세 일괄 수집 진행...")
 
     try:
+        today = datetime.now().date()
+        calendar_start = today - timedelta(days=14)
+        trading_days = get_krx_trading_days(calendar_start.isoformat(), today.isoformat())
+        actual_date = pd.Timestamp(max(trading_days))
+        actual_date_str = actual_date.strftime("%Y-%m-%d")
+
         kospi = fdr.StockListing("KOSPI")
         kosdaq = fdr.StockListing("KOSDAQ")
-        combined_fdr = pd.concat([kospi, kosdaq], ignore_index=True)
-
-        combined_fdr = combined_fdr.rename(
+        market_snapshot = pd.concat([kospi, kosdaq], ignore_index=True).rename(
             columns={
-                "Code": "Code",
-                "Open": "Open",
-                "High": "High",
-                "Low": "Low",
-                "Close": "Close",
-                "Volume": "Volume",
                 "ChagesRatio": "Change",
             }
         )
-
-        combined_fdr = combined_fdr[combined_fdr["Volume"] > 0]
-        combined_fdr["Code"] = combined_fdr["Code"].str.zfill(6)
-
-        # 실제 최신 거래 영업일 날짜 알아내기 (삼성전자 최신 날짜 기준)
-        sample_df = krx.get_market_ohlcv_by_date(
-            (datetime.now() - pd.Timedelta(days=5)).strftime("%Y%m%d"),
-            datetime.now().strftime("%Y%m%d"),
-            "005930",
-        )
-        if not sample_df.empty:
-            actual_date = sample_df.index.max()
-        else:
-            actual_date = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
-
-        actual_date_str = actual_date.strftime("%Y-%m-%d")
+        required_columns = {"Code", "Open", "High", "Low", "Close", "Volume", "Change"}
+        missing_columns = required_columns - set(market_snapshot.columns)
+        if missing_columns:
+            raise RuntimeError(f"FDR 전 종목 시세 필수 컬럼 누락: {sorted(missing_columns)}")
+        market_snapshot = market_snapshot[market_snapshot["Volume"] > 0].copy()
+        market_snapshot["Code"] = market_snapshot["Code"].astype(str).str.zfill(6)
         print(f"  📅 수집된 실제 영업일 기준일: {actual_date_str}")
 
         ticker_to_name = dict(zip(all_stocks["Code"], all_stocks["Name"]))
@@ -158,14 +308,14 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
 
         updated_tickers = set()
 
-        for _, row in combined_fdr.iterrows():
+        for _, row in market_snapshot.iterrows():
             code = row["Code"]
             file_path = os.path.join(DATA_DIR, f"{code}.parquet")
 
             name = ticker_to_name.get(code, "")
             is_delisted = ticker_to_delisted.get(code, False)
 
-            # FDR StockListing의 ChangesRatio는 이미 퍼센트(%) 단위이므로 나누지 않고 그대로 사용!
+            # FDR StockListing의 ChagesRatio는 퍼센트(%) 단위입니다.
             change_val = float(row["Change"]) if not pd.isna(row["Change"]) else 0.0
 
             new_row = pd.DataFrame(
@@ -223,7 +373,9 @@ def update_ohlcv_daily():
     개별 종목 API 루프를 돌지 않아 10초 내로 끝납니다.
     """
     all_stocks = get_all_tickers()
-    _ = _update_ohlcv_bulk_fdr(all_stocks)
+    updated_tickers = _update_ohlcv_bulk_fdr(all_stocks)
+    if not updated_tickers:
+        raise RuntimeError("KRX 일일 가격 업데이트에 실패했습니다.")
     print("\n✅ 일일 가격 데일리 업데이트 완료.")
 
 
@@ -237,16 +389,8 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
     all_stocks = get_all_tickers()
     today_str = datetime.now().strftime("%Y-%m-%d")
 
-    # 한국 실제 영업일 기준 캘린더 생성 (삼성전자 기준)
-    samsung_path = os.path.join(DATA_DIR, "005930.parquet")
-    if os.path.exists(samsung_path):
-        samsung_df = pd.read_parquet(samsung_path)
-        samsung_df["Date"] = pd.to_datetime(samsung_df["Date"])
-        actual_business_days = set(
-            samsung_df[samsung_df["Date"] >= pd.to_datetime(start_date)]["Date"].dt.date
-        )
-    else:
-        actual_business_days = set(pd.date_range(start=start_date, end=today_str, freq="B").date)
+    # 개별 종목이 아닌 KRX 시장 메타데이터로 실제 개장일을 확정합니다.
+    actual_business_days = get_krx_trading_days(start_date, today_str)
 
     print(f"\n[*] OHLCV 전체 이력 수집/보정 가동 | 시작일: {start_date} | 종료일: {today_str}")
     failed = []
