@@ -54,6 +54,8 @@ def get_all_tickers() -> pd.DataFrame:
     # 3. 병합
     all_stocks = pd.concat([active, delisted], ignore_index=True)
     all_stocks = all_stocks.drop_duplicates(subset=["Code"], keep="first")
+    # KRX 한국 증시 표준 규격이 6자리 문자열임
+    # 파이썬, csv 에서 데이터 읽을 때 맨 앞에 0 잘라버려서 이거 신경써줘야함
     all_stocks["Code"] = all_stocks["Code"].str.zfill(6)
     print(f"  [합계] 총 {len(all_stocks)}개 종목")
 
@@ -62,6 +64,7 @@ def get_all_tickers() -> pd.DataFrame:
     return all_stocks
 
 
+# krx -> 한국 거래소 정보데이터 시스템에서 직접 post 요청 날려서 긁어옴.
 def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
     pykrx로 수정주가(adjusted=True) 기준 일봉 OHLCV를 가져옵니다.
@@ -90,7 +93,7 @@ def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFram
         }
     )
     df.index.name = "Date"
-    # 등락률의 NaN 값 보정
+    # 등락률의 NaN 값 보정 -> 이거 첫날 상장때는 등락률 계산이 불가능해서 0으로 처리
     if "Change" in df.columns:
         df["Change"] = df["Change"].fillna(0.0)
     return df
@@ -239,8 +242,6 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
 
     print(f"\n[*] OHLCV 전체 이력 수집/보정 가동 | 시작일: {start_date} | 종료일: {today_str}")
     failed = []
-
-    dict(zip(all_stocks["Code"], all_stocks["Name"], strict=False))
 
     for _, row in tqdm(all_stocks.iterrows(), total=len(all_stocks), desc="전체 수집 및 갭 복구"):
         code = row["Code"]
