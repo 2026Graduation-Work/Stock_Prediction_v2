@@ -1,8 +1,13 @@
 import numpy as np
 import pandas as pd
 
+try:
+    from ..data_collectors.trading_calendar import reindex_to_krx_trading_days
+except ImportError:  # chart 디렉터리를 모듈 루트로 실행하는 기존 경로 지원
+    from data_collectors.trading_calendar import reindex_to_krx_trading_days
 
-def normalize_trading_halts(df: pd.DataFrame) -> pd.DataFrame:
+
+def normalize_trading_halts(df: pd.DataFrame, trading_days=None) -> pd.DataFrame:
     """
     거래정지·권리락일 처리 (표준 퀀트 관례 적용)
 
@@ -16,16 +21,8 @@ def normalize_trading_halts(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    # Date 컬럼 인덱스 정렬
-    if "Date" in df.columns:
-        df = df.set_index("Date")
-    df.index = pd.to_datetime(df.index)
-    df = df.sort_index()
-
-    # 1. 전체 영업일 인덱스 생성 및 재구성 (상장~상폐 범위)
-    full_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq="B")
-    df = df.reindex(full_idx)
-    df.index.name = "Date"
+    # 1. 종목의 실제 거래 기간(상장~상폐)을 KRX 개장일로만 재구성
+    df = reindex_to_krx_trading_days(df, trading_days)
 
     # 2. OHLCV 0 값 -> NaN
     for col in ["Open", "High", "Low", "Close", "Volume"]:
