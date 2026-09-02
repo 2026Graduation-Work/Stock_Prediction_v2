@@ -19,6 +19,66 @@ os.makedirs(DATA_DIR, exist_ok=True)
 
 # 기본 전체 수집 시작일 (최근 10년 기준, 실행 연도 자동 반영)
 _DEFAULT_START_DATE = f"{datetime.now().year - 10}-01-01"
+_VWAP_COLUMNS = {"Amount", "RawClose", "RawVolume", "AdjustmentFactor", "VWAP"}
+
+
+def _has_complete_actual_vwap(df: pd.DataFrame) -> bool:
+    """거래량이 있는 모든 행에 실제 VWAP 산출 필드가 유효한지 확인합니다."""
+    if not _VWAP_COLUMNS.issubset(df.columns) or "Volume" not in df.columns:
+        return False
+    traded = pd.to_numeric(df["Volume"], errors="coerce").fillna(0) > 0
+    if not traded.any():
+        return True
+    numeric = df.loc[traded, sorted(_VWAP_COLUMNS)].apply(pd.to_numeric, errors="coerce")
+    return bool(numeric.notna().all().all() and numeric.gt(0).all().all())
+
+
+def _attach_actual_vwap(adjusted_df: pd.DataFrame, raw_df: pd.DataFrame) -> pd.DataFrame:
+    """KRX 거래대금 기반 일별 VWAP을 수정주가 스케일로 변환합니다."""
+    if adjusted_df.empty or raw_df.empty:
+        return pd.DataFrame()
+
+    adjusted = adjusted_df.copy()
+    raw = raw_df.rename(
+        columns={
+            "종가": "RawClose",
+            "거래량": "RawVolume",
+            "거래대금": "Amount",
+        }
+    ).copy()
+    required_raw_columns = {"RawClose", "RawVolume", "Amount"}
+    missing_columns = required_raw_columns - set(raw.columns)
+    if missing_columns:
+        raise ValueError(f"실제 VWAP 계산용 KRX 컬럼 누락: {sorted(missing_columns)}")
+
+    adjusted.index = pd.to_datetime(adjusted.index).normalize()
+    raw.index = pd.to_datetime(raw.index).normalize()
+    raw_fields = raw[["RawClose", "RawVolume", "Amount"]].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    combined = adjusted.join(raw_fields, how="left")
+
+    traded = pd.to_numeric(combined["Volume"], errors="coerce").fillna(0) > 0
+    invalid = traded & (
+        combined["RawClose"].isna()
+        | combined["RawClose"].le(0)
+        | combined["RawVolume"].isna()
+        | combined["RawVolume"].le(0)
+        | combined["Amount"].isna()
+        | combined["Amount"].le(0)
+    )
+    if invalid.any():
+        invalid_dates = ", ".join(
+            timestamp.strftime("%Y-%m-%d") for timestamp in combined.index[invalid][:5]
+        )
+        raise ValueError(f"거래일의 KRX 거래대금/거래량이 유효하지 않습니다: {invalid_dates}")
+
+    valid_raw_close = combined["RawClose"].where(combined["RawClose"] > 0)
+    combined["AdjustmentFactor"] = combined["Close"] / valid_raw_close
+    raw_vwap = combined["Amount"] / combined["RawVolume"]
+    combined["VWAP"] = raw_vwap * combined["AdjustmentFactor"]
+    combined.loc[~traded, "VWAP"] = float("nan")
+    return combined
 
 
 def get_all_tickers() -> pd.DataFrame:
@@ -73,16 +133,22 @@ def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFram
     start_yyyymmdd = start_date.replace("-", "")
     end_yyyymmdd = end_date.replace("-", "")
 
-    df = krx.get_market_ohlcv_by_date(
+    adjusted_df = krx.get_market_ohlcv_by_date(
         start_yyyymmdd,
         end_yyyymmdd,
         code,
         adjusted=True,
     )
-    if df.empty:
-        return df
+    raw_df = krx.get_market_ohlcv_by_date(
+        start_yyyymmdd,
+        end_yyyymmdd,
+        code,
+        adjusted=False,
+    )
+    if adjusted_df.empty or raw_df.empty:
+        return pd.DataFrame()
 
-    df = df.rename(
+    adjusted_df = adjusted_df.rename(
         columns={
             "시가": "Open",
             "고가": "High",
@@ -92,11 +158,16 @@ def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFram
             "등락률": "Change",
         }
     )
-    df.index.name = "Date"
+    required_adjusted_columns = ["Open", "High", "Low", "Close", "Volume", "Change"]
+    missing_columns = set(required_adjusted_columns) - set(adjusted_df.columns)
+    if missing_columns:
+        raise ValueError(f"수정주가 필수 컬럼 누락: {sorted(missing_columns)}")
+    adjusted_df = adjusted_df[required_adjusted_columns].copy()
+    adjusted_df.index.name = "Date"
     # 등락률의 NaN 값 보정 -> 이거 첫날 상장때는 등락률 계산이 불가능해서 0으로 처리
-    if "Change" in df.columns:
-        df["Change"] = df["Change"].fillna(0.0)
-    return df
+    if "Change" in adjusted_df.columns:
+        adjusted_df["Change"] = adjusted_df["Change"].fillna(0.0)
+    return _attach_actual_vwap(adjusted_df, raw_df)
 
 
 def _fetch_ohlcv_fdr(code: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -105,16 +176,24 @@ def _fetch_ohlcv_fdr(code: str, start_date: str, end_date: str) -> pd.DataFrame:
     FDR의 Change(소수점 단위)를 퍼센트(%) 단위로 변환하여 pykrx와 스케일을 통일합니다.
     """
     try:
-        df = fdr.DataReader(code, start_date, end_date)
-        if df.empty:
-            return df
+        adjusted_df = fdr.DataReader(code, start_date, end_date)
+        raw_df = krx.get_market_ohlcv_by_date(
+            start_date.replace("-", ""),
+            end_date.replace("-", ""),
+            code,
+            adjusted=False,
+        )
+        if adjusted_df.empty or raw_df.empty:
+            return pd.DataFrame()
 
         # 필요한 컬럼만 추출 및 리네임
-        df = df[["Open", "High", "Low", "Close", "Volume", "Change"]]
+        adjusted_df = adjusted_df[
+            ["Open", "High", "Low", "Close", "Volume", "Change"]
+        ].copy()
         # 등락률 단위를 %로 변환 (FDR은 0.0132 형태, pykrx는 1.32 형태)
-        df["Change"] = df["Change"].fillna(0.0) * 100.0
-        df.index.name = "Date"
-        return df
+        adjusted_df["Change"] = adjusted_df["Change"].fillna(0.0) * 100.0
+        adjusted_df.index.name = "Date"
+        return _attach_actual_vwap(adjusted_df, raw_df)
     except Exception:
         # print(f"  [FDR Fetch Error] {code}: {e}")
         return pd.DataFrame()
@@ -143,11 +222,22 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
                 "ChagesRatio": "Change",
             }
         )
-        required_columns = {"Code", "Open", "High", "Low", "Close", "Volume", "Change"}
+        required_columns = {
+            "Code",
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "Volume",
+            "Amount",
+            "Change",
+        }
         missing_columns = required_columns - set(market_snapshot.columns)
         if missing_columns:
             raise RuntimeError(f"FDR 전 종목 시세 필수 컬럼 누락: {sorted(missing_columns)}")
         market_snapshot = market_snapshot[market_snapshot["Volume"] > 0].copy()
+        if market_snapshot["Amount"].isna().any() or market_snapshot["Amount"].le(0).any():
+            raise RuntimeError("FDR 전 종목 시세에 유효하지 않은 거래대금이 있습니다.")
         market_snapshot["Code"] = market_snapshot["Code"].astype(str).str.zfill(6)
         print(f"  📅 수집된 실제 영업일 기준일: {actual_date_str}")
 
@@ -165,6 +255,10 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
 
             # FDR StockListing의 ChagesRatio는 퍼센트(%) 단위입니다.
             change_val = float(row["Change"]) if not pd.isna(row["Change"]) else 0.0
+            volume = float(row["Volume"])
+            amount = float(row["Amount"])
+            close = float(row["Close"])
+            vwap = amount / volume
 
             new_row = pd.DataFrame(
                 [
@@ -173,8 +267,13 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
                         "Open": float(row["Open"]),
                         "High": float(row["High"]),
                         "Low": float(row["Low"]),
-                        "Close": float(row["Close"]),
-                        "Volume": float(row["Volume"]),
+                        "Close": close,
+                        "Volume": volume,
+                        "Amount": amount,
+                        "RawClose": close,
+                        "RawVolume": volume,
+                        "AdjustmentFactor": 1.0,
+                        "VWAP": vwap,
                         "Change": change_val,
                         "Code": code,
                         "Name": name,
@@ -188,7 +287,9 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
                     existing = pd.read_parquet(file_path)
                     existing["Date"] = pd.to_datetime(existing["Date"])
 
-                    if actual_date in existing["Date"].values:
+                    actual_rows = existing.loc[existing["Date"].eq(actual_date)]
+                    has_actual_vwap = _has_complete_actual_vwap(actual_rows)
+                    if actual_date in existing["Date"].values and has_actual_vwap:
                         updated_tickers.add(code)
                         continue
 
@@ -266,6 +367,9 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
                     # 1. 중간 누락(Gap) 탐지
                     first_date = existing_df["Date"].min()
                     check_start = max(first_date, pd.to_datetime(start_date))
+                    vwap_incomplete = not _has_complete_actual_vwap(
+                        existing_df.loc[existing_df["Date"] >= check_start]
+                    )
                     check_days = {d for d in actual_business_days if d >= check_start.date()}
                     existing_dates = set(existing_df["Date"].dt.date)
                     missing_days = check_days - existing_dates
@@ -274,7 +378,9 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
                     fetch_start_str = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
                     # 2. 업데이트 및 보정 필요성 판단
-                    if not is_delisted and (fetch_start_str <= today_str or missing_days):
+                    if not is_delisted and (
+                        fetch_start_str <= today_str or missing_days or vwap_incomplete
+                    ):
                         needs_download = True
                         # 누락이 많거나 업데이트 범위가 넓으면 해당 종목만 start_date부터 전체를 다시 받아 머지
                         fetch_start_str = start_date
