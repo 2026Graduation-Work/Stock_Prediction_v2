@@ -362,6 +362,50 @@ python -m experiments.features.build_psychology_features \
 따른다. 워밍업이 65거래일이므로 `train_start`는 각 종목의 첫 거래일 + 66거래일 이후여야
 A/B 행 정합성 검사를 통과한다.
 
+### 9.2 KRX 투자자별 수급 피처
+
+`price_collector.py`는 기관·개인·외국인의 일별 매수대금, 매도대금, 순매수대금을
+`data/raw/<Code>.parquet`에 보존한다. 원 단위 금액은 종목 크기에 좌우되므로 기존
+161피처에 직접 넣지 않는다. 다음 명령으로 거래대금 정규화 수급 강도를 외부 피처로 만든다.
+현재 사용 중인 pykrx의 KRX 원천 조회에는 실행 환경의 `KRX_ID`, `KRX_PW`가 필요하며,
+인증 또는 수급 응답이 빠지면 수집기는 기존 값을 추정하지 않고 해당 갱신을 실패 처리한다.
+
+```bash
+python data_collectors/investor_flow_features.py \
+  --raw-dir data/raw \
+  --output data/external/investor_flows.parquet
+```
+
+생성되는 피처는 기관·개인·외국인별 매수 비중, 매도 비중, 당일·5일·20일
+순매수 강도 총 15개다. 매수·매도 비중은 각각 `매수(매도)대금 / 거래대금`,
+당일 순매수 강도는 `순매수대금 / 거래대금`, 누적 값은
+`기간 순매수대금 합 / 기간 거래대금 합`이다. 기타법인·기타외국인은 별도 유형이라
+세 유형의 비중 합이 항상 1일 필요는 없다. 수급은 장 마감 뒤 확정되므로
+`AvailableDate`는 반드시 다음 KRX 개장일로 기록된다.
+
+```yaml
+features:
+  sources:
+    - name: investor_flow
+      path: data/external/investor_flows.parquet
+      apply_period: one_day
+      columns:
+        - institution_net_buy_ratio
+        - institution_net_buy_ratio_5
+        - institution_net_buy_ratio_20
+        - individual_net_buy_ratio
+        - individual_net_buy_ratio_5
+        - individual_net_buy_ratio_20
+        - foreign_net_buy_ratio
+        - foreign_net_buy_ratio_5
+        - foreign_net_buy_ratio_20
+      missing: { policy: zero, add_indicator: false }
+```
+
+위 예시는 중복성이 비교적 적은 순매수 강도 9개부터 검증하는 권장 설정이다.
+매수·매도 비중 6개도 외부 Parquet에 있으므로 별도 treatment에서 추가 비교할 수 있다.
+이 피처들은 baseline에 바로 편입하지 않고 11절의 A/B 비교를 통과한 뒤 채택한다.
+
 ## 10. 기존 161피처 자체를 수정할 때
 
 추가 외부 피처와 달리 다음 파일을 함께 수정한다.

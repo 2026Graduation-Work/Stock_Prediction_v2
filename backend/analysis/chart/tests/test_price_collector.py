@@ -6,6 +6,23 @@ import pytest
 from data_collectors import price_collector, trading_calendar
 
 
+def _investor_flows(index):
+    return pd.DataFrame(
+        {
+            "InstitutionBuyAmount": [300.0] * len(index),
+            "InstitutionSellAmount": [200.0] * len(index),
+            "InstitutionNetBuyAmount": [100.0] * len(index),
+            "IndividualBuyAmount": [400.0] * len(index),
+            "IndividualSellAmount": [500.0] * len(index),
+            "IndividualNetBuyAmount": [-100.0] * len(index),
+            "ForeignBuyAmount": [200.0] * len(index),
+            "ForeignSellAmount": [200.0] * len(index),
+            "ForeignNetBuyAmount": [0.0] * len(index),
+        },
+        index=index,
+    )
+
+
 def _write_calendar_cache(path, start, end, trading_days):
     path.write_text(
         json.dumps(
@@ -172,6 +189,11 @@ def test_daily_bulk_update_uses_exact_krx_snapshot_date(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(price_collector.fdr, "StockListing", fake_stock_listing)
+    monkeypatch.setattr(
+        price_collector,
+        "_fetch_daily_investor_snapshot",
+        lambda trading_date: _investor_flows(pd.Index(["005930"], name="Code")),
+    )
     stocks = pd.DataFrame(
         [{"Code": "005930", "Name": "삼성전자", "IsDelisted": False}]
     )
@@ -185,6 +207,7 @@ def test_daily_bulk_update_uses_exact_krx_snapshot_date(tmp_path, monkeypatch):
     assert stored.loc[0, "Close"] == 70500
     assert stored.loc[0, "VWAP"] == 70400
     assert stored.loc[0, "Amount"] == 70400000
+    assert stored.loc[0, "InstitutionNetBuyAmount"] == 100
 
 
 def test_attach_actual_vwap_matches_adjusted_price_scale():
@@ -255,6 +278,11 @@ def test_fdr_history_joins_unadjusted_krx_turnover(monkeypatch):
         return raw
 
     monkeypatch.setattr(price_collector.krx, "get_market_ohlcv_by_date", fake_raw)
+    monkeypatch.setattr(
+        price_collector,
+        "_fetch_investor_flows_by_date",
+        lambda *args: _investor_flows(index),
+    )
 
     result = price_collector._fetch_ohlcv_fdr("005930", "2026-09-01", "2026-09-01")
 
@@ -262,6 +290,68 @@ def test_fdr_history_joins_unadjusted_krx_turnover(monkeypatch):
     assert result.loc[index[0], "Change"] == pytest.approx(1.0)
     assert result.loc[index[0], "VWAP"] == pytest.approx(101.0)
     assert result.loc[index[0], "AdjustmentFactor"] == pytest.approx(0.5)
+    assert result.loc[index[0], "IndividualNetBuyAmount"] == -100
+
+
+def test_investor_history_fetches_buy_and_sell_and_derives_net(monkeypatch):
+    index = pd.to_datetime(["2026-09-01"])
+    calls = []
+
+    def fake_trading_value(fromdate, todate, code, on):
+        calls.append((fromdate, todate, code, on))
+        multiplier = 1 if on == "매수" else 2
+        return pd.DataFrame(
+            {
+                "기관합계": [300 * multiplier],
+                "개인": [400 * multiplier],
+                "외국인합계": [200 * multiplier],
+            },
+            index=index,
+        )
+
+    monkeypatch.setattr(
+        price_collector.krx, "get_market_trading_value_by_date", fake_trading_value
+    )
+
+    result = price_collector._fetch_investor_flows_by_date(
+        "005930", "2026-09-01", "2026-09-01"
+    )
+
+    assert calls == [
+        ("20260901", "20260901", "005930", "매수"),
+        ("20260901", "20260901", "005930", "매도"),
+    ]
+    assert result.loc[index[0], "InstitutionBuyAmount"] == 300
+    assert result.loc[index[0], "InstitutionSellAmount"] == 600
+    assert result.loc[index[0], "InstitutionNetBuyAmount"] == -300
+
+
+def test_daily_investor_snapshot_uses_six_market_level_calls(monkeypatch):
+    calls = []
+
+    def fake_net_purchases(fromdate, todate, market, investor):
+        calls.append((market, investor))
+        code = "005930" if market == "KOSPI" else "035720"
+        return pd.DataFrame(
+            {"매수거래대금": [600], "매도거래대금": [400]},
+            index=pd.Index([code], name="티커"),
+        )
+
+    monkeypatch.setattr(
+        price_collector.krx,
+        "get_market_net_purchases_of_equities_by_ticker",
+        fake_net_purchases,
+    )
+
+    result = price_collector._fetch_daily_investor_snapshot(pd.Timestamp("2026-09-01"))
+
+    assert len(calls) == 6
+    assert set(calls) == {
+        (market, investor)
+        for market in ("KOSPI", "KOSDAQ")
+        for investor in ("기관합계", "개인", "외국인")
+    }
+    assert result.loc["005930", "ForeignNetBuyAmount"] == 200
 
 
 def test_actual_vwap_completeness_checks_values_not_only_columns():

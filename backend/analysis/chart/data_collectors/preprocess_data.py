@@ -15,6 +15,12 @@ RAW_DATA_DIR = "./data/raw"
 PROCESSED_DATA_DIR = "./data/processed"
 os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
 
+INVESTOR_FLOW_INPUT_COLUMNS = [
+    f"{prefix}{side}Amount"
+    for prefix in ("Institution", "Individual", "Foreign")
+    for side in ("Buy", "Sell", "NetBuy")
+]
+
 
 def normalize_trading_halts(
     df: pd.DataFrame, trading_days=None
@@ -49,6 +55,16 @@ def normalize_trading_halts(
     )
     if traded_without_vwap.any():
         raise ValueError("거래가 존재하는 원본 행에 실제 VWAP 값이 없습니다.")
+    missing_flow_columns = set(INVESTOR_FLOW_INPUT_COLUMNS) - set(df.columns)
+    if missing_flow_columns:
+        raise ValueError(
+            f"KRX 투자자 수급 컬럼이 없습니다: {sorted(missing_flow_columns)}"
+        )
+    traded_without_flows = df["Close"].notna() & df["Close"].ne(0) & df[
+        INVESTOR_FLOW_INPUT_COLUMNS
+    ].isna().any(axis=1)
+    if traded_without_flows.any():
+        raise ValueError("거래가 존재하는 원본 행에 KRX 투자자 수급 값이 없습니다.")
 
     # 2. OHLCV 0 값 → NaN (pykrx 거래정지 0-값 케이스)
     for col in ["Open", "High", "Low", "Close", "Volume", "VWAP"]:
@@ -75,6 +91,8 @@ def normalize_trading_halts(
     for col in ["Amount", "RawVolume"]:
         if col in df.columns:
             df[col] = df[col].fillna(0.0)
+    # 거래정지일은 실제 매수·매도가 없으므로 모든 투자자 수급 대금을 0으로 표시
+    df[INVESTOR_FLOW_INPUT_COLUMNS] = df[INVESTOR_FLOW_INPUT_COLUMNS].fillna(0.0)
 
     # 비수정 종가와 수정계수는 새로 생성된 거래정지 행에 직전 값을 유지
     for col in ["RawClose", "AdjustmentFactor"]:
@@ -378,10 +396,13 @@ def _load_trading_days_for_files(raw_files: list[str]) -> set:
     )
 
 
-def _processed_has_actual_vwap(file_path: str) -> bool:
-    """구형 HLC3 기반 processed 파일과 실제 VWAP 기반 파일을 구분합니다."""
+def _processed_has_current_market_data(file_path: str) -> bool:
+    """processed 파일에 실제 VWAP과 투자자별 원천 수급이 모두 있는지 확인합니다."""
     try:
-        pd.read_parquet(file_path, columns=["VWAP"])
+        pd.read_parquet(
+            file_path,
+            columns=["VWAP", *INVESTOR_FLOW_INPUT_COLUMNS],
+        )
         return True
     except Exception:
         return False
@@ -400,7 +421,7 @@ def preprocess_all_data():
         file_name = os.path.basename(file_path)
         save_path = os.path.join(PROCESSED_DATA_DIR, file_name)
 
-        if os.path.exists(save_path) and _processed_has_actual_vwap(save_path):
+        if os.path.exists(save_path) and _processed_has_current_market_data(save_path):
             continue
 
         try:
@@ -464,7 +485,7 @@ def update_processed_data():
             # ── 기존 processed 파일의 마지막 날짜 확인 ──────────────────
             existing = pd.read_parquet(save_path)
             existing["Date"] = pd.to_datetime(existing["Date"])
-            if "VWAP" not in existing.columns:
+            if not set(["VWAP", *INVESTOR_FLOW_INPUT_COLUMNS]).issubset(existing.columns):
                 df_raw = pd.read_parquet(file_path)
                 if len(df_raw) < _LOOKBACK_DAYS:
                     skipped += 1

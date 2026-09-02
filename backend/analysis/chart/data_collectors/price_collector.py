@@ -20,6 +20,16 @@ os.makedirs(DATA_DIR, exist_ok=True)
 # 기본 전체 수집 시작일 (최근 10년 기준, 실행 연도 자동 반영)
 _DEFAULT_START_DATE = f"{datetime.now().year - 10}-01-01"
 _VWAP_COLUMNS = {"Amount", "RawClose", "RawVolume", "AdjustmentFactor", "VWAP"}
+_INVESTOR_TYPES = {
+    "Institution": "기관합계",
+    "Individual": "개인",
+    "Foreign": "외국인합계",
+}
+_INVESTOR_FLOW_COLUMNS = {
+    f"{prefix}{side}Amount"
+    for prefix in _INVESTOR_TYPES
+    for side in ("Buy", "Sell", "NetBuy")
+}
 
 
 def _has_complete_actual_vwap(df: pd.DataFrame) -> bool:
@@ -31,6 +41,142 @@ def _has_complete_actual_vwap(df: pd.DataFrame) -> bool:
         return True
     numeric = df.loc[traded, sorted(_VWAP_COLUMNS)].apply(pd.to_numeric, errors="coerce")
     return bool(numeric.notna().all().all() and numeric.gt(0).all().all())
+
+
+def _has_complete_investor_flows(df: pd.DataFrame) -> bool:
+    """거래일마다 기관·개인·외국인 매수/매도/순매수 대금이 있는지 확인합니다."""
+    if not _INVESTOR_FLOW_COLUMNS.issubset(df.columns) or "Volume" not in df.columns:
+        return False
+    traded = pd.to_numeric(df["Volume"], errors="coerce").fillna(0) > 0
+    if not traded.any():
+        return True
+
+    numeric = df.loc[traded, sorted(_INVESTOR_FLOW_COLUMNS)].apply(
+        pd.to_numeric, errors="coerce"
+    )
+    if numeric.isna().any().any():
+        return False
+    for prefix in _INVESTOR_TYPES:
+        buy = numeric[f"{prefix}BuyAmount"]
+        sell = numeric[f"{prefix}SellAmount"]
+        net_buy = numeric[f"{prefix}NetBuyAmount"]
+        if buy.lt(0).any() or sell.lt(0).any() or not (net_buy == buy - sell).all():
+            return False
+    return True
+
+
+def _has_complete_market_data(df: pd.DataFrame) -> bool:
+    """실제 VWAP과 투자자별 수급이 모두 완전한 원본 데이터인지 확인합니다."""
+    return _has_complete_actual_vwap(df) and _has_complete_investor_flows(df)
+
+
+def _build_investor_flow_frame(
+    buy_df: pd.DataFrame, sell_df: pd.DataFrame
+) -> pd.DataFrame:
+    """pykrx의 일별 매수·매도 표를 영문 수급 컬럼으로 표준화합니다."""
+    if buy_df.empty or sell_df.empty:
+        return pd.DataFrame()
+
+    buy = buy_df.copy()
+    sell = sell_df.copy()
+    buy.index = pd.to_datetime(buy.index).normalize()
+    sell.index = pd.to_datetime(sell.index).normalize()
+    if buy.index.has_duplicates or sell.index.has_duplicates:
+        raise ValueError("KRX 투자자 수급 데이터에 중복 날짜가 있습니다.")
+
+    columns = {}
+    for prefix, korean_name in _INVESTOR_TYPES.items():
+        # 일부 KRX 응답은 외국인합계를 '외국인'으로 반환하므로 두 표기를 허용합니다.
+        candidates = [korean_name]
+        if korean_name == "외국인합계":
+            candidates.append("외국인")
+        source_column = next((name for name in candidates if name in buy.columns), None)
+        if source_column is None or source_column not in sell.columns:
+            raise ValueError(f"KRX 투자자 수급 컬럼 누락: {korean_name}")
+
+        buy_amount = pd.to_numeric(buy[source_column], errors="coerce")
+        sell_amount = pd.to_numeric(sell[source_column], errors="coerce")
+        columns[f"{prefix}BuyAmount"] = buy_amount
+        columns[f"{prefix}SellAmount"] = sell_amount
+        columns[f"{prefix}NetBuyAmount"] = buy_amount - sell_amount
+
+    result = pd.DataFrame(columns).sort_index()
+    if not _has_complete_investor_flows(result.assign(Volume=1.0)):
+        raise ValueError("KRX 투자자별 매수/매도 대금이 유효하지 않습니다.")
+    result.index.name = "Date"
+    return result
+
+
+def _fetch_investor_flows_by_date(
+    code: str, start_date: str, end_date: str
+) -> pd.DataFrame:
+    """개별 종목의 기관·개인·외국인 일별 매수/매도 대금을 조회합니다."""
+    start_yyyymmdd = start_date.replace("-", "")
+    end_yyyymmdd = end_date.replace("-", "")
+    buy_df = krx.get_market_trading_value_by_date(
+        start_yyyymmdd, end_yyyymmdd, code, on="매수"
+    )
+    sell_df = krx.get_market_trading_value_by_date(
+        start_yyyymmdd, end_yyyymmdd, code, on="매도"
+    )
+    return _build_investor_flow_frame(buy_df, sell_df)
+
+
+def _attach_investor_flows(
+    price_df: pd.DataFrame, investor_df: pd.DataFrame
+) -> pd.DataFrame:
+    """가격 데이터의 모든 실거래일에 투자자별 수급 대금을 결합합니다."""
+    if price_df.empty or investor_df.empty:
+        return pd.DataFrame()
+    combined = price_df.join(investor_df, how="left")
+    if not _has_complete_investor_flows(combined):
+        missing = combined.index[
+            combined[sorted(_INVESTOR_FLOW_COLUMNS)].isna().any(axis=1)
+            & pd.to_numeric(combined["Volume"], errors="coerce").fillna(0).gt(0)
+        ]
+        sample = ", ".join(date.strftime("%Y-%m-%d") for date in missing[:5])
+        raise ValueError(f"거래일의 KRX 투자자 수급 데이터가 누락되었습니다: {sample}")
+    return combined
+
+
+def _fetch_daily_investor_snapshot(trading_date: pd.Timestamp) -> pd.DataFrame:
+    """한 거래일의 전 종목 수급을 시장·투자자별 6회 호출로 일괄 조회합니다."""
+    yyyymmdd = trading_date.strftime("%Y%m%d")
+    frames = []
+    for market in ("KOSPI", "KOSDAQ"):
+        market_frame = None
+        for prefix, investor in _INVESTOR_TYPES.items():
+            investor_name = "외국인" if investor == "외국인합계" else investor
+            raw = krx.get_market_net_purchases_of_equities_by_ticker(
+                yyyymmdd, yyyymmdd, market, investor_name
+            )
+            required = {"매수거래대금", "매도거래대금"}
+            if raw.empty or not required.issubset(raw.columns):
+                raise ValueError(f"{market} {investor_name} 당일 수급 조회 실패")
+            values = raw[["매수거래대금", "매도거래대금"]].apply(
+                pd.to_numeric, errors="coerce"
+            )
+            values.index = values.index.astype(str).str.zfill(6)
+            values = values.rename(
+                columns={
+                    "매수거래대금": f"{prefix}BuyAmount",
+                    "매도거래대금": f"{prefix}SellAmount",
+                }
+            )
+            values[f"{prefix}NetBuyAmount"] = (
+                values[f"{prefix}BuyAmount"] - values[f"{prefix}SellAmount"]
+            )
+            market_frame = (
+                values if market_frame is None else market_frame.join(values, how="outer")
+            )
+        frames.append(market_frame)
+
+    result = pd.concat(frames)
+    result = result[~result.index.duplicated(keep="first")].sort_index()
+    result.index.name = "Code"
+    if not _has_complete_investor_flows(result.assign(Volume=1.0)):
+        raise ValueError("KRX 당일 투자자별 수급 데이터가 유효하지 않습니다.")
+    return result
 
 
 def _attach_actual_vwap(adjusted_df: pd.DataFrame, raw_df: pd.DataFrame) -> pd.DataFrame:
@@ -167,7 +313,9 @@ def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFram
     # 등락률의 NaN 값 보정 -> 이거 첫날 상장때는 등락률 계산이 불가능해서 0으로 처리
     if "Change" in adjusted_df.columns:
         adjusted_df["Change"] = adjusted_df["Change"].fillna(0.0)
-    return _attach_actual_vwap(adjusted_df, raw_df)
+    price_df = _attach_actual_vwap(adjusted_df, raw_df)
+    investor_df = _fetch_investor_flows_by_date(code, start_date, end_date)
+    return _attach_investor_flows(price_df, investor_df)
 
 
 def _fetch_ohlcv_fdr(code: str, start_date: str, end_date: str) -> pd.DataFrame:
@@ -193,7 +341,9 @@ def _fetch_ohlcv_fdr(code: str, start_date: str, end_date: str) -> pd.DataFrame:
         # 등락률 단위를 %로 변환 (FDR은 0.0132 형태, pykrx는 1.32 형태)
         adjusted_df["Change"] = adjusted_df["Change"].fillna(0.0) * 100.0
         adjusted_df.index.name = "Date"
-        return _attach_actual_vwap(adjusted_df, raw_df)
+        price_df = _attach_actual_vwap(adjusted_df, raw_df)
+        investor_df = _fetch_investor_flows_by_date(code, start_date, end_date)
+        return _attach_investor_flows(price_df, investor_df)
     except Exception:
         # print(f"  [FDR Fetch Error] {code}: {e}")
         return pd.DataFrame()
@@ -239,6 +389,10 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
         if market_snapshot["Amount"].isna().any() or market_snapshot["Amount"].le(0).any():
             raise RuntimeError("FDR 전 종목 시세에 유효하지 않은 거래대금이 있습니다.")
         market_snapshot["Code"] = market_snapshot["Code"].astype(str).str.zfill(6)
+        investor_snapshot = _fetch_daily_investor_snapshot(actual_date)
+        market_snapshot = market_snapshot.join(investor_snapshot, on="Code", how="left")
+        if not _has_complete_investor_flows(market_snapshot):
+            raise RuntimeError("FDR 전 종목 시세와 KRX 투자자 수급을 완전하게 결합하지 못했습니다.")
         print(f"  📅 수집된 실제 영업일 기준일: {actual_date_str}")
 
         ticker_to_name = dict(zip(all_stocks["Code"], all_stocks["Name"]))
@@ -274,6 +428,7 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
                         "RawVolume": volume,
                         "AdjustmentFactor": 1.0,
                         "VWAP": vwap,
+                        **{column: float(row[column]) for column in _INVESTOR_FLOW_COLUMNS},
                         "Change": change_val,
                         "Code": code,
                         "Name": name,
@@ -288,8 +443,8 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
                     existing["Date"] = pd.to_datetime(existing["Date"])
 
                     actual_rows = existing.loc[existing["Date"].eq(actual_date)]
-                    has_actual_vwap = _has_complete_actual_vwap(actual_rows)
-                    if actual_date in existing["Date"].values and has_actual_vwap:
+                    has_complete_data = _has_complete_market_data(actual_rows)
+                    if actual_date in existing["Date"].values and has_complete_data:
                         updated_tickers.add(code)
                         continue
 
@@ -318,8 +473,8 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
 def update_ohlcv_daily():
     """
     [데일리 증분 업데이트 함수]
-    매일 장 마감 후 실행되어 당일 최신 1일치 시세(FDR 벌크)를 초고속으로 수집 및 업데이트합니다.
-    개별 종목 API 루프를 돌지 않아 10초 내로 끝납니다.
+    매일 장 마감 후 당일 시세(FDR)와 투자자별 수급(KRX)을 일괄 수집합니다.
+    수급은 종목별 호출 대신 시장·투자자 유형별 6회 호출로 결합합니다.
     """
     all_stocks = get_all_tickers()
     updated_tickers = _update_ohlcv_bulk_fdr(all_stocks)
@@ -331,7 +486,7 @@ def update_ohlcv_daily():
 def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool = False):
     """
     [전체 이력 수집 및 정밀 보정 함수]
-    지정된 start_date부터 오늘까지 전체 종목의 과거 가격 이력을 다운로드하여 구축합니다.
+    지정된 start_date부터 오늘까지 가격·VWAP·투자자별 수급 이력을 다운로드합니다.
     또한, 이미 구축된 파일 중 중간 영업일(Gap) 누락을 감지하고 메워줍니다.
     속도와 안정성을 위해 FDR DataReader를 기본으로 사용하고 pykrx를 백업으로 사용합니다.
     """
@@ -367,7 +522,7 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
                     # 1. 중간 누락(Gap) 탐지
                     first_date = existing_df["Date"].min()
                     check_start = max(first_date, pd.to_datetime(start_date))
-                    vwap_incomplete = not _has_complete_actual_vwap(
+                    market_data_incomplete = not _has_complete_market_data(
                         existing_df.loc[existing_df["Date"] >= check_start]
                     )
                     check_days = {d for d in actual_business_days if d >= check_start.date()}
@@ -379,7 +534,7 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
 
                     # 2. 업데이트 및 보정 필요성 판단
                     if not is_delisted and (
-                        fetch_start_str <= today_str or missing_days or vwap_incomplete
+                        fetch_start_str <= today_str or missing_days or market_data_incomplete
                     ):
                         needs_download = True
                         # 누락이 많거나 업데이트 범위가 넓으면 해당 종목만 start_date부터 전체를 다시 받아 머지
@@ -440,7 +595,7 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="KRX OHLCV 하이브리드 고속 수집기 (기능 분리 버전)",
+        description="KRX 가격·VWAP·투자자별 수급 하이브리드 수집기",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 사용 예시:

@@ -47,6 +47,20 @@ NON_FEATURE_COLUMNS = {
     "Sigma",
     "Y_Label",
     "Trading_Halt",
+    "Amount",
+    "RawClose",
+    "RawVolume",
+    "AdjustmentFactor",
+    "VWAP",
+    "InstitutionBuyAmount",
+    "InstitutionSellAmount",
+    "InstitutionNetBuyAmount",
+    "IndividualBuyAmount",
+    "IndividualSellAmount",
+    "IndividualNetBuyAmount",
+    "ForeignBuyAmount",
+    "ForeignSellAmount",
+    "ForeignNetBuyAmount",
 }
 
 

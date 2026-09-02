@@ -258,6 +258,20 @@ def load_parquet_data(
                     "Sigma",
                     "Y_Label",
                     "Trading_Halt",
+                    "Amount",
+                    "RawClose",
+                    "RawVolume",
+                    "AdjustmentFactor",
+                    "VWAP",
+                    "InstitutionBuyAmount",
+                    "InstitutionSellAmount",
+                    "InstitutionNetBuyAmount",
+                    "IndividualBuyAmount",
+                    "IndividualSellAmount",
+                    "IndividualNetBuyAmount",
+                    "ForeignBuyAmount",
+                    "ForeignSellAmount",
+                    "ForeignNetBuyAmount",
                 ]
                 if not keep_date:
                     exclude_cols.append("Date")
