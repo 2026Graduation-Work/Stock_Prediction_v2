@@ -2,7 +2,8 @@
 
 `supabase/migrations/` 0001~0003 기준. 스키마가 바뀌면 이 문서와 `frontend/lib/types.ts`를 함께 고친다.
 
-> 0003(`style_axes`)은 아직 미적용이다. 적용 전 담당자 확인이 필요하다.
+> 0003(schema_version `1.1.0` 허용)은 아직 미적용이다. 적용 전 담당자 확인이 필요하다.
+> 8축은 별도 컬럼 없이 `profile_payload.style_axes`에 저장하므로 0003 없이도 앱은 동작한다(8축만 null).
 
 ```mermaid
 erDiagram
@@ -69,8 +70,7 @@ erDiagram
     text schema_version "1.0.0 | 1.1.0 (0003)"
     text source "profiling_block"
     float8 confidence
-    jsonb profile_payload "profiling_output 원본"
-    jsonb style_axes "0003, v1.1 8축. v1.0 행은 null"
+    jsonb profile_payload "profiling_output 원본. v1.1이면 style_axes 포함"
     timestamptz created_at
     timestamptz updated_at
   }
@@ -160,7 +160,7 @@ erDiagram
   }
 ```
 
-## `ips_profiles.style_axes` 형태
+## `ips_profiles.profile_payload.style_axes` 형태
 
 `schema/profiling_output.schema.json` v1.1 `style_axes` ↔ `frontend/lib/types.ts` `StyleAxes`.
 

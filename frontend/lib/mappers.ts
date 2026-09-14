@@ -29,7 +29,6 @@ export interface IpsProfileRow {
   risk_score: number;
   fomo_score: number;
   horizon_score: number;
-  style_axes?: unknown; // 0003 마이그레이션. v1.0 행은 null
 }
 
 export interface AvoidedAssetRow {

@@ -1,5 +1,5 @@
 -- Kim Minji demo persona seed. Safe to run repeatedly.
--- Requires migrations/0003_ips_profiles_style_axes.sql (style_axes column, schema_version 1.1.0).
+-- Requires migrations/0003_ips_profiles_schema_v11.sql (schema_version 1.1.0; style_axes lives in profile_payload).
 -- Expected rows on a clean project after execution:
 -- users 1 / ips_profiles 1 / avoided_assets 2 / portfolio_holdings 4 /
 -- watchlist 3 / stocks 5 / predictions 4 / prediction_features 8 / market_status 1
@@ -58,8 +58,7 @@ insert into public.ips_profiles (
   schema_version,
   source,
   confidence,
-  profile_payload,
-  style_axes
+  profile_payload
 )
 values (
   'u_minji_001',
@@ -174,21 +173,7 @@ values (
       "source": "profiling_block",
       "confidence": 0.81
     }
-  }$profile$::jsonb,
-  -- profile_payload.style_axes와 같은 값. 산출 근거는 frontend/lib/mock-data.ts investorStyleAxes 주석.
-  $style_axes${
-    "assessment_mode": "quick",
-    "axes": [
-      {"axis_id": "market_participation", "ratio": -0.2, "confidence": 0.81, "answered_count": 3, "question_count": 3},
-      {"axis_id": "loss_tolerance", "ratio": -0.3, "confidence": 0.92, "answered_count": 3, "question_count": 3},
-      {"axis_id": "turnover", "ratio": -0.25, "confidence": 0.95, "answered_count": 3, "question_count": 3},
-      {"axis_id": "concentration", "ratio": -0.4, "confidence": 0.81, "answered_count": 3, "question_count": 3},
-      {"axis_id": "rule_adherence", "ratio": 0.2, "confidence": 0.81, "answered_count": 3, "question_count": 3},
-      {"axis_id": "information_reliance", "ratio": 0.16, "confidence": 0.85, "answered_count": 3, "question_count": 3},
-      {"axis_id": "urgency", "ratio": 0.44, "confidence": 0.78, "answered_count": 3, "question_count": 3},
-      {"axis_id": "drawdown_reaction", "ratio": 0.3, "confidence": 0.7, "answered_count": 3, "question_count": 3}
-    ]
-  }$style_axes$::jsonb
+  }$profile$::jsonb
 )
 on conflict (user_id) do update set
   session_id = excluded.session_id,
@@ -221,7 +206,6 @@ on conflict (user_id) do update set
   schema_version = excluded.schema_version,
   confidence = excluded.confidence,
   profile_payload = excluded.profile_payload,
-  style_axes = excluded.style_axes,
   updated_at = now();
 
 insert into public.avoided_assets (user_id, asset_type)

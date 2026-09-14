@@ -377,7 +377,7 @@ async function queryStockDetail(
     client
       .from("ips_profiles")
       .select(
-        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score,style_axes",
+        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score,style_axes:profile_payload->style_axes",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -397,6 +397,8 @@ async function queryStockDetail(
   if (!stockResult.data) throw new Error(`종목 정보를 찾지 못했습니다: ${code}`);
 
   const profile = profileResult.data as IpsProfileRow;
+  // 8축은 profile_payload(schema v1.1) 안에만 있다. v1.0 프로필이면 null.
+  const payloadStyleAxes = (profileResult.data as { style_axes?: unknown }).style_axes;
   const { data: predictionData, error: predictionError } = await client
     .from("predictions")
     .select(DETAIL_PREDICTION_COLUMNS)
@@ -427,7 +429,7 @@ async function queryStockDetail(
     profile: mapProfileSummary(userResult.data as UserRow, profile),
     marketStatus: marketResult,
     maxRiskTier: profile.max_risk_tier,
-    styleAxes: isStyleAxes(profile.style_axes) ? profile.style_axes : null,
+    styleAxes: isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
     source: "supabase",
   };
 }

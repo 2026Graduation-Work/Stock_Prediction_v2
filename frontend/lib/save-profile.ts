@@ -90,8 +90,6 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
       source: profile.meta.source,
       confidence: profile.meta.confidence,
       profile_payload: storedProfile,
-      // 0003 미적용 DB에서도 v1.0 저장이 깨지지 않도록 8축이 있을 때만 컬럼을 보낸다.
-      ...(profile.style_axes ? { style_axes: profile.style_axes } : {}),
       updated_at: now,
     },
     { onConflict: "user_id" },

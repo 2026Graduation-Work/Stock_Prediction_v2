@@ -4,7 +4,12 @@ import { test } from "node:test";
 import type { StyleAxes, StyleAxisId } from "../types.ts";
 import { investorStyleAxes } from "../mock-data.ts";
 import { BIAS_PROFILE_AXES, CARD_ORDER, classifyBit, type BitType } from "./bit.ts";
-import { NUDGES, selectNudges, type NudgeMarket } from "./nudges.ts";
+import {
+  NUDGES,
+  SCREEN_GUIDE_NOTICE,
+  selectNudges,
+  type NudgeMarket,
+} from "./nudges.ts";
 
 const AXIS_IDS: StyleAxisId[] = [
   "market_participation",
@@ -47,8 +52,22 @@ const CALM: NudgeMarket = {
   riskGrade: 3,
 };
 
-const ids = (bit: StyleAxes, market: Partial<NudgeMarket> = {}) =>
-  selectNudges(classifyBit(bit), { ...CALM, ...market }).map(({ id }) => id);
+// 모든 시장 조건이 참인 시장. 성향 조건만으로 발화가 갈린다.
+const ALL_MARKET: NudgeMarket = {
+  retailNetBuyStreakDays: 5,
+  retailNetLatest: 1,
+  foreignNetLatest: -1,
+  institutionNetBuyDaysOf5: 4,
+  volatilityPercentile: 0.95,
+  drawdownFrom3mHigh: -0.2,
+  return3d: 0.12,
+  sentimentChange: 0.8,
+  isTopHolding: true,
+  riskGrade: 2,
+};
+
+const ids = (bit: StyleAxes, market: Partial<NudgeMarket> = {}, limit?: number) =>
+  selectNudges(classifyBit(bit), { ...CALM, ...market }, limit).map(({ id }) => id);
 
 const TYPE_CASES: [number, BitType, "emotional" | "cognitive"][] = [
   [-0.8, "PRESERVER", "emotional"],
@@ -100,45 +119,80 @@ test("confidence 0.5 미만이면 유형과 함께 lowConfidence", () => {
   assert.equal(result.lowConfidence, true);
 });
 
-test("넛지 12종, id 중복 없음, 권유 표현 없음", () => {
-  assert.equal(new Set(NUDGES.map(({ id }) => id)).size, 12);
-  for (const { id, text } of NUDGES) {
-    assert.doesNotMatch(text, /사세요|파세요|매수하|매도하|권장|추천/, id);
+test("넛지 11종(N12는 화면 안내로 분리), id 중복 없음, 권유 표현 없음", () => {
+  const nudgeIds = NUDGES.map(({ id }) => id);
+  assert.equal(new Set(nudgeIds).size, 11);
+  assert.ok(!(nudgeIds as string[]).includes("N12"));
+  for (const text of [...NUDGES.map((rule) => rule.text), SCREEN_GUIDE_NOTICE.text]) {
+    assert.doesNotMatch(text, /사세요|파세요|매수하|매도하|권장|추천/);
   }
 });
 
-test("N04·N05는 drawdown_reaction +0.3 초과(하락 시 이탈)에서만", () => {
+test("화면 안내(기존 N12)는 PRESERVER·FOLLOWER에만", () => {
+  assert.deepEqual(SCREEN_GUIDE_NOTICE.appliesTo, ["PRESERVER", "FOLLOWER"]);
+});
+
+test("임계는 경계 포함: >= +0.3, <= -0.3", () => {
+  const hot = { volatilityPercentile: 0.95 };
+  assert.deepEqual(ids(axes({ drawdown_reaction: 0.3 }), hot), ["N04"]);
+  assert.deepEqual(ids(axes({ drawdown_reaction: 0.29 }), hot), []);
+  assert.ok(ids(axes({ loss_tolerance: -0.3 }), { riskGrade: 2 }).includes("N11"));
+  assert.ok(!ids(axes({ loss_tolerance: -0.29 }), { riskGrade: 2 }).includes("N11"));
+});
+
+test("N04·N05는 drawdown_reaction + 쪽(하락 시 이탈)에서만", () => {
   const hot = { volatilityPercentile: 0.95, drawdownFrom3mHigh: -0.2 };
   assert.deepEqual(ids(axes({ drawdown_reaction: 0.5 }), hot), ["N05", "N04"]);
   assert.deepEqual(ids(axes({ drawdown_reaction: -0.5 }), hot), []);
 });
 
-test("N10은 rule_adherence +0.3 초과(상황별 재량)에서만", () => {
+test("N10은 rule_adherence + 쪽(상황별 재량)에서만", () => {
   assert.deepEqual(ids(axes({ rule_adherence: 0.5 })), ["N10"]);
   assert.deepEqual(ids(axes({ rule_adherence: -0.5 })), []);
 });
 
 test("N11은 위험 등급 2 이하(위험 쪽)에서만", () => {
   const averse = axes({ loss_tolerance: -0.5 });
-  assert.ok(ids(averse, { riskGrade: 2 }).includes("N11"));
-  assert.ok(!ids(averse, { riskGrade: 4 }).includes("N11"));
+  assert.deepEqual(ids(averse, { riskGrade: 2 }), ["N11"]);
+  assert.deepEqual(ids(averse, { riskGrade: 4 }), []);
 });
 
-test("N01~N03은 FOLLOWER면 information_reliance가 낮아도 발화하고 출처에 bit_type", () => {
-  const fired = selectNudges(classifyBit(investorStyleAxes), {
-    ...CALM,
+test("N01~N03은 information_reliance >= 0.3 단독 조건. FOLLOWER여도 낮으면 발화 안 함", () => {
+  const supplyMarket = {
     retailNetBuyStreakDays: 5,
-  });
-  const n01 = fired.find(({ id }) => id === "N01");
-  assert.deepEqual(n01?.sources, ["bit_type"]);
+    retailNetLatest: 1,
+    foreignNetLatest: -1,
+    institutionNetBuyDaysOf5: 4,
+  };
+  // 김민지 FOLLOWER, information_reliance +0.16
+  assert.deepEqual(ids(investorStyleAxes, supplyMarket, Infinity), []);
+
+  const fired = selectNudges(classifyBit(axes({ information_reliance: 0.3 })), {
+    ...CALM,
+    ...supplyMarket,
+  }, Infinity);
+  assert.deepEqual(fired.map(({ id }) => id), ["N02", "N01", "N03"]);
+  assert.deepEqual(
+    fired.map(({ axis, ratio }) => [axis, ratio]),
+    [
+      ["information_reliance", 0.3],
+      ["information_reliance", 0.3],
+      ["information_reliance", 0.3],
+    ],
+  );
 });
 
-test("N12는 PRESERVER·FOLLOWER에서만", () => {
-  // spectrum(0.8)은 turnover 0.8이라 N09가 함께 발화하므로 N12 포함 여부만 본다.
-  assert.ok(ids(spectrum(-0.8)).includes("N12"));
-  assert.ok(ids(spectrum(-0.3)).includes("N12"));
-  assert.ok(!ids(spectrum(0.2)).includes("N12"));
-  assert.ok(!ids(spectrum(0.8)).includes("N12"));
+test("김민지 고정: 모든 시장 조건이 참일 때 성향상 발화 가능한 넛지", () => {
+  // drawdown_reaction +0.30(N04·N05), urgency +0.44(N06·N07), loss_tolerance -0.30(N11)
+  const fired = selectNudges(classifyBit(investorStyleAxes), ALL_MARKET, Infinity);
+  assert.deepEqual(
+    fired.map(({ id }) => id),
+    ["N05", "N11", "N04", "N06", "N07"],
+  );
+  assert.deepEqual(
+    selectNudges(classifyBit(investorStyleAxes), ALL_MARKET).map(({ id }) => id),
+    ["N05", "N11"],
+  );
 });
 
 test("최대 2개, 우선순위 N02 > N05 > N11 > N04 > N01 > id 순", () => {
@@ -149,17 +203,7 @@ test("최대 2개, 우선순위 N02 > N05 > N11 > N04 > N01 > id 순", () => {
     urgency: 0.5,
     rule_adherence: 0.5,
   });
-  const market: Partial<NudgeMarket> = {
-    retailNetBuyStreakDays: 5,
-    retailNetLatest: 1,
-    foreignNetLatest: -1,
-    institutionNetBuyDaysOf5: 4,
-    volatilityPercentile: 0.95,
-    drawdownFrom3mHigh: -0.2,
-    return3d: 0.12,
-    sentimentChange: 0.8,
-    riskGrade: 2,
-  };
+  const market: Partial<NudgeMarket> = { ...ALL_MARKET, isTopHolding: false };
   assert.deepEqual(ids(everything, market), ["N02", "N05"]);
   assert.deepEqual(ids(everything, { ...market, foreignNetLatest: 1 }), ["N05", "N11"]);
   assert.deepEqual(
