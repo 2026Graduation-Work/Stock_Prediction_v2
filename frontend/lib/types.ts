@@ -1,4 +1,5 @@
-// schema/ v1.0에서 파생된 프론트 타입입니다. 스키마 변경 시 반드시 동기화합니다.
+// schema/ v1.1에서 파생된 프론트 타입입니다. 스키마 변경 시 반드시 동기화합니다.
+// DB 컬럼 대응은 docs/erd.md.
 // chart_output.schema.json: signal_light·rank_percentile·return_band·confidence·horizon_agreement·risk_flags
 
 export type SignalLight =
@@ -131,6 +132,31 @@ export interface ProfilingHolding {
   avg_buy_price: number;
 }
 
+// schema v1.1 style_axes. 축 id·극성은 backend/profiling/survey/style_questions.py AXES가 SSOT.
+// ratio: -1 = 주석 왼쪽, +1 = 주석 오른쪽.
+export type StyleAxisId =
+  | "market_participation" // 시장 수익률 참여 ↔ 내 목표 우선
+  | "loss_tolerance" // 원금 보전 ↔ 수익 기회
+  | "turnover" // 장기 보유 ↔ 단기 매매
+  | "concentration" // 폭넓은 분산 ↔ 소수 집중
+  | "rule_adherence" // 사전 규칙 준수 ↔ 상황별 재량 (이름과 달리 +가 규칙에서 멀어지는 쪽)
+  | "information_reliance" // 본인 판단 ↔ 시장·타인 추종
+  | "urgency" // 여유 ↔ 조급함
+  | "drawdown_reaction"; // 하락 시 유지 ↔ 하락 시 이탈
+
+export interface StyleAxis {
+  axis_id: StyleAxisId;
+  ratio: number; // -1~+1
+  confidence: number; // 0~1, 축 내부 응답 일관성 × 응답률
+  answered_count: number;
+  question_count: number;
+}
+
+export interface StyleAxes {
+  assessment_mode: "quick" | "detailed";
+  axes: StyleAxis[]; // 8축 모두
+}
+
 export interface ProfilingOutput {
   user_id: string;
   session_id: string;
@@ -165,6 +191,7 @@ export interface ProfilingOutput {
     conflict_with_survey: boolean;
   };
   confidence_per_field: Record<string, number>;
+  style_axes?: StyleAxes; // v1.1 optional. 있을 때만 schema_version 1.1.0
   context: {
     target_ticker?: string;
     investment_amount_krw: number;
@@ -173,7 +200,7 @@ export interface ProfilingOutput {
     benchmark_index?: string;
   };
   meta: {
-    schema_version: "1.0.0";
+    schema_version: "1.0.0" | "1.1.0";
     source: "profiling_block";
     confidence: number;
   };

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProfilingOutput } from "./types";
-import { horizonScoreForMonths } from "./profiling-rules";
+import { horizonScoreForMonths, isStyleAxes } from "./profiling-rules";
 import { getSupabaseClient } from "./supabase";
 
 export const PROFILE_STORAGE_KEY = "signallab.ips-profile.v1";
@@ -90,6 +90,8 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
       source: profile.meta.source,
       confidence: profile.meta.confidence,
       profile_payload: storedProfile,
+      // 0003 미적용 DB에서도 v1.0 저장이 깨지지 않도록 8축이 있을 때만 컬럼을 보낸다.
+      ...(profile.style_axes ? { style_axes: profile.style_axes } : {}),
       updated_at: now,
     },
     { onConflict: "user_id" },
@@ -283,7 +285,8 @@ function isProfilingOutput(value: unknown): value is ProfilingOutput {
     constraints.avoided_assets.every(
       (asset) => typeof asset === "string" && validRiskFlags.has(asset),
     ) &&
-    meta.schema_version === "1.0.0"
+    (meta.schema_version === "1.0.0" || meta.schema_version === "1.1.0") &&
+    (value.style_axes === undefined || isStyleAxes(value.style_axes))
   );
 }
 

@@ -5,7 +5,21 @@ import type {
   ProfileType,
   ProfilingOutput,
   RiskFlag,
+  StyleAxes,
+  StyleAxisId,
 } from "./types";
+
+// style_questions.AXIS_IDS와 같은 순서.
+export const STYLE_AXIS_IDS: readonly StyleAxisId[] = [
+  "market_participation",
+  "loss_tolerance",
+  "turnover",
+  "concentration",
+  "rule_adherence",
+  "information_reliance",
+  "urgency",
+  "drawdown_reaction",
+];
 
 export const PROFILE_TYPE_THRESHOLD = 60;
 
@@ -123,6 +137,7 @@ export interface SurveyAnswers {
   target_ticker?: string;
   market_regime_hint?: string;
   benchmark_index?: string;
+  style_axes?: StyleAxes; // 채점된 8축. 설문 UI는 아직 8축 리커트를 받지 않는다
 }
 
 export function profileTypeForRiskScore(riskScore: number): ProfileType {
@@ -213,6 +228,7 @@ export function convertSurveyAnswers(input: unknown): ProfilingOutput {
       conflict_with_survey: false,
     },
     confidence_per_field: { ...CONFIDENCE_PER_FIELD },
+    ...(answers.style_axes ? { style_axes: answers.style_axes } : {}),
     context: {
       investment_amount_krw: answers.investment_amount_krw ?? 0,
       action_intent: answers.action_intent ?? "buy_consideration",
@@ -225,7 +241,7 @@ export function convertSurveyAnswers(input: unknown): ProfilingOutput {
         : {}),
     },
     meta: {
-      schema_version: "1.0.0",
+      schema_version: answers.style_axes ? "1.1.0" : "1.0.0",
       source: "profiling_block",
       confidence: 0.81,
     },
@@ -267,7 +283,45 @@ function parseSurveyAnswers(input: unknown): SurveyAnswers {
       "market_regime_hint",
     ),
     benchmark_index: optionalText(input.benchmark_index, "benchmark_index"),
+    style_axes: parseStyleAxes(input.style_axes),
   };
+}
+
+// schema v1.1 style_axes 계약 검사: 8축 전부, ratio -1~1, confidence 0~1.
+export function isStyleAxes(value: unknown): value is StyleAxes {
+  if (
+    !isRecord(value) ||
+    (value.assessment_mode !== "quick" && value.assessment_mode !== "detailed") ||
+    !Array.isArray(value.axes) ||
+    value.axes.length !== STYLE_AXIS_IDS.length
+  ) {
+    return false;
+  }
+  const axes: unknown[] = value.axes;
+  const ids = new Set(axes.map((axis) => (isRecord(axis) ? axis.axis_id : null)));
+  return (
+    STYLE_AXIS_IDS.every((id) => ids.has(id)) &&
+    axes.every(
+      (axis) =>
+        isRecord(axis) &&
+        inRange(axis.ratio, -1, 1) &&
+        inRange(axis.confidence, 0, 1) &&
+        Number.isInteger(axis.answered_count) &&
+        Number.isInteger(axis.question_count),
+    )
+  );
+}
+
+function parseStyleAxes(value: unknown): StyleAxes | undefined {
+  if (value === undefined) return undefined;
+  if (!isStyleAxes(value)) {
+    throw new Error("style_axes는 8축 schema v1.1 형식이어야 합니다.");
+  }
+  return value;
+}
+
+function inRange(value: unknown, min: number, max: number) {
+  return typeof value === "number" && value >= min && value <= max;
 }
 
 function parseChoice<T extends object>(

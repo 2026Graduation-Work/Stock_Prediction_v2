@@ -62,6 +62,11 @@ export default function StockDetailBoundary({
       : null;
   const data = currentResult?.data ?? initialData;
   const error = currentResult?.error ?? "";
+
+  // 8축 배선 확인용 콘솔 출력.
+  useEffect(() => {
+    console.info("[style_axes]", data.styleAxes);
+  }, [data.styleAxes]);
   const loading =
     onboardingState.mode === "supabase" && !currentResult?.data && !error;
 

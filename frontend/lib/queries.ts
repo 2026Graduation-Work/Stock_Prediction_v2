@@ -3,6 +3,7 @@ import {
   avoidanceNotice,
   holdingAlerts,
   investorProfile,
+  investorStyleAxes,
   marketStatus,
   portfolioHoldings,
   recommendedStocks,
@@ -28,6 +29,7 @@ import {
   type StockRow,
   type UserRow,
 } from "./mappers";
+import { isStyleAxes } from "./profiling-rules";
 import { getSupabaseClient } from "./supabase";
 import type {
   InvestorProfileSummary,
@@ -35,6 +37,7 @@ import type {
   PortfolioHolding,
   RecommendedStock,
   StockDetail,
+  StyleAxes,
 } from "./types";
 
 export const DEMO_USER_ID = "u_minji_001";
@@ -62,6 +65,7 @@ export interface StockDetailData {
   profile: InvestorProfileSummary;
   marketStatus: MarketStatus;
   maxRiskTier: number;
+  styleAxes: StyleAxes | null; // v1.0 프로필이면 null
   source: "mock" | "supabase";
 }
 
@@ -161,6 +165,7 @@ export function getMockStockDetailData(code: string): StockDetailData | null {
     profile: investorProfile,
     marketStatus,
     maxRiskTier: 4,
+    styleAxes: investorStyleAxes,
     source: "mock",
   };
 }
@@ -372,7 +377,7 @@ async function queryStockDetail(
     client
       .from("ips_profiles")
       .select(
-        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score",
+        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score,style_axes",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -422,6 +427,7 @@ async function queryStockDetail(
     profile: mapProfileSummary(userResult.data as UserRow, profile),
     marketStatus: marketResult,
     maxRiskTier: profile.max_risk_tier,
+    styleAxes: isStyleAxes(profile.style_axes) ? profile.style_axes : null,
     source: "supabase",
   };
 }
