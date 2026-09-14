@@ -61,7 +61,7 @@ const ALL_MARKET: NudgeMarket = {
   volatilityPercentile: 0.95,
   drawdownFrom3mHigh: -0.2,
   return3d: 0.12,
-  sentimentChange: 0.8,
+  sentimentChange: 2, // 감성 점수 폭(-1~1)의 최대 변화. N07 임계 산출값과 무관하게 참
   isTopHolding: true,
   riskGrade: 2,
 };

@@ -2,6 +2,7 @@
 // 문구는 기획 확정본이다. 한 글자도 바꾸지 않는다.
 // 형식 규칙: 사실 + 사실 병렬. 인과 주장·추종 유도·매수/매도 권유 금지.
 
+import { SENTIMENT_SHIFT_P90 } from "../providers/sentiment-fixture.ts";
 import type { RiskGrade, StyleAxisId } from "../types";
 import type { BitResult, BitType } from "./bit";
 
@@ -41,8 +42,9 @@ const INSTITUTION_BUY_DAYS = 4;
 const VOLATILITY_TOP_10 = 0.9;
 const DRAWDOWN_LIMIT = -0.15;
 const RALLY_3D = 0.1;
-// ponytail: 감성 "급변" 임계는 임의값. 감성 실데이터 분포를 보고 정한다.
-const SENTIMENT_SHIFT = 0.5;
+// 감성 "급변" 임계 = news_corpus 일별 감성 변화량 |Δ|의 p90.
+// 계산: frontend/scripts/build_sentiment_fixture.py. 산출값·표본·감성 백엔드는 sentiment-fixture.ts 헤더에 있다.
+const SENTIMENT_SHIFT = SENTIMENT_SHIFT_P90;
 
 interface NudgeRule {
   id: NudgeId;
