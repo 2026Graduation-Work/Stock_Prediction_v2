@@ -11,12 +11,14 @@ N07 "뉴스 감성 급변" 임계는 전체 기간 일별 감성 변화량 |Δ|�
 점수를 만들지 않고 실제 코퍼스에서 그런 날짜 구간을 찾는다.
 
 실행
-    전수(기본, torch·transformers 필요):
-        python frontend/scripts/build_sentiment_fixture.py
+    전수(기본, torch·transformers 필요). 일별 점수를 레포 CSV로도 남긴다:
+        python frontend/scripts/build_sentiment_fixture.py \\
+            --daily-csv backend/analysis/text/data/processed/news_sentiment_daily.csv
+    일별 점수 재사용(창 마지막 날 기사만 다시 채점). stderr 로그나 위 CSV를 받는다:
+        python frontend/scripts/build_sentiment_fixture.py \\
+            --daily-log backend/analysis/text/data/processed/news_sentiment_daily.csv
     빠른 플레이스홀더(사전 폴백, 몇 초):
         python frontend/scripts/build_sentiment_fixture.py --limit 300 --scorer dictionary
-    전수 배치 로그 재사용(창 마지막 날 기사만 다시 채점):
-        python frontend/scripts/build_sentiment_fixture.py --daily-log batch.log
 기본 옵션에서 KR-FinBERT를 못 불러오면 중단한다
 (VALUE_PIPELINE_VALIDATION.md: 감성 백엔드 혼용 금지). 사전 결과는 PLACEHOLDER로 표시한다.
 """
@@ -47,7 +49,8 @@ COMPANY = "삼성전자"
 BODY_CHARS = 1000  # preprocess.load_daily_news 기본값
 WINDOW_DAYS = 20
 HEADLINES = 3
-LOG_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2}) n=(\d+) score=([+-]\d+\.\d+)$")
+# stderr 로그 "2025-10-29 n=55 score=+0.1234" 와 CSV "2025-10-29,55,0.1234" 둘 다 받는다.
+DAILY_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?: n=|,)(\d+)(?: score=|,)([+-]?\d+\.\d+)$")
 
 
 def parse_args() -> argparse.Namespace:
@@ -68,9 +71,22 @@ def parse_args() -> argparse.Namespace:
         "--daily-log",
         type=Path,
         default=None,
-        help="이전 전수 실행의 stderr 로그('날짜 n=건수 score=점수' 줄). 일별 점수를 재사용한다",
+        help="일별 점수 원천: 이전 전수 실행의 stderr 로그 또는 --daily-csv로 남긴 CSV",
+    )
+    parser.add_argument(
+        "--daily-csv",
+        type=Path,
+        default=None,
+        help="전수 KR-FinBERT 일별 점수(date,n,score)를 이 경로에 쓴다",
     )
     return parser.parse_args()
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.resolve().relative_to(ROOT))
+    except ValueError:
+        return "<저장소 밖 파일: 전수 배치 stderr 로그>"
 
 
 def load_corpus() -> dict[str, list[dict]]:
@@ -98,10 +114,30 @@ def load_corpus() -> dict[str, list[dict]]:
 def parse_daily_log(path: Path) -> dict[str, tuple[int, float]]:
     logged: dict[str, tuple[int, float]] = {}
     for line in path.read_text(encoding="utf-8").splitlines():
-        match = LOG_LINE.match(line.strip())
+        match = DAILY_LINE.match(line.strip())
         if match:
             logged[match.group(1)] = (int(match.group(2)), float(match.group(3)))
     return logged
+
+
+def write_daily_csv(path: Path, days: list[dict], daily_log: Path | None) -> None:
+    lines = [
+        f"# 삼성전자({TICKER}) 일별 뉴스 감성. KR-FinBERT({SETTINGS.finbert_model}) 전수 채점",
+        f"# 원천: backend/analysis/text/data/processed/news_corpus.csv, backend value_pipeline news_agent 규칙"
+        f"(관련성 필터, 하루 최대 {SETTINGS.max_daily_articles}건, 제목 + 본문 앞 {BODY_CHARS}자)",
+        f"# 생성: python frontend/scripts/build_sentiment_fixture.py --daily-csv {display_path(path)}",
+    ]
+    if daily_log is not None:
+        lines.append(
+            f"#       이 파일의 값은 전수 채점 실행의 일별 결과({display_path(daily_log)})를 옮겨 적었다."
+        )
+    lines += [
+        "# n = 채점 기사 수, score = 그날 기사 감성 평균(-1 부정 ~ +1 긍정). '#' 줄은 주석이다.",
+        "date,n,score",
+        *[f"{day['date']},{day['articleCount']},{day['score']:.4f}" for day in days],
+        "",
+    ]
+    path.write_text("\n".join(lines), encoding="utf-8")
 
 
 def score(texts: list[str], scorer: str) -> list[float]:
@@ -119,6 +155,9 @@ def delta(days: list[dict], index: int) -> float:
 
 def main() -> None:
     args = parse_args()
+    placeholder = args.scorer != "finbert" or args.limit is not None
+    if args.daily_csv is not None and placeholder:
+        raise SystemExit("플레이스홀더 결과는 일별 CSV에 쓰지 않습니다. 전수 KR-FinBERT로만 씁니다.")
     corpus = load_corpus()
     per_day = SETTINGS.max_daily_articles
     if args.limit is not None:
@@ -138,9 +177,12 @@ def main() -> None:
             print(f"{date} n={len(relevant)} score={day['score']:+.4f}", file=sys.stderr, flush=True)
         else:
             if date not in logged or logged[date][0] != len(relevant):
-                raise SystemExit(f"{date}: 로그의 건수가 코퍼스 관련 기사 수({len(relevant)})와 다릅니다.")
+                raise SystemExit(f"{date}: 일별 점수의 건수가 코퍼스 관련 기사 수({len(relevant)})와 다릅니다.")
             day["score"] = logged[date][1]
         days.append(day)
+
+    if args.daily_csv is not None:
+        write_daily_csv(args.daily_csv, days, args.daily_log)
 
     changes = [delta(days, index) for index in range(1, len(days))]
     p90 = round(statistics.quantiles(changes, n=10, method="inclusive")[-1], 4)
@@ -156,7 +198,7 @@ def main() -> None:
 
     last_scores = last.get("scores") or score([_text_of(item) for item in last["items"]], args.scorer)
     if "scores" not in last and abs(aggregate(last_scores)[0] - last["score"]) > 1e-4:
-        raise SystemExit(f"{last['date']}: 재채점 평균이 로그 점수와 다릅니다.")
+        raise SystemExit(f"{last['date']}: 재채점 평균이 일별 점수와 다릅니다.")
     ranked = sorted(zip(last["items"], last_scores), key=lambda pair: abs(pair[1]), reverse=True)
     series = {
         "days": [
@@ -171,7 +213,7 @@ def main() -> None:
     scored = sum(day["articleCount"] for day in days)
 
     header: list[str] = []
-    if args.scorer != "finbert" or args.limit is not None:
+    if placeholder:
         scorer_label = "사전 기반" if args.scorer == "dictionary" else "FinBERT"
         sample = f"{args.limit}건 표본" if args.limit is not None else "전수"
         header.append(f"// PLACEHOLDER — {scorer_label} {sample}. FinBERT 전수 결과로 교체 대기 중.")
@@ -182,7 +224,7 @@ def main() -> None:
     )
     flags = f"--scorer {args.scorer}" + (f" --limit {args.limit}" if args.limit is not None else "")
     if args.daily_log:
-        flags += " --daily-log <전수 배치 stderr 로그>"
+        flags += f" --daily-log {display_path(args.daily_log)}"
     previous = window[-2]
     OUT.write_text(
         "\n".join(

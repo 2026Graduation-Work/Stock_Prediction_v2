@@ -1,6 +1,6 @@
 // FIXTURE — 실데이터 아님.
 // 단, 삼성전자(005930) 감성 점수와 기사 제목은 실제 기사에서 집계했다. 자동 생성 파일이므로 직접 고치지 않는다.
-// 생성: python frontend/scripts/build_sentiment_fixture.py --scorer finbert --daily-log <전수 배치 stderr 로그>
+// 생성: python frontend/scripts/build_sentiment_fixture.py --scorer finbert --daily-log backend/analysis/text/data/processed/news_sentiment_daily.csv
 //       (backend value_pipeline news_agent와 같은 규칙)
 // 원천: backend/analysis/text/data/processed/news_corpus.csv, 2025-10-29 ~ 2025-12-31 중 관련 기사가 있는 64일, 채점 8920건
 // 감성 백엔드: kr-finbert (snunlp/KR-FinBert-SC), 기사 텍스트 = 제목 + 본문 앞 1000자
