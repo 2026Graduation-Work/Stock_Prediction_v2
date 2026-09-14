@@ -77,9 +77,10 @@ test("김민지 + 삼성전자: 넛지가 1개 이상 발화한다", async () =>
   assert.deepEqual(fired, EXPECTED_MINJI_SAMSUNG);
 });
 
-test("김민지 + 삼성전자: information_reliance를 0.3으로 올리면 수급 넛지 N02가 새로 발화한다", async () => {
+test("김민지 + 삼성전자: information_reliance를 0.3으로 올리면 수급 넛지 N02가 새로 발화하고 다른 축의 N07이 함께 보인다", async () => {
   assert.ok(!(await samsungNudges(investorStyleAxes)).includes("N02"));
-  assert.ok((await samsungNudges(minjiWith({ information_reliance: 0.3 }))).includes("N02"));
+  // N03도 시장 조건이 참이지만 N02와 같은 information_reliance 축이라 빠진다
+  assert.deepEqual(await samsungNudges(minjiWith({ information_reliance: 0.3 })), ["N02", "N07"]);
 });
 
 // urgency +0.44 × 감성 창 마지막 날 |Δ| >= p90(실제 날짜 구간) → N07.

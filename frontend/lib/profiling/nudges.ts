@@ -164,10 +164,18 @@ export function selectNudges(
   market: NudgeMarket,
   limit = MAX_VISIBLE_NUDGES,
 ): FiredNudge[] {
+  // 같은 축 근거 넛지는 우선순위가 높은 하나만 남긴다.
+  // 같은 사실을 두 번 말하지 않고, 노출 슬롯에 서로 다른 관점이 오게 하려는 것이다.
+  const seenAxes = new Set<StyleAxisId>();
   return NUDGES.filter(
     (rule) => rule.side * bit.ratios[rule.axis] >= AXIS_THRESHOLD && rule.market(market),
   )
     .sort((left, right) => rank(left.id) - rank(right.id) || left.id.localeCompare(right.id))
+    .filter((rule) => {
+      if (seenAxes.has(rule.axis)) return false;
+      seenAxes.add(rule.axis);
+      return true;
+    })
     .slice(0, limit)
     .map(({ id, text, axis }) => ({ id, text, axis, ratio: bit.ratios[axis] }));
 }

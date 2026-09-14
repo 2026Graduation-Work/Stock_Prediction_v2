@@ -141,9 +141,23 @@ test("임계는 경계 포함: >= +0.3, <= -0.3", () => {
 });
 
 test("N04·N05는 drawdown_reaction + 쪽(하락 시 이탈)에서만", () => {
+  assert.deepEqual(ids(axes({ drawdown_reaction: 0.5 }), { volatilityPercentile: 0.95 }), ["N04"]);
+  assert.deepEqual(ids(axes({ drawdown_reaction: 0.5 }), { drawdownFrom3mHigh: -0.2 }), ["N05"]);
+  assert.deepEqual(
+    ids(axes({ drawdown_reaction: -0.5 }), { volatilityPercentile: 0.95, drawdownFrom3mHigh: -0.2 }),
+    [],
+  );
+});
+
+test("같은 축 근거 넛지는 우선순위가 높은 하나만 남는다", () => {
   const hot = { volatilityPercentile: 0.95, drawdownFrom3mHigh: -0.2 };
-  assert.deepEqual(ids(axes({ drawdown_reaction: 0.5 }), hot), ["N05", "N04"]);
-  assert.deepEqual(ids(axes({ drawdown_reaction: -0.5 }), hot), []);
+  // N05·N04는 둘 다 drawdown_reaction. 우선순위 N05 > N04
+  assert.deepEqual(ids(axes({ drawdown_reaction: 0.5 }), hot, Infinity), ["N05"]);
+  // 축이 다르면 둘 다 남는다
+  assert.deepEqual(
+    ids(axes({ drawdown_reaction: 0.5, urgency: 0.5 }), { ...hot, return3d: 0.12 }),
+    ["N05", "N06"],
+  );
 });
 
 test("N10은 rule_adherence + 쪽(상황별 재량)에서만", () => {
@@ -167,35 +181,29 @@ test("N01~N03은 information_reliance >= 0.3 단독 조건. FOLLOWER여도 낮�
   // 김민지 FOLLOWER, information_reliance +0.16
   assert.deepEqual(ids(investorStyleAxes, supplyMarket, Infinity), []);
 
-  const fired = selectNudges(classifyBit(axes({ information_reliance: 0.3 })), {
-    ...CALM,
-    ...supplyMarket,
-  }, Infinity);
-  assert.deepEqual(fired.map(({ id }) => id), ["N02", "N01", "N03"]);
+  const herding = axes({ information_reliance: 0.3 });
+  assert.deepEqual(ids(herding, { retailNetBuyStreakDays: 5 }), ["N01"]);
+  assert.deepEqual(ids(herding, { retailNetLatest: 1, foreignNetLatest: -1 }), ["N02"]);
+  assert.deepEqual(ids(herding, { institutionNetBuyDaysOf5: 4 }), ["N03"]);
+  // 셋 다 참이어도 같은 축이라 우선순위가 가장 높은 N02만 남는다
+  const fired = selectNudges(classifyBit(herding), { ...CALM, ...supplyMarket }, Infinity);
   assert.deepEqual(
-    fired.map(({ axis, ratio }) => [axis, ratio]),
-    [
-      ["information_reliance", 0.3],
-      ["information_reliance", 0.3],
-      ["information_reliance", 0.3],
-    ],
+    fired.map(({ id, axis, ratio }) => [id, axis, ratio]),
+    [["N02", "information_reliance", 0.3]],
   );
 });
 
-test("김민지 고정: 모든 시장 조건이 참일 때 성향상 발화 가능한 넛지", () => {
-  // drawdown_reaction +0.30(N04·N05), urgency +0.44(N06·N07), loss_tolerance -0.30(N11)
+test("김민지 고정: 모든 시장 조건이 참일 때 성향상 발화 가능한 넛지(축당 1개)", () => {
+  // drawdown_reaction +0.30(N05 > N04), loss_tolerance -0.30(N11), urgency +0.44(N06 > N07)
   const fired = selectNudges(classifyBit(investorStyleAxes), ALL_MARKET, Infinity);
-  assert.deepEqual(
-    fired.map(({ id }) => id),
-    ["N05", "N11", "N04", "N06", "N07"],
-  );
+  assert.deepEqual(fired.map(({ id }) => id), ["N05", "N11", "N06"]);
   assert.deepEqual(
     selectNudges(classifyBit(investorStyleAxes), ALL_MARKET).map(({ id }) => id),
     ["N05", "N11"],
   );
 });
 
-test("최대 2개, 우선순위 N02 > N05 > N11 > N04 > N01 > id 순", () => {
+test("최대 2개, 우선순위 N02 > N05 > N11 > N04 > N01 > id 순, 같은 축 중복 제외", () => {
   const everything = axes({
     information_reliance: 0.5,
     drawdown_reaction: 0.5,
@@ -222,6 +230,7 @@ test("최대 2개, 우선순위 N02 > N05 > N11 > N04 > N01 > id 순", () => {
       riskGrade: 3,
       volatilityPercentile: 0.5,
     }),
-    ["N01", "N03"],
+    // N03·N07은 각각 N01·N06과 같은 축이라 빠진다
+    ["N01", "N06"],
   );
 });
