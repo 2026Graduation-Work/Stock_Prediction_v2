@@ -30,6 +30,7 @@ import {
   type UserRow,
 } from "./mappers";
 import { isStyleAxes } from "./profiling-rules";
+import type { HoldingWeight } from "./providers";
 import { getSupabaseClient } from "./supabase";
 import type {
   InvestorProfileSummary,
@@ -66,6 +67,7 @@ export interface StockDetailData {
   marketStatus: MarketStatus;
   maxRiskTier: number;
   styleAxes: StyleAxes | null; // v1.0 프로필이면 null
+  holdings: HoldingWeight[]; // 넛지 N08 보유 비중 판정용
   source: "mock" | "supabase";
 }
 
@@ -166,6 +168,7 @@ export function getMockStockDetailData(code: string): StockDetailData | null {
     marketStatus,
     maxRiskTier: 4,
     styleAxes: investorStyleAxes,
+    holdings: portfolioHoldings,
     source: "mock",
   };
 }
@@ -367,7 +370,8 @@ async function queryStockDetail(
   userId: string,
   code: string,
 ): Promise<StockDetailData> {
-  const [marketResult, userResult, profileResult, stockResult] = await Promise.all([
+  const [holdingRows, marketResult, userResult, profileResult, stockResult] = await Promise.all([
+    loadHoldings(client, userId),
     queryMarketStatus(client),
     client
       .from("users")
@@ -430,6 +434,11 @@ async function queryStockDetail(
     marketStatus: marketResult,
     maxRiskTier: profile.max_risk_tier,
     styleAxes: isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
+    holdings: holdingRows.map(({ stock_code, quantity, avg_buy_price }) => ({
+      code: stock_code,
+      quantity,
+      avgBuyPrice: avg_buy_price,
+    })),
     source: "supabase",
   };
 }

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import StockDetailView from "./stock-detail";
 import { useOnboarding } from "./onboarding-provider";
-import { classifyBit } from "@/lib/profiling/bit";
+import type { StockInsights } from "@/lib/providers";
 import {
   getAuthenticatedStockDetailData,
   type StockDetailData,
@@ -19,9 +19,11 @@ interface AuthenticatedDetailResult {
 export default function StockDetailBoundary({
   code,
   initialData,
+  insights,
 }: {
   code: string;
   initialData: StockDetailData;
+  insights: StockInsights;
 }) {
   const { state: onboardingState } = useOnboarding();
   const [authenticatedResult, setAuthenticatedResult] =
@@ -63,12 +65,6 @@ export default function StockDetailBoundary({
       : null;
   const data = currentResult?.data ?? initialData;
   const error = currentResult?.error ?? "";
-
-  // 8축 배선·BIT 분류 확인용 콘솔 출력.
-  useEffect(() => {
-    console.info("[style_axes]", data.styleAxes);
-    if (data.styleAxes) console.info("[BIT]", classifyBit(data.styleAxes));
-  }, [data.styleAxes]);
   const loading =
     onboardingState.mode === "supabase" && !currentResult?.data && !error;
 
@@ -80,6 +76,7 @@ export default function StockDetailBoundary({
   return (
     <StockDetailView
       {...data}
+      insights={insights}
       loading={loading}
       dataError={error}
       onRetry={retry}

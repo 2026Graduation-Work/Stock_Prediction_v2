@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "./disclaimer-footer";
+import InsightSection, { ScreenGuideBanner, useDemoStyleAxes } from "./insight-cards";
 import PriceHistoryChart from "./price-history-chart";
 import ReturnHistogram from "./return-histogram";
 import SiteHeader from "./site-header";
@@ -15,10 +16,12 @@ import {
   RISK_GRADE_META,
   SIGNAL_META,
 } from "@/lib/display";
+import { pricePeriod, type HoldingWeight, type StockInsights } from "@/lib/providers";
 import type {
   InvestorProfileSummary,
   MarketStatus,
   StockDetail,
+  StyleAxes,
 } from "@/lib/types";
 
 // 수익률 밴드 바: 0%가 바 중앙(50%), 수익률 1%p당 5% 이동 (stock-card와 동일 규칙)
@@ -68,6 +71,9 @@ interface StockDetailViewProps {
   profile: InvestorProfileSummary;
   marketStatus: MarketStatus;
   maxRiskTier: number;
+  styleAxes: StyleAxes | null;
+  holdings: HoldingWeight[];
+  insights: StockInsights;
   source: "mock" | "supabase";
   loading?: boolean;
   dataError?: string;
@@ -79,11 +85,15 @@ export default function StockDetailView({
   profile,
   marketStatus,
   maxRiskTier,
+  styleAxes,
+  holdings,
+  insights,
   source,
   loading = false,
   dataError = "",
   onRetry,
 }: StockDetailViewProps) {
+  const demo = useDemoStyleAxes(styleAxes);
   const [query, setQuery] = useState("");
   const [choice, setChoice] = useState<"watch" | "reduce" | "drop" | null>(null);
 
@@ -95,6 +105,7 @@ export default function StockDetailView({
   const bandRight = clamp(50 + detail.returnBand.high * BAND_SCALE, bandLeft + 2, 98);
   const asOfLabel = formatDate(detail.asOf).slice(5); // MM.DD
   const priceHistory = detail.priceHistory ?? [];
+  const priceDataPeriod = pricePeriod(detail);
   const realizedReturns = detail.realizedReturns ?? [];
   const returnHorizon = detail.returnHorizon ?? "h10";
   const returnHorizonDays = HORIZON_DAYS[returnHorizon];
@@ -227,6 +238,15 @@ export default function StockDetailView({
           )}
         </Card>
 
+        {/* 성향 기반 인사이트: 첫 칸은 넛지, 이후 BIT 유형별 순서 */}
+        <InsightSection
+          detail={detail}
+          insights={insights}
+          holdings={holdings}
+          demo={demo}
+          source={source}
+        />
+
         {/* 핵심 신호 */}
         <Card className="grid grid-cols-2 gap-7 xl:grid-cols-4">
           <div className="flex flex-col gap-2.5">
@@ -336,7 +356,11 @@ export default function StockDetailView({
         <Card className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="text-[15px] font-extrabold">주가 흐름</span>
-            <span className="text-xs text-faint">최근 60거래일 · 실제 주가만 표시</span>
+            <span className="text-xs text-faint">
+              최근 60거래일 · 실제 주가만 표시
+              {priceDataPeriod &&
+                ` · 시세 데이터: ${priceDataPeriod.start} ~ ${priceDataPeriod.end} (${source === "mock" ? "샘플" : "실데이터"})`}
+            </span>
             {priceHistory.length >= 2 && (
               <div className="ml-auto flex items-center gap-3.5 text-xs text-muted">
                 <span className="inline-flex items-center gap-1.5">
@@ -536,6 +560,7 @@ export default function StockDetailView({
             </span>
           )}
         </Card>
+        <ScreenGuideBanner bit={demo.bit} />
       </div>
 
       <DisclaimerFooter fixed={false} />
