@@ -188,8 +188,8 @@ export const FINANCIAL_FIXTURE: Record<string, FinancialSnapshot> = {
 };
 
 // 시장 전체 종목 중 최근 60거래일 변동성 백분위(1 = 가장 큼). 시장 분포 데이터가 없어 정한 값이다.
-// 005930 0.92는 김민지 데모에서 N04(변동성 상위 10%) 시장 조건이 참이 되도록 정했다.
+// 대형주는 소형주를 포함한 시장 전체 기준으로 중간 부근이다. 넛지 발화와 무관하게 정했다.
 export const VOLATILITY_PERCENTILE_FIXTURE: Record<string, number> = {
-  "005930": 0.92,
+  "005930": 0.48,
   "005380": 0.35,
 };

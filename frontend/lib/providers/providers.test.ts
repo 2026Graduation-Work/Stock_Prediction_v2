@@ -82,6 +82,7 @@ test("김민지 + 삼성전자: information_reliance를 0.3으로 올리면 수�
   assert.ok((await samsungNudges(minjiWith({ information_reliance: 0.3 }))).includes("N02"));
 });
 
-// 시장 조건: 변동성 상위 8%(FIXTURE 0.92) × drawdown_reaction +0.30 → N04.
-// N07은 감성 시계열 마지막 두 날 변화량이 p90 미만이라 발화하지 않는다(sentiment-fixture.ts가 바뀌면 재확인).
-const EXPECTED_MINJI_SAMSUNG: string[] = ["N04"];
+// urgency +0.44 × 감성 창 마지막 날 |Δ| >= p90(실제 날짜 구간) → N07.
+// N04(변동성 백분위 0.48)·N05(3개월 고점 대비 0%)는 시장 조건이 거짓이라 발화하지 않는다.
+// sentiment-fixture.ts가 다시 생성되면 재확인한다.
+const EXPECTED_MINJI_SAMSUNG: string[] = ["N07"];
