@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import StockDetailView from "./stock-detail";
 import { useOnboarding } from "./onboarding-provider";
+import { classifyBit } from "@/lib/profiling/bit";
 import {
   getAuthenticatedStockDetailData,
   type StockDetailData,
@@ -63,9 +64,10 @@ export default function StockDetailBoundary({
   const data = currentResult?.data ?? initialData;
   const error = currentResult?.error ?? "";
 
-  // 8축 배선 확인용 콘솔 출력.
+  // 8축 배선·BIT 분류 확인용 콘솔 출력.
   useEffect(() => {
     console.info("[style_axes]", data.styleAxes);
+    if (data.styleAxes) console.info("[BIT]", classifyBit(data.styleAxes));
   }, [data.styleAxes]);
   const loading =
     onboardingState.mode === "supabase" && !currentResult?.data && !error;
