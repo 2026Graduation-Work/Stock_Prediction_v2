@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProfilingOutput } from "./types";
-import { horizonScoreForMonths } from "./profiling-rules";
+import { horizonScoreForMonths, isStyleAxes } from "./profiling-rules";
 import { getSupabaseClient } from "./supabase";
 
 export const PROFILE_STORAGE_KEY = "signallab.ips-profile.v1";
@@ -283,7 +283,8 @@ function isProfilingOutput(value: unknown): value is ProfilingOutput {
     constraints.avoided_assets.every(
       (asset) => typeof asset === "string" && validRiskFlags.has(asset),
     ) &&
-    meta.schema_version === "1.0.0"
+    (meta.schema_version === "1.0.0" || meta.schema_version === "1.1.0") &&
+    (value.style_axes === undefined || isStyleAxes(value.style_axes))
   );
 }
 

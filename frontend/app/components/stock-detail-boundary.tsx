@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import StockDetailView from "./stock-detail";
 import { useOnboarding } from "./onboarding-provider";
+import type { StockInsights } from "@/lib/providers";
 import {
   getAuthenticatedStockDetailData,
   type StockDetailData,
@@ -18,9 +19,11 @@ interface AuthenticatedDetailResult {
 export default function StockDetailBoundary({
   code,
   initialData,
+  insights,
 }: {
   code: string;
   initialData: StockDetailData;
+  insights: StockInsights;
 }) {
   const { state: onboardingState } = useOnboarding();
   const [authenticatedResult, setAuthenticatedResult] =
@@ -73,6 +76,7 @@ export default function StockDetailBoundary({
   return (
     <StockDetailView
       {...data}
+      insights={insights}
       loading={loading}
       dataError={error}
       onRetry={retry}
