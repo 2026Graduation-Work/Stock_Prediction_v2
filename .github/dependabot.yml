@@ -76,6 +76,14 @@ updates:
       - dependency-name: "pandas"
         update-types:
           - "version-update:semver-major"
+      # plotly 7.x 는 layout template 에서 scattermapbox 를 제거했다. vectorbt 1.0.0 은
+      # import 시 테마 템플릿에 scattermapbox 를 넣어 ValueError 로 죽는다.
+      # 8/25 plotly 7.0.0 배포 이후 chart-test 가 전부 실패한 원인이다 (#92 #93).
+      # chart requirements.txt 의 plotly<7 상한과 한 쌍이다.
+      # 해제 조건: vectorbt 가 plotly 7 을 지원하거나 vectorbt 를 걷어낼 때.
+      - dependency-name: "plotly"
+        update-types:
+          - "version-update:semver-major"
 
     groups:
       backend-all:
