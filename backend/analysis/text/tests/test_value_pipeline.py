@@ -140,6 +140,44 @@ def test_load_daily_news_limit_none_returns_all(tmp_path: Path) -> None:
     ) == 40
 
 
+def test_load_news_range_reads_each_workbook_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """연 단위 그래프가 같은 Excel을 날짜별로 재파싱하지 않는다."""
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    workbook = data_dir / "005930_삼성전자_20220101-20221231.xlsx"
+    _write_bigkinds(
+        workbook,
+        [
+            {"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
+             "제목": "삼성전자 흑자", "본문": "실적 개선", "URL": "", "분석제외 여부": ""},
+            {"뉴스 식별자": "n2", "일자": 20220616, "언론사": "한국경제",
+             "제목": "삼성전자 수요", "본문": "수요 둥화", "URL": "", "분석제외 여부": ""},
+        ],
+    )
+    original = pp._read_workbook_uncached
+    reads: list[Path] = []
+
+    def counted(path: Path):
+        reads.append(path)
+        return original(path)
+
+    pp._read_workbook_cached.cache_clear()
+    monkeypatch.setattr(pp, "_read_workbook_uncached", counted)
+
+    items = pp.load_news_range(
+        "삼성전자",
+        "2022-06-15",
+        "2022-06-16",
+        data_dir=data_dir,
+        ticker="005930",
+    )
+
+    assert reads == [workbook]
+    assert [item["date"] for item in items] == ["2022-06-15", "2022-06-16"]
+
+
 def test_load_daily_news_nfc_company_match_and_missing_file(tmp_path: Path) -> None:
     data_dir = tmp_path / "data"
     data_dir.mkdir()

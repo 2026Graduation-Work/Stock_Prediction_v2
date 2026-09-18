@@ -3,18 +3,19 @@
 .env 파일(있으면 자동 로드)에 다음을 넣으면 실데이터로 전환된다:
     GEMINI_API_KEY=...          # https://aistudio.google.com (무료 티어)
     DART_API_KEY=...            # https://opendart.fss.or.kr (무료)
-    NAVER_CLIENT_ID=...         # https://developers.naver.com (검색 API, 무료)
-    NAVER_CLIENT_SECRET=...
+    NEWSAPI_AI_KEY=...          # https://newsapi.ai (Event Registry)
 """
 from __future__ import annotations
 
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 
 try:  # .env 자동 로드 (없으면 무시)
     from dotenv import load_dotenv
 
-    load_dotenv()
+    # 실행 위치가 repo root가 아니어도 항상 동일한 .env를 읽는다.
+    load_dotenv(Path(__file__).resolve().parents[4] / ".env")
 except Exception:  # python-dotenv 미설치 시
     pass
 
@@ -23,6 +24,7 @@ except Exception:  # python-dotenv 미설치 시
 class Settings:
     gemini_api_key: str | None = field(default_factory=lambda: os.getenv("GEMINI_API_KEY"))
     dart_api_key: str | None = field(default_factory=lambda: os.getenv("DART_API_KEY"))
+    newsapi_ai_key: str | None = field(default_factory=lambda: os.getenv("NEWSAPI_AI_KEY"))
     naver_client_id: str | None = field(default_factory=lambda: os.getenv("NAVER_CLIENT_ID"))
     naver_client_secret: str | None = field(
         default_factory=lambda: os.getenv("NAVER_CLIENT_SECRET")
@@ -61,6 +63,10 @@ class Settings:
     @property
     def has_dart(self) -> bool:
         return bool(self.dart_api_key)
+
+    @property
+    def has_newsapi_ai(self) -> bool:
+        return bool(self.newsapi_ai_key)
 
     @property
     def has_naver(self) -> bool:
