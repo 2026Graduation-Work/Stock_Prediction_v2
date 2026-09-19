@@ -107,14 +107,8 @@ const DEMO_PORTFOLIO: ProfilingOutput["portfolio"] = {
   watchlist: ["000660", "035420", "051910"],
 };
 
-function createSessionId() {
-  const uuid = globalThis.crypto?.randomUUID?.();
-  const fallback = `${Date.now().toString(36)}${Math.floor(
-    globalThis.performance?.now?.() ?? 0,
-  ).toString(36)}`;
-  const token = (uuid ?? fallback).replaceAll("-", "").slice(0, 12).padEnd(12, "0");
-  return `s_${token}`;
-}
+// https·localhost는 secure context라 randomUUID가 항상 있다.
+const createSessionId = () => `s_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
 
 function readDraft(): Draft | null {
   try {

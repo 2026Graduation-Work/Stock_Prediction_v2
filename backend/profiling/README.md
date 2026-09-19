@@ -24,7 +24,7 @@ schema/   저장소 루트의 profiling_output.schema.json v1.0 계약
 
 | 파일 | 역할 |
 | --- | --- |
-| `frontend/lib/profiling/style-questions.json` | 8축 문항 정의(정본): 축, 리커트 40·빠른 진단 24, 보유기간 구간표, 데모 프리셋. 리커트와 시나리오형(선택지별 축 점수)을 모두 담을 수 있다 |
+| `frontend/lib/profiling/style-questions.json` | 8축 문항 정의(정본): 축, 리커트 40·빠른 진단 24, 보유기간 구간표. 리커트와 시나리오형(선택지별 축 점수)을 모두 담을 수 있다 |
 | `frontend/lib/profiling/style-scoring.ts` | 축 점수·신뢰도, 모순 검출, v1.0 필드 축약 |
 | `frontend/lib/profiling/style-golden-cases.json` | 골든 10건. 삭제 전 Python `style_scoring.py`로 계산한 기대값이며 TS 채점기가 이 값과 같아야 한다 |
 | `frontend/lib/profiling-rules.ts` | 설문 응답 → schema 출력 변환, 3축 요약(성향 카드) |

@@ -1,4 +1,4 @@
-import { AVOIDED_ASSET_LABELS, horizonForScore, summaryFromStyleAxes } from "./profiling-rules";
+import { AVOIDED_ASSET_LABELS, summaryFromStyleAxes } from "./profiling-rules";
 import type {
   DataProvenance,
   HorizonAgreement,
@@ -223,20 +223,11 @@ export function mapProfileSummary(
   profile: IpsProfileRow,
   styleAxes: StyleAxes | null = null,
 ): InvestorProfileSummary {
-  // risk_score·fomo_score·horizon_score는 3축 요약값이다(save-profile.ts). 8축이 있으면 8축에서 다시 계산한다.
-  return summaryFromStyleAxes(
-    styleAxes,
-    {
-      displayName: user.display_name,
-      avatarLabel: user.avatar_label,
-      surveyedAt: profile.surveyed_at.slice(0, 7).replace("-", "."),
-    },
-    {
-      riskTolerance: profile.risk_score,
-      sentimentSensitivity: profile.fomo_score,
-      horizon: horizonForScore(profile.horizon_score),
-    },
-  );
+  return summaryFromStyleAxes(styleAxes, {
+    displayName: user.display_name,
+    avatarLabel: user.avatar_label,
+    surveyedAt: profile.surveyed_at.slice(0, 7).replace("-", "."),
+  });
 }
 
 export function mapPortfolioHolding(

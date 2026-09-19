@@ -61,13 +61,6 @@ const QUESTIONS = bank.questions as StyleQuestion[];
 const TURNOVER_DAY_RULES: readonly { max_ratio: number; days: number }[] =
   bank.turnover_day_rules;
 
-export const PERSONAS = bank.personas as {
-  id: string;
-  label: string;
-  summary: string;
-  pattern: Record<StyleAxisId, number>;
-}[];
-
 export function questionsForMode(mode: AssessmentMode): StyleQuestion[] {
   return mode === "detailed" ? QUESTIONS : QUESTIONS.filter(({ quick }) => quick);
 }
@@ -252,22 +245,15 @@ const LEGACY_RATIO_FIELDS = [
   ["herding_score", "information_reliance"],
 ] as const;
 
-export interface LegacyFields {
-  risk_tolerance: number;
-  fomo_index: number;
-  panic_sell_tendency: number;
-  herding_score: number;
-  time_horizon_days: number;
-  time_horizon_months: number;
-}
-
-export function reduceToLegacyFields(styleAxes: StyleAxes): LegacyFields {
+export function reduceToLegacyFields(styleAxes: StyleAxes) {
   const ratio = (id: StyleAxisId) => styleAxes.axes.find(({ axis_id }) => axis_id === id)!.ratio;
+  const unit = (id: StyleAxisId) => round6((ratio(id) + 1) / 2);
   const days = daysForTurnover(ratio("turnover"));
   return {
-    ...(Object.fromEntries(
-      LEGACY_RATIO_FIELDS.map(([field, axis]) => [field, round6((ratio(axis) + 1) / 2)]),
-    ) as Pick<LegacyFields, (typeof LEGACY_RATIO_FIELDS)[number][0]>),
+    risk_tolerance: unit("loss_tolerance"),
+    fomo_index: unit("urgency"),
+    panic_sell_tendency: unit("drawdown_reaction"),
+    herding_score: unit("information_reliance"),
     time_horizon_days: days,
     time_horizon_months: Math.round(days / 30),
   };
