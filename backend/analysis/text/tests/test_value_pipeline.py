@@ -19,7 +19,9 @@ from analysis.text import preprocess as pp
 from analysis.text.value_pipeline import agents as agents_mod
 from analysis.text.value_pipeline import collectors as collectors_mod
 from analysis.text.value_pipeline import graph as graph_mod
+from analysis.text.value_pipeline import llm as llm_mod
 from analysis.text.value_pipeline import metrics as metrics_mod
+from analysis.text.value_pipeline import run as run_mod
 from analysis.text.value_pipeline import schema as schema_mod
 from analysis.text.value_pipeline import staleness as staleness_mod
 
@@ -273,8 +275,147 @@ def test_fetch_dart_financials_uses_point_in_time_fiscal_year(
     out = collectors_mod._fetch_dart_financials("005930", "2022-06-15")
 
     assert _FakeDart.seen["finstate_year"] == 2021
-    assert _FakeDart.seen["report_year"] == 2021   # 발행주식수도 같은 사업연도
+    # 발행주식수는 사업연도가 아니라 스냅샷 기준연도(SHARES_ASOF_YEAR) 공시 기준 —
+    # FDR 수정주가와 분할 기준을 맞추기 위해서다 (액면분할 50배 왜곡 회귀 방지).
+    assert _FakeDart.seen["report_year"] == collectors_mod.SETTINGS.shares_asof_year
     assert out["fiscal_year"] == 2021
+    assert out["shares_outstanding"] == 1000.0
+
+
+def test_dart_falls_back_to_separate_statements(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """연결(CFS)이 없는 법인은 별도(OFS)로 폴백한다.
+
+    실측: 에코프로비엠 FY2018~19는 자회사가 없어 연결재무제표가 존재하지 않는다.
+    """
+
+    class _OfsOnlyDart:
+        seen: list[str] = []
+
+        def __init__(self, key):
+            pass
+
+        def finstate_all(self, corp, bsns_year, fs_div="CFS", **kw):
+            _OfsOnlyDart.seen.append(fs_div)
+            if fs_div == "CFS":
+                return None  # 연결 없음
+            return pd.DataFrame([
+                {"account_nm": "매출액", "thstrm_amount": "300", "frmtrm_amount": "270"},
+            ])
+
+        def report(self, corp, kind, year, **kw):
+            return pd.DataFrame([{"se": "보통주", "istc_totqy": "1000"}])
+
+    _OfsOnlyDart.seen = []
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _OfsOnlyDart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(collectors_mod.SETTINGS, dart_api_key="x"),
+    )
+    out = collectors_mod._fetch_dart_financials("247540", "2019-06-03")
+
+    assert _OfsOnlyDart.seen[:2] == ["CFS", "OFS"]  # 연결 시도 → 별도 폴백
+    assert out["revenue"] == 300.0
+
+
+def test_parse_common_shares_skips_dash_rows_and_prefers_common() -> None:
+    """FY2015 실응답처럼 값이 '-'뿐인 프레임은 None, 정상 프레임은 보통주 행."""
+    dash_only = pd.DataFrame(
+        [{"se": "합계", "istc_totqy": "-"}, {"se": "비고", "istc_totqy": "-"}]
+    )
+    assert collectors_mod._parse_common_shares(dash_only) is None
+
+    normal = pd.DataFrame([
+        {"se": "보통주", "istc_totqy": "140,679,337"},
+        {"se": "우선주", "istc_totqy": "20,513,427"},
+        {"se": "합계", "istc_totqy": "161,192,764"},
+    ])
+    assert collectors_mod._parse_common_shares(normal) == 140679337.0
+    # 보통주 행이 없으면 합계로 폴백
+    total_only = pd.DataFrame([{"se": "합계", "istc_totqy": "161,192,764"}])
+    assert collectors_mod._parse_common_shares(total_only) == 161192764.0
+    assert collectors_mod._parse_common_shares(None) is None
+
+
+class _SharesDart:
+    """주식총수 조회 대역 — 탐색 순서를 기록하고, 특정 연도만 값이 없다."""
+
+    seen: list[int] = []
+    empty_years: set[int] = set()
+
+    def __init__(self, key):
+        pass
+
+    def report(self, corp, kind, year, **kw):
+        _SharesDart.seen.append(year)
+        if year in _SharesDart.empty_years:
+            return pd.DataFrame([{"se": "합계", "istc_totqy": "-"}])
+        return pd.DataFrame([{"se": "보통주", "istc_totqy": "5,969,782,550"}])
+
+
+def test_latest_shares_searches_back_past_empty_years(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """기준연도가 '-'뿐이면(공시 전 등) 유효값이 나올 때까지 거슬러 찾는다."""
+    asof = collectors_mod.SETTINGS.shares_asof_year
+    _SharesDart.seen, _SharesDart.empty_years = [], {asof}
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _SharesDart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(collectors_mod.SETTINGS, dart_api_key="x"),
+    )
+    assert collectors_mod._fetch_latest_shares("005930") == 5969782550.0
+    assert _SharesDart.seen == [asof, asof - 1]  # 내림차순 탐색
+
+
+def test_latest_shares_do_not_depend_on_today(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """회귀 못박기(PR #67 리뷰 1): 기준연도가 today()에 묶이면 실행 연도에 따라
+    같은 입력의 per/pbr → signal이 달라져 재현성이 깨진다. 탐색 시작 연도는
+    SHARES_ASOF_YEAR 고정값이어야 한다."""
+    _SharesDart.seen, _SharesDart.empty_years = [], set()
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _SharesDart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(
+            collectors_mod.SETTINGS, dart_api_key="x", shares_asof_year=2023
+        ),
+    )
+    collectors_mod._fetch_latest_shares("005930")
+    assert _SharesDart.seen == [2023]  # today가 아니라 고정 스냅샷 연도에서 시작
+    assert _SharesDart.seen[0] != dt.date.today().year - 1
+
+
+def test_latest_shares_warns_when_snapshot_year_is_stale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """고정 연도가 낡으면(이후 분할 미반영 위험) 숫자는 유지하되 경고를 낸다."""
+    _SharesDart.seen, _SharesDart.empty_years = [], set()
+    monkeypatch.setitem(sys.modules, "OpenDartReader", _SharesDart)
+    monkeypatch.setattr(
+        collectors_mod, "SETTINGS",
+        dataclasses.replace(
+            collectors_mod.SETTINGS, dart_api_key="x", shares_asof_year=2020
+        ),
+    )
+    with pytest.warns(UserWarning, match="낡았습니다"):
+        assert collectors_mod._fetch_latest_shares("005930") == 5969782550.0
+    assert _SharesDart.seen == [2020]  # 경고만 — 탐색 기준은 고정값 유지(재현성)
+
+
+def test_validation_catches_split_regime_mismatch() -> None:
+    """수정주가(분할 반영) × 분할 전 주식수 → per/pbr이 분할 배수만큼 과소.
+
+    실사고: 삼성 50:1 분할 소급수정 주가 37,460원 × FY2016 주식수 1.4억 주
+    → per 0.28, pbr 0.03이 옛 하한(0.1/0.005)을 통과해 ok=true로 새어나갔다.
+    """
+    bad = _fin(shares_outstanding=1.4e8, price=37460.0)
+    v = _validate(_OK_NEWS, {"metrics": metrics_mod.compute_metrics(bad),
+                             "fiscal_year": 2021}, bad)
+    assert not v["ok"]
+    assert any("상식 범위" in e for e in v["errors"])
 
 
 def test_collect_financials_raises_when_no_data(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -530,6 +671,37 @@ def test_run_pipeline_news_and_financial_only(monkeypatch: pytest.MonkeyPatch) -
 
 
 # ── 관련성 필터 (결정론 규칙) ──────────────────────────────────────
+def test_relevance_key_override_for_group_named_coverage() -> None:
+    """접미사 규칙으로 안 잡히는 종목은 override 테이블로 명시한다.
+
+    에코프로비엠은 언론이 그룹명 '에코프로'로 쓰는 기사가 많다
+    (실측: 전량 탈락하던 1,010일 중 126일 복구).
+    """
+    assert agents_mod.relevance_key("에코프로비엠") == "에코프로"
+    news = [{"news_id": "n1", "title": "에코프로 시가총액 11조원 돌파",
+             "summary": "공매도 급등락", "url": "", "press": "", "date": "2023-03-15"}]
+    assert agents_mod.relevant_indices(news, "에코프로비엠") == [0]
+
+
+def test_validation_allows_retained_earnings_above_equity() -> None:
+    """이익잉여금 > 자본총계는 회계 오류가 아니다 — 자기주식 차감 때문.
+
+    실측: 네이버 FY2022 이익잉여금 23.65조 > 자본총계 23.45조인데 자산=부채+자본
+    항등식은 0.0000% 오차로 성립. 옛 규칙이 멀쩡한 731행을 폐기했다.
+    """
+    naver = _fin(retained_earnings=3.1e14)  # 자본총계 3.0e14보다 크다
+    v = _validate(_OK_NEWS, {"metrics": metrics_mod.compute_metrics(naver),
+                             "fiscal_year": 2021}, naver)
+    assert v["ok"], v["errors"]
+
+    # 자산총계를 넘으면 그건 진짜 매핑 오류다
+    broken = _fin(retained_earnings=5.0e14)  # 자산 4.0e14 초과
+    v2 = _validate(_OK_NEWS, {"metrics": metrics_mod.compute_metrics(broken),
+                              "fiscal_year": 2021}, broken)
+    assert not v2["ok"]
+    assert any("이익잉여금 ≤ 자산총계" in e for e in v2["errors"])
+
+
 def test_relevance_key_strips_corporate_suffix() -> None:
     """'삼성전자'로 제목만 매칭하면 폭락일에 주가 기사만 남아 표본이 편향된다.
 
@@ -830,6 +1002,54 @@ def test_corpus_workbooks_still_accept_legacy_newsresult(tmp_path: Path) -> None
         {"뉴스 식별자": "n1", "일자": 20220615, "언론사": "매일경제",
          "제목": "기사", "본문": "본문", "URL": "", "분석제외 여부": ""}])
     assert len(pp.find_corpus_workbooks(raw, "005930")) == 1
+
+
+# ── LLM 런타임 스위치 (--no-llm) ───────────────────────────────────
+@pytest.fixture()
+def _llm_switch_reset():
+    """스위치는 모듈 전역이라 테스트 간 누수 방지를 위해 반드시 원복한다."""
+    yield
+    llm_mod.set_llm_enabled(True)
+
+
+def test_set_llm_enabled_blocks_api_even_with_key(
+    monkeypatch: pytest.MonkeyPatch, _llm_switch_reset
+) -> None:
+    """--no-llm은 키가 .env에 있어도 API 경로를 차단해야 한다."""
+    monkeypatch.setattr(
+        llm_mod, "SETTINGS",
+        dataclasses.replace(llm_mod.SETTINGS, gemini_api_key="dummy-key"),
+    )
+    llm_mod.set_llm_enabled(False)
+    assert llm_mod.get_llm() is None  # 키가 있어도 None → structured가 폴백
+
+    from pydantic import BaseModel
+
+    class _Probe(BaseModel):
+        text: str = ""
+
+    # 캐시에 없는 프롬프트 → 차단 상태에선 API 대신 None(규칙 폴백 신호)
+    assert llm_mod.structured("no-llm 스위치 프로브 프롬프트", _Probe) is None
+
+
+def test_cli_no_llm_flag_wires_the_switch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, _llm_switch_reset, capsys
+) -> None:
+    """run.py --no-llm 이 실행 전에 스위치를 내리는지 확인."""
+    seen: dict[str, bool] = {}
+
+    def fake_pipeline(ticker, date, name):
+        seen["disabled_during_run"] = llm_mod._FORCE_DISABLED
+        return {"validation": {"ok": True, "errors": [], "warnings": []}}
+
+    monkeypatch.setattr(run_mod, "run_pipeline", fake_pipeline)
+    rc = run_mod.main(
+        ["--date", "2022-06-15", "--no-llm", "--out", str(tmp_path / "o.json")]
+    )
+
+    assert rc == 0
+    assert seen["disabled_during_run"] is True
+    capsys.readouterr()  # 결과 JSON stdout 출력 소거
 
 
 # ── staleness (Tetlock 2011) ───────────────────────────────────────

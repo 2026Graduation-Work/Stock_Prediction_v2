@@ -14,6 +14,6 @@ DART_API_KEY는 필수다 — 재무 없이는 시그널을 만들지 않는다.
 검증 기준: VALUE_PIPELINE_VALIDATION.md
 """
 
-from .schema import ValueSignal
+from .schema import PeriodValueSignal, ValueSignal
 
-__all__ = ["ValueSignal"]
+__all__ = ["PeriodValueSignal", "ValueSignal"]
