@@ -32,13 +32,21 @@ interface DemoSession {
   signedInAt: string;
 }
 
+// 이메일 계정 기능을 쓸 수 있는지(Supabase 환경변수 유무). 데모 계정은 이와 관계없이 항상 쓸 수 있다.
+export function isAccountLoginAvailable(): boolean {
+  return isSupabaseConfigured();
+}
+
+// 세션이 정해지기 전(로딩 중)의 표시용 모드. 실제 모드는 로그인한 방식으로 정한다.
 export function getAuthMode(): OnboardingState["mode"] {
-  return isSupabaseConfigured() ? "supabase" : "demo";
+  return readDemoSession() ? "demo" : isSupabaseConfigured() ? "supabase" : "demo";
 }
 
 export async function resolveOnboardingState(): Promise<OnboardingState> {
+  // 데모 계정으로 들어왔으면 환경변수가 있어도 데모로 둔다(Supabase를 부르지 않는다).
+  if (readDemoSession()) return resolveDemoOnboardingState();
   const client = getSupabaseClient();
-  if (!client) return resolveDemoOnboardingState();
+  if (!client) return { status: "signed_out", mode: "demo" };
 
   const { data: sessionData, error: sessionError } = await client.auth.getSession();
   if (sessionError) {
@@ -126,6 +134,7 @@ function resolveDemoOnboardingState(): OnboardingState {
 }
 
 export function startDemoSession(): void {
+  clearSavedProfile(); // 이전 계정의 설문 결과가 데모 화면에 섞이지 않게
   const session: DemoSession = {
     userId: "demo_minji",
     displayName: "김민지",
@@ -145,11 +154,51 @@ export async function requestMagicLink(email: string): Promise<void> {
       emailRedirectTo: `${window.location.origin}/login`,
     },
   });
-  if (error) throw new Error(`로그인 링크 전송 실패: ${error.message}`);
+  if (error) throw new Error(`로그인 링크 전송 실패: ${koreanAuthError(error.message)}`);
+}
+
+// 비밀번호 가입. 메일 발송 한도에 막혀도 시연할 수 있도록 매직링크와 별도로 둔다.
+// Supabase에서 이메일 확인이 켜져 있으면 세션 없이 돌아오고, 확인 메일을 눌러야 로그인된다.
+export async function signUpWithPassword(
+  email: string,
+  password: string,
+): Promise<{ needsEmailConfirmation: boolean }> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("이 배포에는 계정 기능이 아직 연결되지 않았습니다.");
+  const { data, error } = await client.auth.signUp({
+    email,
+    password,
+    options: { emailRedirectTo: `${window.location.origin}/login` },
+  });
+  if (error) throw new Error(`가입 실패: ${koreanAuthError(error.message)}`);
+  return { needsEmailConfirmation: !data.session };
+}
+
+export async function signInWithPassword(email: string, password: string): Promise<void> {
+  const client = getSupabaseClient();
+  if (!client) throw new Error("이 배포에는 계정 기능이 아직 연결되지 않았습니다.");
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (error) throw new Error(`로그인 실패: ${koreanAuthError(error.message)}`);
+}
+
+// Supabase Auth 영문 오류 중 자주 나오는 것만 옮긴다. 나머지는 원문을 그대로 보여 준다.
+export function koreanAuthError(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("invalid login credentials")) return "이메일 또는 비밀번호가 맞지 않아요.";
+  if (lower.includes("already registered")) return "이미 가입된 이메일이에요. 로그인해 주세요.";
+  if (lower.includes("email not confirmed")) {
+    return "메일 확인이 아직이에요. 받은 메일의 링크를 누른 뒤 다시 로그인해 주세요.";
+  }
+  if (lower.includes("rate limit")) {
+    return "메일 발송 한도를 넘었어요. 비밀번호로 가입·로그인하거나 잠시 후 다시 시도해 주세요.";
+  }
+  if (lower.includes("password should be at least")) return "비밀번호는 6자 이상이어야 해요.";
+  return message;
 }
 
 export async function signOut(): Promise<void> {
-  const client = getSupabaseClient();
+  // 데모 계정은 Supabase 세션이 없으므로 로컬만 지운다.
+  const client = readDemoSession() ? null : getSupabaseClient();
   let signOutError: Error | null = null;
   if (client) {
     const { error } = await client.auth.signOut({ scope: "local" });
@@ -196,6 +245,7 @@ export function subscribeToAuthChanges(onChange: () => void): () => void {
 }
 
 function readDemoSession(): DemoSession | null {
+  if (typeof window === "undefined") return null;
   try {
     const serialized = window.localStorage.getItem(DEMO_SESSION_STORAGE_KEY);
     if (!serialized) return null;

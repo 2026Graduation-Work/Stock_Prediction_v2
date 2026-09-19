@@ -206,6 +206,16 @@ export default function Dashboard(initialData: DashboardData) {
                 </div>
               )}
 
+              {!keyword && stocks.length === 0 && holdingAlerts.length === 0 && (
+                <div className="rounded-[14px] border border-dashed border-edge bg-white p-8 text-center">
+                  <p className="text-sm font-bold text-ink">오늘 보여 줄 종목 신호가 아직 없어요</p>
+                  <p className="mt-1.5 text-[13px] text-muted">
+                    예측 데이터가 적재되면 여기에 나타나요. 종목명이나 코드로 검색하면 종목 정보는 바로 볼 수
+                    있어요.
+                  </p>
+                </div>
+              )}
+
               {visibleStocks.map((stock) => (
                 <StockCard key={stock.code} stock={stock} />
               ))}

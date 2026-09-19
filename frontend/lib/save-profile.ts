@@ -7,10 +7,14 @@ import { getSupabaseClient } from "./supabase";
 export const PROFILE_STORAGE_KEY = "signallab.ips-profile.v1";
 export const PROFILE_UPDATED_EVENT = "signallab:profile-updated";
 
-export async function saveProfile(profile: ProfilingOutput): Promise<void> {
+// mode는 로그인한 방식이다. 데모 계정은 환경변수가 있어도 이 브라우저에만 저장한다.
+export async function saveProfile(
+  profile: ProfilingOutput,
+  mode: "demo" | "supabase",
+): Promise<void> {
   if (typeof window === "undefined") return;
 
-  const client = getSupabaseClient();
+  const client = mode === "supabase" ? getSupabaseClient() : null;
   if (!client) {
     persistProfile(profile);
     return;

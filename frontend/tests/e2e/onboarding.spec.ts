@@ -41,9 +41,13 @@ test("new user: 8축 설문 -> 결과 확인 -> 대시보드 -> 종목 상세까
   await page.goto("/");
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "시그널랩 로그인" })).toBeVisible();
+  // 계정 로그인과 데모 계정이 항상 함께 보인다(환경변수가 없으면 계정 쪽은 안내만)
+  await expect(page.getByRole("heading", { name: "이메일로 시작" })).toBeVisible();
+  await expect(page.getByText("데모 계정 · 예시 데이터")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "김민지 데모로 시작" }).click();
+  await page.getByRole("button", { name: "데모 계정으로 둘러보기" }).click();
   await expect(page).toHaveURL(/\/survey$/);
+  await expect(page.getByText("데모 계정 · 예시 데이터")).toBeVisible();
   await expect(page.getByText("성향 문항 1/8", { exact: false })).toBeVisible();
   await assertNoHorizontalOverflow(page, 390, 844);
   await page.setViewportSize({ width: 1024, height: 900 });
@@ -99,6 +103,7 @@ test("new user: 8축 설문 -> 결과 확인 -> 대시보드 -> 종목 상세까
   await page.getByRole("button", { name: "대시보드로 이동" }).click();
   await expect(page).toHaveURL("/");
   await expect(page.getByText("오늘의 추천 종목", { exact: false }).first()).toBeVisible();
+  await expect(page.getByText("데모 계정 · 예시 데이터")).toBeVisible();
   await expect(page.getByText("적극 축적형", { exact: true })).toBeVisible();
   await expect(page.getByText("추종형", { exact: true })).toHaveCount(0);
   await page.reload();
@@ -110,6 +115,7 @@ test("new user: 8축 설문 -> 결과 확인 -> 대시보드 -> 종목 상세까
   await expect(page).toHaveURL(/\/stocks\/(005930|005380|068270)$/);
   await expect(page.getByText(/과거 유사 신호 .*실현 수익률 분포/).first()).toBeVisible();
   await expect(page.locator('[data-bit-type="ACCUMULATOR"]')).toBeVisible();
+  await expect(page.getByText("데모 계정 · 예시 데이터")).toBeVisible();
 
   // 다른 성향으로 보기: 이 화면만 바뀌고 저장된 결과는 그대로
   await page.getByRole("button", { name: "자산 보존형" }).click();

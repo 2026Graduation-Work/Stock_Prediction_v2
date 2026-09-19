@@ -42,8 +42,6 @@ import type {
   StyleAxes,
 } from "./types";
 
-export const DEMO_USER_ID = "u_minji_001";
-
 export interface ProfileQueryResult {
   profile: InvestorProfileSummary;
   maxRiskTier: number;
@@ -96,27 +94,19 @@ const PREDICTION_FEATURE_COLUMNS =
 
 const STOCK_COLUMNS = "code,name,market,risk_grade,risk_flags";
 
-export async function getDashboardData(
-  userId = DEMO_USER_ID,
-): Promise<DashboardData> {
-  const [currentMarketStatus, stocks, currentHoldingAlerts, holdings, profileResult] =
-    await Promise.all([
-      getMarketStatus(),
-      getRecommendedStocks(userId),
-      getHoldingAlerts(userId),
-      getPortfolio(userId),
-      getProfile(userId),
-    ]);
-
+// 첫 화면(서버 렌더)은 데모 계정 데이터로 그린다. 개인 테이블은 RLS로 본인만 읽을 수 있어
+// 서버의 비로그인 조회로는 얻을 수 없다. 로그인한 사용자는 브라우저에서
+// getAuthenticatedDashboardData로 자기 데이터를 다시 불러온다.
+export function getDashboardData(): DashboardData {
   return {
-    marketStatus: currentMarketStatus,
-    stocks,
-    holdingAlerts: currentHoldingAlerts,
-    holdings,
-    profile: profileResult.profile,
-    maxRiskTier: profileResult.maxRiskTier,
-    avoidedLabels: profileResult.avoidedLabels,
-    excludedStocks: profileResult.excludedStocks,
+    marketStatus,
+    stocks: recommendedStocks,
+    holdingAlerts,
+    holdings: portfolioHoldings,
+    profile: investorProfile,
+    maxRiskTier: 4,
+    avoidedLabels: avoidanceNotice.avoidedLabels,
+    excludedStocks: avoidanceNotice.excludedStocks,
   };
 }
 
@@ -137,7 +127,7 @@ export async function getAuthenticatedDashboardData(): Promise<DashboardData> {
   if (!appUser) throw new Error("연결된 서비스 사용자 정보가 없습니다.");
 
   const [currentMarketStatus, profileContext, holdingRows] = await Promise.all([
-    queryMarketStatus(client),
+    marketStatusOrExample(client),
     loadProfileQueryContext(client, appUser.id),
     loadHoldings(client, appUser.id),
   ]);
@@ -194,45 +184,15 @@ export async function getAuthenticatedStockDetailData(
   return queryStockDetail(client, appUser.id, code);
 }
 
-export async function getMarketStatus(): Promise<MarketStatus> {
-  return withFallback("market status", marketStatus, queryMarketStatus);
-}
-
-export async function getRecommendedStocks(
-  userId = DEMO_USER_ID,
-): Promise<RecommendedStock[]> {
-  return withFallback("recommended stocks", recommendedStocks, (client) =>
-    queryRecommendedStocks(client, userId),
-  );
-}
-
-export async function getHoldingAlerts(
-  userId = DEMO_USER_ID,
-): Promise<RecommendedStock[]> {
-  return withFallback("holding alerts", holdingAlerts, (client) =>
-    queryHoldingAlerts(client, userId),
-  );
-}
-
-export async function getPortfolio(
-  userId = DEMO_USER_ID,
-): Promise<PortfolioHolding[]> {
-  return withFallback("portfolio", portfolioHoldings, (client) =>
-    queryPortfolio(client, userId),
-  );
-}
-
-export async function getProfile(
-  userId = DEMO_USER_ID,
-): Promise<ProfileQueryResult> {
-  const fallback: ProfileQueryResult = {
-    profile: investorProfile,
-    maxRiskTier: 4,
-    avoidedLabels: avoidanceNotice.avoidedLabels,
-    excludedStocks: avoidanceNotice.excludedStocks,
-  };
-
-  return withFallback("profile", fallback, (client) => queryProfile(client, userId));
+// 시장 상태는 공개 데이터라 비어 있거나 조회에 실패해도 내 화면 전체를 깨뜨리지 않는다.
+// 예시값(provenance mock)으로 대체하고, 화면은 "예시 데이터"로 표시한다.
+async function marketStatusOrExample(client: SupabaseClient): Promise<MarketStatus> {
+  try {
+    return await queryMarketStatus(client);
+  } catch (error) {
+    console.warn("[Supabase fallback] market status:", error);
+    return marketStatus;
+  }
 }
 
 async function queryMarketStatus(client: SupabaseClient): Promise<MarketStatus> {
@@ -353,13 +313,6 @@ async function queryPortfolio(
   });
 }
 
-async function queryProfile(
-  client: SupabaseClient,
-  userId: string,
-): Promise<ProfileQueryResult> {
-  return (await loadProfileQueryContext(client, userId)).result;
-}
-
 async function queryStockDetail(
   client: SupabaseClient,
   userId: string,
@@ -367,7 +320,7 @@ async function queryStockDetail(
 ): Promise<StockDetailData> {
   const [holdingRows, marketResult, userResult, profileResult, stockResult] = await Promise.all([
     loadHoldings(client, userId),
-    queryMarketStatus(client),
+    marketStatusOrExample(client),
     client
       .from("users")
       .select("id,display_name,avatar_label")
@@ -586,21 +539,6 @@ function latestRowsByStock(rows: PredictionRow[]): PredictionRow[] {
     (left, right) =>
       left.display_order - right.display_order || left.stock_code.localeCompare(right.stock_code),
   );
-}
-
-async function withFallback<T>(
-  label: string,
-  fallback: T,
-  query: (client: SupabaseClient) => Promise<T>,
-): Promise<T> {
-  const client = getSupabaseClient();
-  if (!client) return fallback;
-  try {
-    return await query(client);
-  } catch (error) {
-    console.warn(`[Supabase fallback] ${label}:`, error);
-    return fallback;
-  }
 }
 
 function assertQuery(

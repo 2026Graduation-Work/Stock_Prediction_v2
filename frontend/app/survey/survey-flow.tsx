@@ -24,6 +24,7 @@ import {
 } from "@/lib/profiling/style-scoring";
 import { saveProfile } from "@/lib/save-profile";
 import type { ProfilingOutput, RiskFlag, StyleAxes, StyleAxisId } from "@/lib/types";
+import { useOnboarding } from "../components/onboarding-provider";
 import SignOutButton from "../components/sign-out-button";
 
 // 한 화면 최대 2문항. 축마다 3문항이라 축 하나가 두 화면(2 + 1)이 된다.
@@ -150,6 +151,8 @@ function axisFeedback(axis: AxisDefinition, style: Record<string, number>): stri
 
 export default function SurveyFlow() {
   const router = useRouter();
+  const { state: onboardingState } = useOnboarding();
+  const demo = onboardingState.mode === "demo";
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [restored, setRestored] = useState(false);
   const [result, setResult] = useState<ProfilingOutput | null>(null);
@@ -193,7 +196,8 @@ export default function SurveyFlow() {
       free_text: draft.freeText,
       ...(adjusted && Object.keys(adjusted).length ? { adjusted_axes: adjusted } : {}),
       preferred_sectors: ["semiconductor", "healthcare"],
-      portfolio: DEMO_PORTFOLIO,
+      // 보유 종목 입력 화면이 아직 없다. 데모 계정만 김민지 보유 종목을 쓰고, 실제 계정은 비워 둔다.
+      ...(demo ? { portfolio: DEMO_PORTFOLIO } : {}),
       investment_amount_krw: 500000,
       action_intent: "buy_consideration",
       market_regime_hint: "high_volatility",
@@ -241,7 +245,7 @@ export default function SurveyFlow() {
       const profile = Object.keys(adjusted).length
         ? await requestProfile(payload(adjusted))
         : result!;
-      await saveProfile(profile);
+      await saveProfile(profile, onboardingState.mode);
       writeDraft(null);
       setResult(profile);
       setSaved(true);
@@ -270,7 +274,7 @@ export default function SurveyFlow() {
           <span className="h-5 w-px bg-line" />
           <span className="whitespace-nowrap text-sm font-semibold text-body">투자 성향 설문</span>
           <div className="ml-auto flex items-center gap-2">
-            {!result && (
+            {!result && demo && (
               <button
                 type="button"
                 onClick={() => {
