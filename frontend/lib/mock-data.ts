@@ -8,6 +8,7 @@ import type {
   PortfolioHolding,
   RecommendedStock,
   StockDetail,
+  StyleAxes,
 } from "./types";
 
 export const marketStatus: MarketStatus = {
@@ -117,13 +118,35 @@ export const avoidanceNotice = {
   excludedStocks: [{ name: "미래에셋비전스팩3호", code: "418250", reason: "SPAC" }],
 };
 
+// 김민지 8축(schema v1.1). supabase/seed.sql과 같은 값이다.
+// 4축은 기존 v1.0 필드를 schema style_axes 축약 규칙의 역으로 구했다(ratio = 2 × v1.0값 − 1):
+//   loss_tolerance ← risk_tolerance 0.35, urgency ← fomo_index 0.72,
+//   drawdown_reaction ← panic_sell_tendency 0.65, information_reliance ← herding_score 0.58.
+// turnover -0.25는 time_horizon_months 48에 가장 가까운 구간(1800일)이다.
+// market_participation·concentration·rule_adherence는 원천 필드가 없어 정한 값이고
+// confidence는 meta.confidence(0.81)를 쓴다. 나머지 confidence는 confidence_per_field의 대응 값.
+export const investorStyleAxes: StyleAxes = {
+  assessment_mode: "quick",
+  axes: [
+    { axis_id: "market_participation", ratio: -0.2, confidence: 0.81, answered_count: 3, question_count: 3 },
+    { axis_id: "loss_tolerance", ratio: -0.3, confidence: 0.92, answered_count: 3, question_count: 3 },
+    { axis_id: "turnover", ratio: -0.25, confidence: 0.95, answered_count: 3, question_count: 3 },
+    { axis_id: "concentration", ratio: -0.4, confidence: 0.81, answered_count: 3, question_count: 3 },
+    { axis_id: "rule_adherence", ratio: 0.2, confidence: 0.81, answered_count: 3, question_count: 3 },
+    { axis_id: "information_reliance", ratio: 0.16, confidence: 0.85, answered_count: 3, question_count: 3 },
+    { axis_id: "urgency", ratio: 0.44, confidence: 0.78, answered_count: 3, question_count: 3 },
+    { axis_id: "drawdown_reaction", ratio: 0.3, confidence: 0.7, answered_count: 3, question_count: 3 },
+  ],
+};
+
+// supabase/seed.sql portfolio_holdings와 같은 종목·수량·평단 (N08 보유 비중 넛지가 의존)
 export const portfolioHoldings: PortfolioHolding[] = [
   {
-    code: "000270",
-    name: "기아",
+    code: "005930",
+    name: "삼성전자",
     signalLight: "positive",
     quantity: 15,
-    avgBuyPrice: 104_200,
+    avgBuyPrice: 71_200,
   },
   {
     code: "035720",
@@ -140,11 +163,11 @@ export const portfolioHoldings: PortfolioHolding[] = [
     avgBuyPrice: 182_000,
   },
   {
-    code: "000660",
-    name: "SK하이닉스",
+    code: "005380",
+    name: "현대차",
     signalLight: "strong_positive",
     quantity: 5,
-    avgBuyPrice: 395_500,
+    avgBuyPrice: 235_000,
   },
 ];
 

@@ -3,6 +3,7 @@ import {
   avoidanceNotice,
   holdingAlerts,
   investorProfile,
+  investorStyleAxes,
   marketStatus,
   portfolioHoldings,
   recommendedStocks,
@@ -28,6 +29,8 @@ import {
   type StockRow,
   type UserRow,
 } from "./mappers";
+import { isStyleAxes } from "./profiling-rules";
+import type { HoldingWeight } from "./providers";
 import { getSupabaseClient } from "./supabase";
 import type {
   InvestorProfileSummary,
@@ -35,6 +38,7 @@ import type {
   PortfolioHolding,
   RecommendedStock,
   StockDetail,
+  StyleAxes,
 } from "./types";
 
 export const DEMO_USER_ID = "u_minji_001";
@@ -62,6 +66,8 @@ export interface StockDetailData {
   profile: InvestorProfileSummary;
   marketStatus: MarketStatus;
   maxRiskTier: number;
+  styleAxes: StyleAxes | null; // v1.0 프로필이면 null
+  holdings: HoldingWeight[]; // 넛지 N08 보유 비중 판정용
   source: "mock" | "supabase";
 }
 
@@ -161,6 +167,8 @@ export function getMockStockDetailData(code: string): StockDetailData | null {
     profile: investorProfile,
     marketStatus,
     maxRiskTier: 4,
+    styleAxes: investorStyleAxes,
+    holdings: portfolioHoldings,
     source: "mock",
   };
 }
@@ -362,7 +370,8 @@ async function queryStockDetail(
   userId: string,
   code: string,
 ): Promise<StockDetailData> {
-  const [marketResult, userResult, profileResult, stockResult] = await Promise.all([
+  const [holdingRows, marketResult, userResult, profileResult, stockResult] = await Promise.all([
+    loadHoldings(client, userId),
     queryMarketStatus(client),
     client
       .from("users")
@@ -372,7 +381,7 @@ async function queryStockDetail(
     client
       .from("ips_profiles")
       .select(
-        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score",
+        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score,style_axes:profile_payload->style_axes",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -392,6 +401,8 @@ async function queryStockDetail(
   if (!stockResult.data) throw new Error(`종목 정보를 찾지 못했습니다: ${code}`);
 
   const profile = profileResult.data as IpsProfileRow;
+  // 8축은 profile_payload(schema v1.1) 안에만 있다. v1.0 프로필이면 null.
+  const payloadStyleAxes = (profileResult.data as { style_axes?: unknown }).style_axes;
   const { data: predictionData, error: predictionError } = await client
     .from("predictions")
     .select(DETAIL_PREDICTION_COLUMNS)
@@ -422,6 +433,12 @@ async function queryStockDetail(
     profile: mapProfileSummary(userResult.data as UserRow, profile),
     marketStatus: marketResult,
     maxRiskTier: profile.max_risk_tier,
+    styleAxes: isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
+    holdings: holdingRows.map(({ stock_code, quantity, avg_buy_price }) => ({
+      code: stock_code,
+      quantity,
+      avgBuyPrice: avg_buy_price,
+    })),
     source: "supabase",
   };
 }

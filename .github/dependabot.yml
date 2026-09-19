@@ -38,6 +38,20 @@ updates:
       - dependency-name: "@types/node"
         update-types:
           - "version-update:semver-major"
+      # typescript 7.x 는 typescript-eslint 8.x 가 아직 거부한다
+      # ("typescript-eslint does not support TS 7.0" 로 lint 가 즉시 죽는다).
+      # eslint-config-next 가 typescript-eslint 를 끌고 오므로 우회할 수 없다.
+      # 해제 조건: typescript-eslint 가 TS 7 을 지원할 때. (#97)
+      - dependency-name: "typescript"
+        update-types:
+          - "version-update:semver-major"
+      # eslint 10.x 는 rule context API 를 바꿨는데 eslint-plugin-react 7.37.x 가
+      # 옛 API(contextOrFilename.getFilename)를 그대로 부른다. 역시
+      # eslint-config-next 가 끌고 오는 플러그인이라 우회 불가.
+      # 해제 조건: eslint-plugin-react 가 eslint 10 을 지원할 때. (#97)
+      - dependency-name: "eslint"
+        update-types:
+          - "version-update:semver-major"
 
     groups:
       frontend-all:
@@ -74,6 +88,14 @@ updates:
       # 같은 코드가 블록마다 다르게 동작하므로 함께 묶어 둔다 (#90).
       # 해제 조건: pykrx 가 pandas 3 을 지원하거나 pykrx 를 걷어낼 때.
       - dependency-name: "pandas"
+        update-types:
+          - "version-update:semver-major"
+      # plotly 7.x 는 layout template 에서 scattermapbox 를 제거했다. vectorbt 1.0.0 은
+      # import 시 테마 템플릿에 scattermapbox 를 넣어 ValueError 로 죽는다.
+      # 8/25 plotly 7.0.0 배포 이후 chart-test 가 전부 실패한 원인이다 (#92 #93).
+      # chart requirements.txt 의 plotly<7 상한과 한 쌍이다.
+      # 해제 조건: vectorbt 가 plotly 7 을 지원하거나 vectorbt 를 걷어낼 때.
+      - dependency-name: "plotly"
         update-types:
           - "version-update:semver-major"
 
