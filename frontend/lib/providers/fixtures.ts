@@ -43,19 +43,27 @@ export function businessDaysEndingAt(end: string, count: number): string[] {
 }
 
 // 억원 단위. 개인은 외국인·기관의 반대편에 서는 경향을 흉내 낸다.
+// KRX 투자자 분류상 개인 + 외국인 + 기관합계 + 기타법인 = 0이므로 기타법인은 나머지로 맞춘다.
+// 개인이 외국인·기관을 받아 내고 남는 작은 차이(규모의 ±10% 이내)가 기타법인 몫이 된다.
 function supplySeries(
   seed: number,
   scale: number,
-  latest: Omit<SupplyDemandDay, "date">,
+  latest: Omit<SupplyDemandDay, "date" | "otherCorp">,
 ): SupplyDemandDay[] {
   const random = seeded(seed);
   const dates = businessDaysEndingAt(PREDICTION_AS_OF, 20);
   return dates.map((date, index) => {
-    if (index === dates.length - 1) return { date, ...latest };
-    const foreign = Math.round(signedUnit(random) * scale);
-    const institution = Math.round(signedUnit(random) * scale * 0.6);
-    const retail = -(foreign + institution) + Math.round(signedUnit(random) * scale * 0.1);
-    return { date, retail, foreign, institution };
+    const day =
+      index === dates.length - 1
+        ? latest
+        : (() => {
+            const foreign = Math.round(signedUnit(random) * scale);
+            const institution = Math.round(signedUnit(random) * scale * 0.6);
+            const retail =
+              -(foreign + institution) + Math.round(signedUnit(random) * scale * 0.1);
+            return { retail, foreign, institution };
+          })();
+    return { date, ...day, otherCorp: -(day.retail + day.foreign + day.institution) };
   });
 }
 

@@ -1,4 +1,5 @@
 import { MARKET_CONDITION_META } from "@/lib/display";
+import SourceChip from "./source-chip";
 import type { MarketIndexQuote, MarketStatus } from "@/lib/types";
 
 function formatValue(quote: MarketIndexQuote): string {
@@ -28,30 +29,29 @@ function QuoteCell({ quote }: { quote: MarketIndexQuote }) {
   );
 }
 
-function Score({ label, value }: { label: string; value: number }) {
+// 점수 산식이 정의되기 전(실데이터가 아닐 때)에는 숫자를 숨기고 "예시"만 둔다.
+function Score({ label, value }: { label: string; value: number | null }) {
   return (
     <div className="hidden items-baseline gap-1.5 whitespace-nowrap lg:flex">
       <span className="text-[10px] text-faint">{label}</span>
-      <span className="text-xs font-extrabold tabular-nums">{value}</span>
+      {value === null ? (
+        <span className="text-xs font-bold text-faint">예시</span>
+      ) : (
+        <span className="text-xs font-extrabold tabular-nums">{value}</span>
+      )}
     </div>
   );
 }
 
 export default function MarketStatusBar({ status }: { status: MarketStatus }) {
   const meta = MARKET_CONDITION_META[status.condition];
+  const real = status.provenance.kind === "real";
 
   return (
     <section aria-label="시장 지수와 시장 상태" className="border-t border-line bg-field">
       <div className="mx-auto grid h-[50px] w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:px-8">
         <div className="hidden min-w-[110px] flex-col lg:flex">
-          <span className="flex items-center gap-1.5 text-[10px] font-semibold text-muted">
-            시장 브리핑
-            {status.source === "mock" && (
-              <span className="rounded-[3px] bg-brand-soft px-1 py-0.5 text-[8.5px] font-extrabold text-brand">
-                샘플
-              </span>
-            )}
-          </span>
+          <span className="text-[10px] font-semibold text-muted">시장 브리핑</span>
           <span className="text-[11px] font-bold tabular-nums">
             {status.date.replaceAll("-", ".")} 기준
           </span>
@@ -66,8 +66,9 @@ export default function MarketStatusBar({ status }: { status: MarketStatus }) {
         </div>
 
         <div className="flex h-8 items-center gap-3 border-l border-line pl-3">
-          <Score label="변동성" value={status.volatilityScore} />
-          <Score label="거래량" value={status.volumeScore} />
+          <SourceChip provenance={status.provenance} />
+          <Score label="변동성" value={real ? status.volatilityScore : null} />
+          <Score label="거래량" value={real ? status.volumeScore : null} />
           <span
             className="inline-flex h-6 items-center rounded-[4px] px-2.5 text-[10.5px] font-extrabold"
             style={{ backgroundColor: meta.bg, color: meta.color }}

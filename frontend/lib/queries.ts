@@ -30,6 +30,7 @@ import {
   type UserRow,
 } from "./mappers";
 import { isStyleAxes } from "./profiling-rules";
+import { passesHardConstraints } from "./recommendation-filter";
 import type { HoldingWeight } from "./providers";
 import { getSupabaseClient } from "./supabase";
 import type {
@@ -73,12 +74,11 @@ export interface StockDetailData {
 
 interface ProfileSettingsRow {
   profile_type: "stable" | "aggressive";
-  max_risk_tier: number;
 }
 
 interface ProfileSettings {
   profileType: "stable" | "aggressive";
-  maxRiskTier: number;
+  userMaxRiskTier: number | null;
   avoided: Set<string>;
 }
 
@@ -271,11 +271,7 @@ async function queryRecommendedStocks(
 
   return predictions.flatMap((prediction) => {
     const stock = stockByCode.get(prediction.stock_code);
-    if (
-      !stock ||
-      stock.risk_grade < settings.maxRiskTier ||
-      toRiskFlags(stock.risk_flags).some((flag) => settings.avoided.has(flag))
-    ) {
+    if (!stock || !passesHardConstraints(stock.risk_grade, toRiskFlags(stock.risk_flags), settings)) {
       return [];
     }
     return [mapRecommendedStock(prediction, stock)];
@@ -298,7 +294,6 @@ async function queryHoldingAlerts(
     .from("predictions")
     .select(PREDICTION_COLUMNS)
     .eq("model_type", settings.profileType)
-    .eq("is_holding_alert", true)
     .in(
       "stock_code",
       holdings.map(({ stock_code }) => stock_code),
@@ -494,7 +489,7 @@ async function loadProfileSettings(
   const [profileResult, avoidedResult] = await Promise.all([
     client
       .from("ips_profiles")
-      .select("profile_type,max_risk_tier")
+      .select("profile_type")
       .eq("user_id", userId)
       .maybeSingle(),
     client
@@ -519,7 +514,9 @@ function toProfileSettings(
 ): ProfileSettings {
   return {
     profileType: profile.profile_type,
-    maxRiskTier: profile.max_risk_tier,
+    // ips_profiles.max_risk_tier는 profile_type에서 자동 파생된 값이다(save-profile.ts).
+    // 사용자가 직접 정하는 경로가 생기기 전까지는 종목을 거르지 않는다.
+    userMaxRiskTier: null,
     avoided: new Set(avoidedRows.map(({ asset_type }) => asset_type)),
   };
 }

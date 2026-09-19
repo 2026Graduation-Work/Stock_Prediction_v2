@@ -8,6 +8,7 @@ import {
   SIGNAL_ORDER,
 } from "@/lib/display";
 import type { RecommendedStock } from "@/lib/types";
+import SourceChip from "./source-chip";
 
 // 수익률 밴드 바: 0%가 바 중앙(50%), 수익률 1%p당 5% 이동
 const BAND_SCALE = 5;
@@ -126,7 +127,7 @@ export default function StockCard({
         <div className="flex flex-col gap-1">
           <span className="text-xs text-muted">과거 유사 신호 구간</span>
           <span className="text-[15px] font-extrabold">
-            적중률 {Math.round(stock.hitRate * 100)}%
+            상승 비율 {Math.round(stock.hitRate * 100)}%
           </span>
           <span className="text-xs text-faint">유사 사례 {stock.similarCaseCount}건 기준</span>
         </div>
@@ -162,9 +163,10 @@ export default function StockCard({
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex items-center justify-between gap-3">
+        <SourceChip provenance={stock.provenance} />
         <Link href={`/stocks/${stock.code}`} className="text-[13px] font-semibold">
-          근거 보기 →
+          자세히 보기 →
         </Link>
       </div>
     </article>

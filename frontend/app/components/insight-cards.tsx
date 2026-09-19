@@ -30,6 +30,7 @@ import {
   type FiredNudge,
 } from "@/lib/profiling/nudges";
 import {
+  combinedProvenance,
   periodsOverlap,
   pricePeriod,
   riskSnapshot,
@@ -44,7 +45,8 @@ import {
   type StockInsights,
   type SupplyDemandDay,
 } from "@/lib/providers";
-import type { StockDetail, StyleAxes, StyleAxisId } from "@/lib/types";
+import type { DataProvenance, StockDetail, StyleAxes, StyleAxisId } from "@/lib/types";
+import SourceChip from "./source-chip";
 
 // 극성은 backend/profiling/survey/style_questions.py AXES와 같다.
 const AXIS_META: Record<StyleAxisId, { name: string; negative: string; positive: string }> = {
@@ -118,6 +120,7 @@ const SUPPLY_SERIES = [
   { key: "retail", label: "개인", color: "#dd7b2e" },
   { key: "foreign", label: "외국인", color: "#2f5fd0" },
   { key: "institution", label: "기관", color: "#14735a" },
+  { key: "otherCorp", label: "기타법인", color: "#7a5af8" },
 ] as const;
 
 const TOOLTIP_STYLE = { border: "1px solid #e4e7ec", borderRadius: 6, fontSize: 11 };
@@ -187,12 +190,14 @@ function InsightCard({
   id,
   title,
   note,
+  provenance,
   emphasized = false,
   children,
 }: {
   id: CardId;
   title: string;
   note?: string;
+  provenance: DataProvenance;
   emphasized?: boolean;
   children: ReactNode;
 }) {
@@ -209,6 +214,9 @@ function InsightCard({
         </h2>
         <WhyTooltip id={`why-${id}`} text={WHY[id]} />
         {note && <span className="text-xs text-faint">{note}</span>}
+        <span className="ml-auto">
+          <SourceChip provenance={provenance} />
+        </span>
       </div>
       {children}
     </section>
@@ -312,7 +320,7 @@ function SupplyContent({ supply }: { supply: SupplyDemandDay[] }) {
   const latest = supply[supply.length - 1];
   return (
     <>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {SUPPLY_SERIES.map((series) => (
           <div key={series.key} className="rounded-lg bg-field px-4 py-3">
             <span className="text-xs font-bold" style={{ color: series.color }}>
@@ -659,36 +667,49 @@ export default function InsightSection({
   insights,
   holdings,
   demo,
-  source,
 }: {
   detail: StockDetail;
   insights: StockInsights;
   holdings: HoldingWeight[];
   demo: DemoStyleAxes;
-  source: "mock" | "supabase";
 }) {
   const market = toNudgeMarket(detail, insights, holdings);
   const nudges = demo.bit && market ? selectNudges(demo.bit, market) : [];
   const order = demo.bit?.cardOrder ?? DEFAULT_CARD_ORDER;
-  const { supply, sentiment, contributions, financial } = insights;
+  const { supply, sentiment, contributions, financial, provenance } = insights;
   const prices: Period | null = pricePeriod(detail);
   const sentimentDates = sentiment ? sentimentPeriod(sentiment) : null;
+  // 기간 라벨은 "<데이터> 데이터: 시작 ~ 끝" 한 형식으로 쓴다. 실데이터 여부는 카드의 SourceChip이 맡는다.
   const sentimentNote = sentimentDates
-    ? `감성 데이터: ${sentimentDates.start} ~ ${sentimentDates.end} (${sentiment?.source === "real" ? "실데이터" : "합성"})`
+    ? `감성 데이터: ${sentimentDates.start} ~ ${sentimentDates.end}`
     : "일별 감성 점수 · 대표 기사 3건";
   const priceNote = prices
-    ? `시세 데이터: ${prices.start} ~ ${prices.end} (${source === "mock" ? "샘플" : "실데이터"})`
+    ? `시세 데이터: ${prices.start} ~ ${prices.end}`
     : "최근 60거래일 가격 기준";
+  const supplyNote = supply?.length
+    ? `수급 데이터: ${supply[0].date} ~ ${supply[supply.length - 1].date} · 순매수 억원`
+    : "개인·외국인·기관·기타법인 최근 20영업일 순매수 · 억원";
   const periodMismatch = Boolean(prices && sentimentDates && !periodsOverlap(prices, sentimentDates));
 
   const cards: Record<CardId, ReactNode> = {
     nudge: (
-      <InsightCard id="nudge" title="확인해 볼 점" note="답하신 성향과 이 종목 상황이 겹치는 지점 · 최대 2개" emphasized>
+      <InsightCard
+        id="nudge"
+        title="확인해 볼 점"
+        note="답하신 성향과 이 종목 상황이 겹치는 지점 · 최대 2개"
+        provenance={combinedProvenance(detail.provenance, provenance.supply, provenance.sentiment)}
+        emphasized
+      >
         <NudgeContent bit={demo.bit} hasMarket={Boolean(market)} nudges={nudges} />
       </InsightCard>
     ),
     contribution: (
-      <InsightCard id="contribution" title="기여도 분해" note="모델 신호의 근거 구성 · 합 100%">
+      <InsightCard
+        id="contribution"
+        title="기여도 분해"
+        note="모델 신호의 근거 구성 · 합 100%"
+        provenance={provenance.contributions}
+      >
         {contributions?.length ? (
           <ContributionContent contributions={contributions} />
         ) : (
@@ -697,7 +718,7 @@ export default function InsightSection({
       </InsightCard>
     ),
     supply: (
-      <InsightCard id="supply" title="수급" note="개인·외국인·기관 최근 20영업일 순매수 · 억원">
+      <InsightCard id="supply" title="수급" note={supplyNote} provenance={provenance.supply}>
         {supply?.length ? (
           <SupplyContent supply={supply} />
         ) : (
@@ -706,7 +727,7 @@ export default function InsightSection({
       </InsightCard>
     ),
     sentiment: (
-      <InsightCard id="sentiment" title="뉴스 감성" note={sentimentNote}>
+      <InsightCard id="sentiment" title="뉴스 감성" note={sentimentNote} provenance={provenance.sentiment}>
         {sentiment?.days.length ? (
           <SentimentContent sentiment={sentiment} periodMismatch={periodMismatch} />
         ) : (
@@ -715,12 +736,12 @@ export default function InsightSection({
       </InsightCard>
     ),
     risk: (
-      <InsightCard id="risk" title="위험/변동성" note={priceNote}>
+      <InsightCard id="risk" title="위험/변동성" note={priceNote} provenance={detail.provenance}>
         <RiskContent detail={detail} />
       </InsightCard>
     ),
     financial: (
-      <InsightCard id="financial" title="재무" note={financial?.period}>
+      <InsightCard id="financial" title="재무" note={financial?.period} provenance={provenance.financial}>
         {financial ? (
           <FinancialContent financial={financial} />
         ) : (

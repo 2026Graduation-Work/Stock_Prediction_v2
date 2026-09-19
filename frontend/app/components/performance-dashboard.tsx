@@ -142,7 +142,7 @@ export default function PerformanceDashboard({
             />
           </div>
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 px-1 text-[11px] text-faint">
-            <span>AUC·적중률·Sharpe·MDD·누적수익률: 값이 클수록 우수</span>
+            <span>AUC·방향 일치율·Sharpe·MDD·누적수익률: 값이 클수록 우수</span>
             <span>Brier·ECE: 값이 작을수록 우수</span>
             <span>거래 수: 우열 없이 규모만 비교</span>
           </div>

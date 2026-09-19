@@ -46,13 +46,35 @@ for (const code of CODES) {
 }
 
 test("대상 외 종목은 null", async () => {
-  const insights = await loadStockInsights("068270");
-  assert.deepEqual(insights, {
-    supply: null,
-    sentiment: null,
-    contributions: null,
-    financial: null,
+  const { supply, sentiment, contributions, financial } = await loadStockInsights("068270");
+  assert.deepEqual(
+    { supply, sentiment, contributions, financial },
+    { supply: null, sentiment: null, contributions: null, financial: null },
+  );
+});
+
+for (const code of CODES) {
+  test(`${code}: 수급 네 주체(개인·외국인·기관합계·기타법인) 순매수 합은 매일 0`, async () => {
+    const supply = (await supplyDemandProvider(code)) ?? [];
+    assert.ok(supply.length > 0);
+    for (const day of supply) {
+      assert.equal(day.retail + day.foreign + day.institution + day.otherCorp, 0, day.date);
+    }
   });
+}
+
+test("출처: 실데이터는 삼성전자 감성뿐이고 나머지는 픽스처", async () => {
+  const samsung = await loadStockInsights("005930");
+  assert.deepEqual(samsung.provenance.sentiment, {
+    kind: "real",
+    source: "BigKinds · KR-FinBERT",
+    asOf: samsung.sentiment?.days.at(-1)?.date,
+  });
+  for (const key of ["supply", "contributions", "financial"] as const) {
+    assert.equal(samsung.provenance[key].kind, "fixture", key);
+  }
+  const hyundai = await loadStockInsights("005380");
+  assert.equal(hyundai.provenance.sentiment.kind, "fixture");
 });
 
 function minjiWith(overrides: Record<string, number>): StyleAxes {
