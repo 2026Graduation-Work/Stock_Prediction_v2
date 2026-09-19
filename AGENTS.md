@@ -24,10 +24,11 @@
 - Python lint: `ruff check .`
 - Python test: `pytest`
 - Frontend build 검증: `cd frontend && pnpm build`
-- 본인 블록 CI가 초록인지 확인 후 리뷰 요청
+- 본인 블록 CI가 초록인지 확인 후 머지
 
 ## PR 규칙
-- 항상 새 브랜치 → PR → 리뷰(봇 + 상호) → 머지. main 직접 push 금지.
+- 항상 새 브랜치 → PR → 봇 리뷰 → 머지. main 직접 push 금지.
+- 2026 2학기 한정: 상호 승인(approve) 없이 작성자 셀프 머지 허용 (ruleset 필수 승인 0). 학기 종료 후 1로 복구.
 - 브랜치명: `feat/`, `fix/`, `chore/`, `refactor/` 접두
 - 스키마 변경 PR은 제목에 `[schema]` + 전원 멘션
 - 커밋: 이동/리네임과 로직 수정은 분리
