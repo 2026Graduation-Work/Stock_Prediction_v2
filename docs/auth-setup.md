@@ -6,6 +6,17 @@
 - 데모 계정("데모 계정으로 둘러보기")은 환경변수와 관계없이 항상 동작합니다. 설정 도중에도 교수님·심사자는 데모로 둘러볼 수 있습니다.
 - 환경변수가 없으면 로그인 화면의 "이메일로 시작"은 "계정 기능이 아직 연결되지 않았어요" 안내만 보입니다.
 
+## 현재 상태 (2026-09-20)
+
+| 항목 | 상태 |
+|---|---|
+| 마이그레이션 0001~0003 | ✅ 적용 완료 (Supabase 'Stock Prediction', ref `oaqksneegnpteextxgux`, 서울) |
+| seed.sql | ✅ 적용 완료 (종목 5 · 예측 4 · 시장 상태 1 · 김민지 데모 행) |
+| RLS | ✅ anon 키로 확인: 종목·시장 상태는 읽힘, users·ips_profiles·portfolio_holdings는 42501로 거부 |
+| Auth 설정(3번) | ⬜ 사람이 할 일 — 이메일 확인 끄기는 보안 설정이라 콘솔에서 직접 |
+| Vercel 환경변수(4번) | ⬜ 사람이 할 일 |
+| Vercel 배포 보호(4-1번) | ⬜ 사람이 할 일 — 지금 프로덕션 주소도 Vercel 로그인을 요구함 |
+
 ## 0. 준비물
 
 - Supabase 프로젝트 (Dashboard 접근 권한)
@@ -71,6 +82,19 @@ Settings → Environment Variables:
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon public 키 | **Preview만 먼저** |
 
 `NEXT_PUBLIC_` 변수는 빌드할 때 들어가므로, 추가한 뒤 **Preview를 다시 배포**해야 반영됩니다(Deployments → 최신 Preview → Redeploy).
+
+## 4-1. Vercel — 배포 보호(Deployment Protection) 확인
+
+2026-09-20 확인 결과 프로젝트의 고정 주소(`stock-prediction-v2-choi-jung-hyeon-s-projects.vercel.app`)도
+Vercel 로그인 화면으로 넘어갑니다. 이대로면 **교수님·심사자가 배포 사이트를 열 수 없습니다.**
+(`stock-prediction-v2.vercel.app`은 다른 사람의 앱이라 쓸 수 없습니다.)
+
+둘 중 하나를 고릅니다. **A를 권장합니다.**
+
+- A. Settings → Domains → Add에서 아직 안 쓰인 `*.vercel.app` 주소(예: `signallab-skku.vercel.app`)를 Production에 연결합니다. 기본 보호 설정(Standard Protection)은 Production 도메인을 공개로 두므로, 이 주소는 로그인 없이 열리고 Preview는 계속 보호됩니다.
+- B. Settings → Deployment Protection → Vercel Authentication을 끕니다. 모든 배포가 공개됩니다.
+
+A로 새 주소를 만들었다면 3-3의 Site URL과 Redirect URLs에도 그 주소를 추가합니다.
 
 ## 5. Preview에서 확인 (체크리스트)
 
