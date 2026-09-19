@@ -18,6 +18,7 @@ import type {
   RecommendedStock,
 } from "@/lib/types";
 import { AVOIDED_ASSET_LABELS } from "@/lib/profiling-rules";
+import { holdingAlertsOutside } from "@/lib/recommendation-filter";
 import {
   getSavedProfileSnapshot,
   getServerProfileSnapshot,
@@ -108,11 +109,12 @@ export default function Dashboard(initialData: DashboardData) {
     profile,
     maxRiskTier,
     stocks = [],
-    holdingAlerts = [],
+    holdingAlerts: rawHoldingAlerts = [],
     holdings = [],
     excludedStocks = [],
     avoidedLabels = [],
   } = currentData;
+  const holdingAlerts = holdingAlertsOutside(rawHoldingAlerts, stocks);
   const loadingAuthenticatedData =
     onboardingState.mode === "supabase" && !authenticatedData && !dataError;
   const savedSnapshot = useSyncExternalStore(
@@ -191,7 +193,7 @@ export default function Dashboard(initialData: DashboardData) {
             <main className="flex flex-col gap-3.5">
               <SectionTitle
                 title="오늘의 추천 종목"
-                subtitle={`${activeProfile.profileTypeLabel} 기준 · 위험 ${riskTierLabel} 위주 선별`}
+                subtitle={`${activeProfile.profileTypeLabel} 기준 · 성향에 맞는 위험등급 ${riskTierLabel}`}
               />
 
               {!keyword && activeExcludedStocks.length > 0 && (

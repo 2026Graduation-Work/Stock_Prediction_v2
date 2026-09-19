@@ -38,7 +38,7 @@ test("login -> survey -> dashboard -> detail -> performance -> logout", async ({
   await assertNoHorizontalOverflow(page, 390, 844);
 
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.getByRole("link", { name: /근거 보기/ }).first().click();
+  await page.getByRole("link", { name: /자세히 보기/ }).first().click();
   await expect(page).toHaveURL(/\/stocks\/(005930|005380|068270)$/);
   await expect(page.getByText(/과거 유사 신호 .*실현 수익률 분포/).first()).toBeVisible();
   await expect(page.getByText("주가 흐름", { exact: true })).toBeVisible();

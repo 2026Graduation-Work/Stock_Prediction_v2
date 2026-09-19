@@ -1,5 +1,6 @@
 import { AVOIDED_ASSET_LABELS } from "./profiling-rules";
 import type {
+  DataProvenance,
   HorizonAgreement,
   HorizonDirection,
   InvestorProfileSummary,
@@ -130,10 +131,14 @@ const FINANCIAL_FEATURE_TOKENS = [
   "debt",
 ];
 
+// Supabase 테이블은 지금 supabase/seed.sql 데모 시드로만 채워진다(백엔드 적재 경로 없음).
+// 실데이터 적재가 생기면 행에 출처 컬럼을 두고 여기서 읽는다. 그 전까지는 예시로 표시한다.
+const SUPABASE_DEMO: DataProvenance = { kind: "mock", source: "Supabase 데모 시드" };
+
 export function mapMarketStatus(row: MarketStatusRow): MarketStatus {
   return {
     date: row.status_date,
-    source: "supabase",
+    provenance: { ...SUPABASE_DEMO, asOf: row.status_date },
     condition: includes(MARKET_CONDITIONS, row.condition) ? row.condition : "caution",
     volatilityScore: row.volatility_score,
     volumeScore: row.volume_score,
@@ -171,6 +176,7 @@ export function mapRecommendedStock(
     },
     riskFlags: toRiskFlags(stock.risk_flags),
     ...(prediction.caution ? { caution: prediction.caution } : {}),
+    provenance: { ...SUPABASE_DEMO, asOf: prediction.prediction_date },
   };
 }
 
@@ -254,6 +260,7 @@ export function mapPortfolioHolding(
         : "neutral",
     quantity: holding.quantity,
     avgBuyPrice: holding.avg_buy_price,
+    provenance: SUPABASE_DEMO,
   };
 }
 

@@ -1,5 +1,6 @@
 import { SIGNAL_META } from "@/lib/display";
-import type { PortfolioHolding, SignalLight } from "@/lib/types";
+import type { DataProvenance, PortfolioHolding, SignalLight } from "@/lib/types";
+import SourceChip from "./source-chip";
 
 const HEATMAP_STYLE: Record<SignalLight, { fill: string; border: string }> = {
   strong_positive: { fill: "#1f6d49", border: "#174f38" },
@@ -53,6 +54,13 @@ export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHold
   const columnTotals = columns.map((column) =>
     column.reduce((sum, item) => sum + item.amount, 0),
   );
+  // 한 종목이라도 예시면 맵 전체를 예시로 표시한다.
+  const provenance: DataProvenance | null =
+    holdings.length === 0
+      ? null
+      : holdings.every(({ provenance: { kind } }) => kind === "real")
+        ? holdings[0].provenance
+        : { kind: "mock", source: "" };
 
   return (
     <section className="flex flex-col gap-3 rounded-[8px] border border-line bg-white px-4 py-4">
@@ -61,9 +69,12 @@ export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHold
           <h2 className="text-sm font-extrabold">내 포트폴리오 맵</h2>
           <p className="mt-0.5 text-[11px] text-faint">면적은 등록 매입금액 기준</p>
         </div>
-        <span className="rounded-[4px] border border-edge bg-field px-2 py-1 text-[10.5px] font-bold text-body">
-          오늘 모델 신호
-        </span>
+        <div className="flex flex-col items-end gap-1">
+          <span className="rounded-[4px] border border-edge bg-field px-2 py-1 text-[10.5px] font-bold text-body">
+            오늘 모델 신호
+          </span>
+          {provenance && <SourceChip provenance={provenance} />}
+        </div>
       </div>
 
       {holdings.length === 0 ? (

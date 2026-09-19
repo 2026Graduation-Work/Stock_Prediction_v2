@@ -2,7 +2,7 @@
 // 대상 종목은 삼성전자(005930)·현대차(005380)이고, 그 외 종목은 null을 돌려준다.
 
 import type { NudgeMarket } from "../profiling/nudges";
-import type { PortfolioHolding, RiskGrade, StockDetail } from "../types";
+import type { DataProvenance, PortfolioHolding, RiskGrade, StockDetail } from "../types";
 import {
   CONTRIBUTION_FIXTURE,
   FINANCIAL_FIXTURE,
@@ -13,12 +13,13 @@ import {
 } from "./fixtures.ts";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
 
-// 억원. + 순매수, - 순매도. 날짜 오름차순.
+// 억원. + 순매수, - 순매도. 날짜 오름차순. 네 주체의 합은 0이다(KRX 투자자 분류).
 export interface SupplyDemandDay {
   date: string;
   retail: number;
   foreign: number;
-  institution: number;
+  institution: number; // 기관합계
+  otherCorp: number; // 기타법인
 }
 export type SupplyDemandProvider = (code: string) => Promise<SupplyDemandDay[] | null>;
 
@@ -98,7 +99,10 @@ export interface StockInsights {
   sentiment: SentimentData | null;
   contributions: ContributionSignal[] | null;
   financial: FinancialSnapshot | null;
+  provenance: Record<"supply" | "sentiment" | "contributions" | "financial", DataProvenance>;
 }
+
+const FIXTURE: DataProvenance = { kind: "fixture", source: "픽스처" };
 
 export async function loadStockInsights(code: string): Promise<StockInsights> {
   const [supply, sentiment, contributions, financial] = await Promise.all([
@@ -107,7 +111,26 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
     contributionProvider(code),
     financialProvider(code),
   ]);
-  return { supply, sentiment, contributions, financial };
+  return {
+    supply,
+    sentiment,
+    contributions,
+    financial,
+    provenance: {
+      supply: FIXTURE,
+      sentiment:
+        sentiment?.source === "real"
+          ? { kind: "real", source: "BigKinds · KR-FinBERT", asOf: sentiment.days.at(-1)?.date }
+          : FIXTURE,
+      contributions: FIXTURE,
+      financial: FIXTURE,
+    },
+  };
+}
+
+// 여러 입력에서 파생된 수치(넛지 등)는 입력이 모두 실데이터일 때만 실데이터다.
+export function combinedProvenance(...inputs: DataProvenance[]): DataProvenance {
+  return inputs.every(({ kind }) => kind === "real") ? inputs[0] : FIXTURE;
 }
 
 export interface Period {

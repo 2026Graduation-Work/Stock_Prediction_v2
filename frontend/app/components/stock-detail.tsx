@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "./disclaimer-footer";
 import InsightSection, { ScreenGuideBanner, useDemoStyleAxes } from "./insight-cards";
+import SourceChip from "./source-chip";
 import PriceHistoryChart from "./price-history-chart";
 import ReturnHistogram from "./return-histogram";
 import SiteHeader from "./site-header";
@@ -210,15 +211,7 @@ export default function StockDetailView({
                   {RISK_FLAG_LABEL[flag]}
                 </span>
               ))}
-              <span
-                className={`inline-flex h-[22px] items-center rounded-md px-2 text-[11.5px] font-bold ${
-                  source === "supabase"
-                    ? "bg-brand-soft text-brand"
-                    : "border border-[#e6c96b] bg-[#fff8df] text-[#8a6500]"
-                }`}
-              >
-                {source === "supabase" ? "Supabase 예측" : "샘플 데이터"}
-              </span>
+              <SourceChip provenance={detail.provenance} />
             </div>
             <span className="text-[12.5px] text-faint">
               데이터·예측 기준일 {formatDate(detail.asOf)} · 장 마감 후 생성
@@ -244,7 +237,6 @@ export default function StockDetailView({
           insights={insights}
           holdings={holdings}
           demo={demo}
-          source={source}
         />
 
         {/* 핵심 신호 */}
@@ -309,9 +301,9 @@ export default function StockDetailView({
           <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
             <span className="text-xs text-muted">신뢰도</span>
             <span className="text-[19px] font-extrabold">
-              적중률 {Math.round(detail.hitRate * 100)}%
+              상승 비율 {Math.round(detail.hitRate * 100)}%
             </span>
-            <span className="text-[12.5px] text-body">이 확률 구간의 과거 적중률</span>
+            <span className="text-[12.5px] text-body">이 확률 구간에서 과거에 실제로 오른 비율</span>
             <span className="text-xs text-faint">과거 유사 사례 {detail.similarCaseCount}건</span>
           </div>
         </Card>
@@ -357,10 +349,11 @@ export default function StockDetailView({
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
             <span className="text-[15px] font-extrabold">주가 흐름</span>
             <span className="text-xs text-faint">
-              최근 60거래일 · 실제 주가만 표시
+              최근 60거래일 · 지난 주가만 표시(예측선 없음)
               {priceDataPeriod &&
-                ` · 시세 데이터: ${priceDataPeriod.start} ~ ${priceDataPeriod.end} (${source === "mock" ? "샘플" : "실데이터"})`}
+                ` · 시세 데이터: ${priceDataPeriod.start} ~ ${priceDataPeriod.end}`}
             </span>
+            <SourceChip provenance={detail.provenance} />
             {priceHistory.length >= 2 && (
               <div className="ml-auto flex items-center gap-3.5 text-xs text-muted">
                 <span className="inline-flex items-center gap-1.5">

@@ -51,8 +51,8 @@ export const METRICS: MetricDefinition[] = [
   {
     key: "hit_rate",
     deltaKey: "delta_B_minus_A_hit_rate",
-    label: "적중률",
-    shortLabel: "적중률",
+    label: "방향 일치율",
+    shortLabel: "방향 일치율",
     group: "ML",
     direction: "higher",
     format: "decimal3",

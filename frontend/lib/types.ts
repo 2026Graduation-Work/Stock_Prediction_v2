@@ -23,6 +23,15 @@ export type RiskFlag =
 
 export type RiskGrade = 1 | 2 | 3 | 4 | 5; // 5 = 매우 안전, 1 = 매우 위험
 
+// 화면 수치의 출처. 수치 데이터 타입은 이 필드를 필수로 가져 SourceChip으로 표시한다.
+// real만 "실데이터"로 표기하고, fixture(손으로 정한 값·합성값)·mock(데모 시드 포함)은 "예시 데이터"다.
+export type DataKind = "real" | "fixture" | "mock";
+export interface DataProvenance {
+  kind: DataKind;
+  source: string; // 예: KRX, BigKinds · KR-FinBERT
+  asOf?: string; // 데이터 기준일 (YYYY-MM-DD)
+}
+
 export interface ReturnBand {
   low: number; // 밴드 하한(%). -1.2 = -1.2%
   high: number; // 밴드 상한(%)
@@ -44,11 +53,12 @@ export interface RecommendedStock {
   signalLight: SignalLight;
   rankPercentile: number; // 0~1, 1이 당일 신호 강도 최상위
   returnBand: ReturnBand;
-  hitRate: number; // 0~1, 과거 유사 신호 구간 적중률 (confidence.bucket_hit_rate)
+  hitRate: number; // 0~1, 과거 유사 신호 구간에서 실제로 오른 비율 (confidence.bucket_hit_rate)
   similarCaseCount: number;
   horizonAgreement: HorizonAgreementSet;
   riskFlags: RiskFlag[];
   caution?: string; // 성향 대비 주의 문구. 있을 때만 카드 하단에 표시
+  provenance: DataProvenance;
 }
 
 // 예측 근거 출처 구분
@@ -91,7 +101,7 @@ export interface MarketIndexQuote {
 
 export interface MarketStatus {
   date: string; // ISO date (YYYY-MM-DD)
-  source: "mock" | "supabase";
+  provenance: DataProvenance;
   condition: MarketCondition;
   volatilityScore: number; // 0~100
   volumeScore: number; // 0~100
@@ -117,6 +127,7 @@ export interface PortfolioHolding {
   signalLight: SignalLight;
   quantity: number;
   avgBuyPrice: number;
+  provenance: DataProvenance;
 }
 
 export type ProfileType = "stable" | "aggressive";
