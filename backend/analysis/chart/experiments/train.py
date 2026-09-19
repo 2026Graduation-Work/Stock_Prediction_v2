@@ -43,6 +43,36 @@ def _validation_window(train_end: str, embargo_days: int) -> tuple[str, str, str
     )
 
 
+def _training_windows(
+    split_info: dict, embargo_days: int, skip_validation: bool
+) -> tuple[str, str, str, str, str | None]:
+    """Resolve leakage-safe train/validation label observation boundaries.
+
+    Final holdout runs may deliberately skip the internal six-month validation
+    window.  In that case the configured training period is used in full, but
+    labels are never allowed to observe beyond ``train_end`` (and therefore
+    never into the holdout year).
+    """
+    train_end = split_info["train_end"]
+    if skip_validation:
+        return train_end, train_end, train_end, train_end, None
+
+    pure_train_end, val_start, val_end = _validation_window(train_end, embargo_days)
+    train_label_observation_end = (
+        pd.to_datetime(val_start) - pd.Timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+    validation_label_observation_end = (
+        pd.to_datetime(split_info["test_start"]) - pd.Timedelta(days=1)
+    ).strftime("%Y-%m-%d")
+    return (
+        pure_train_end,
+        train_label_observation_end,
+        val_start,
+        val_end,
+        validation_label_observation_end,
+    )
+
+
 def _get_spearman(group):
     if len(group) < 5:
         return np.nan
@@ -360,13 +390,13 @@ def main(config_path):
             test_end = split_info["test_end"]
             embargo_days = config.get("data", {}).get("embargo_days", 7)
             label_params = label_params_from_config(config)
-            pure_train_end, val_start, val_end = _validation_window(train_end, embargo_days)
-            train_label_observation_end = (
-                pd.to_datetime(val_start) - pd.Timedelta(days=1)
-            ).strftime("%Y-%m-%d")
-            validation_label_observation_end = (
-                pd.to_datetime(test_start) - pd.Timedelta(days=1)
-            ).strftime("%Y-%m-%d")
+            (
+                pure_train_end,
+                train_label_observation_end,
+                val_start,
+                val_end,
+                validation_label_observation_end,
+            ) = _training_windows(split_info, embargo_days, skip_validation)
 
             fold_pred_hash = f"{predictions_hash}_fold{idx}"
             model_wrapper = LGBMWrapper(config)
@@ -468,7 +498,7 @@ def main(config_path):
             # 2.6. 검증 데이터에 대한 통계적 검정 (OOS 과적합 통제)
             # ---------------------------------------------------------
             if skip_validation:
-                print("\n[2.6] Validation 검정 생략: 2024 holdout 평가로 검증합니다.")
+                print("\n[2.6] Validation 검정 생략: 최종 holdout 평가로 검증합니다.")
             else:
                 print("\n[2.6] Validation 셋에 대한 통계적 신뢰성 검증 진행...")
             if (not skip_validation) and "val_df" not in locals():

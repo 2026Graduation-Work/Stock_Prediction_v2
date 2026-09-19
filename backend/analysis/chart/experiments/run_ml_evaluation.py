@@ -34,6 +34,34 @@ def _json_safe(value):
     return value
 
 
+def _restrict_predictions_to_labeled_rows(
+    predictions: pd.DataFrame, actual: pd.DataFrame
+) -> tuple[pd.DataFrame, int]:
+    """Keep evaluable predictions while rejecting missing or duplicate keys.
+
+    Predictions can legitimately contain the unlabeled tail of delisted stocks.
+    Those rows remain available to the canonical backtest, but ML metrics can
+    only use rows whose future outcome is observable.
+    """
+    keys = ["Date", "Code"]
+    if predictions.duplicated(keys).any():
+        raise ValueError("예측 캐시에 중복 Date/Code 키가 있습니다.")
+    if actual.duplicated(keys).any():
+        raise ValueError("평가 라벨에 중복 Date/Code 키가 있습니다.")
+
+    labeled_keys = actual[keys].copy()
+    aligned = labeled_keys.merge(predictions, on=keys, how="left", validate="one_to_one")
+    prediction_columns = [column for column in predictions.columns if column not in keys]
+    missing = aligned[prediction_columns].isna().all(axis=1)
+    if missing.any():
+        examples = aligned.loc[missing, keys].head(5).to_dict("records")
+        raise ValueError(
+            "평가 라벨에 대응하는 prediction이 없습니다. "
+            f"누락 {int(missing.sum())}건, 예시={examples}"
+        )
+    return aligned, int(len(predictions) - len(aligned))
+
+
 def main(config_path, predictions_path=None):
     if not os.path.exists(config_path):
         raise FileNotFoundError(
@@ -78,6 +106,12 @@ def main(config_path, predictions_path=None):
     )
     actual_df["Date"] = pd.to_datetime(actual_df["Date"]).dt.tz_localize(None)
     actual_df = filter_to_test_fold_rows(actual_df, splits)
+
+    # 미래 outcome을 확인할 수 없는 상장폐지 종목의 마지막 tail은 정답 라벨이 없다.
+    # 백테스트용 원본 prediction은 보존하고 ML 평가에서만 labeled key로 제한한다.
+    final_predictions, unlabeled_prediction_rows = _restrict_predictions_to_labeled_rows(
+        final_predictions, actual_df
+    )
 
     # Align predictions and actual labels
     alignment_df, alignment_status = build_fold_alignment(final_predictions, splits, eval_df=actual_df)
@@ -170,6 +204,7 @@ def main(config_path, predictions_path=None):
         "ic_n_days": overall_ic["n_days"],
         "prediction_hash": predictions_hash,
         "fold_alignment_exact": bool(alignment_status["is_exact_fold_match"]),
+        "excluded_unlabeled_prediction_rows": unlabeled_prediction_rows,
         **{f"fold_alignment_{k}": _json_safe(v) for k, v in alignment_status.items()}
     }
 

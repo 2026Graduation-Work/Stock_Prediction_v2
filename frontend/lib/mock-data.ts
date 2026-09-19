@@ -8,10 +8,11 @@ import type {
   PortfolioHolding,
   RecommendedStock,
   StockDetail,
+  StyleAxes,
 } from "./types";
 
 export const marketStatus: MarketStatus = {
-  date: "2026-07-07",
+  date: "2025-10-02",
   source: "mock",
   condition: "caution",
   volatilityScore: 61,
@@ -20,30 +21,30 @@ export const marketStatus: MarketStatus = {
     {
       symbol: "KOSPI",
       label: "KOSPI",
-      value: 2790.3,
-      change: 31,
-      changePercent: 1.12,
+      value: 3549.21,
+      change: 93.38,
+      changePercent: 2.7,
     },
     {
       symbol: "KOSDAQ",
       label: "KOSDAQ",
-      value: 829.43,
-      change: 4.55,
-      changePercent: 0.55,
+      value: 854.25,
+      change: 8.91,
+      changePercent: 1.05,
     },
     {
       symbol: "KOSPI200",
       label: "KOSPI 200",
-      value: 371.9,
-      change: 4.28,
-      changePercent: 1.16,
+      value: 493.41,
+      change: 14.04,
+      changePercent: 2.93,
     },
     {
       symbol: "USD/KRW",
       label: "원/달러",
-      value: 1220,
-      change: -2,
-      changePercent: -0.16,
+      value: 1401.82,
+      change: -1.33,
+      changePercent: -0.09,
     },
   ],
 };
@@ -117,6 +118,28 @@ export const avoidanceNotice = {
   excludedStocks: [{ name: "미래에셋비전스팩3호", code: "418250", reason: "SPAC" }],
 };
 
+// 김민지 8축(schema v1.1). supabase/seed.sql과 같은 값이다.
+// 4축은 기존 v1.0 필드를 schema style_axes 축약 규칙의 역으로 구했다(ratio = 2 × v1.0값 − 1):
+//   loss_tolerance ← risk_tolerance 0.35, urgency ← fomo_index 0.72,
+//   drawdown_reaction ← panic_sell_tendency 0.65, information_reliance ← herding_score 0.58.
+// turnover -0.25는 time_horizon_months 48에 가장 가까운 구간(1800일)이다.
+// market_participation·concentration·rule_adherence는 원천 필드가 없어 정한 값이고
+// confidence는 meta.confidence(0.81)를 쓴다. 나머지 confidence는 confidence_per_field의 대응 값.
+export const investorStyleAxes: StyleAxes = {
+  assessment_mode: "quick",
+  axes: [
+    { axis_id: "market_participation", ratio: -0.2, confidence: 0.81, answered_count: 3, question_count: 3 },
+    { axis_id: "loss_tolerance", ratio: -0.3, confidence: 0.92, answered_count: 3, question_count: 3 },
+    { axis_id: "turnover", ratio: -0.25, confidence: 0.95, answered_count: 3, question_count: 3 },
+    { axis_id: "concentration", ratio: -0.4, confidence: 0.81, answered_count: 3, question_count: 3 },
+    { axis_id: "rule_adherence", ratio: 0.2, confidence: 0.81, answered_count: 3, question_count: 3 },
+    { axis_id: "information_reliance", ratio: 0.16, confidence: 0.85, answered_count: 3, question_count: 3 },
+    { axis_id: "urgency", ratio: 0.44, confidence: 0.78, answered_count: 3, question_count: 3 },
+    { axis_id: "drawdown_reaction", ratio: 0.3, confidence: 0.7, answered_count: 3, question_count: 3 },
+  ],
+};
+
+// supabase/seed.sql portfolio_holdings와 같은 종목·수량·평단 (N08 보유 비중 넛지가 의존)
 export const portfolioHoldings: PortfolioHolding[] = [
   {
     code: "005930",
@@ -168,7 +191,7 @@ export const stockDetails: Record<string, StockDetail> = {
     ...celltrion,
     currentPrice: 190_800,
     changePercent: 1.2,
-    asOf: "2026-07-07",
+    asOf: "2025-10-02",
     priceHistory: priceSeries(
       [176_200, 183_400, 178_900, 187_300, 183_900, 192_300, 187_400, 190_800],
       1_400,
@@ -212,7 +235,7 @@ export const stockDetails: Record<string, StockDetail> = {
     ...samsungElectronics,
     currentPrice: 92_300,
     changePercent: 0.8,
-    asOf: "2026-07-07",
+    asOf: "2025-10-02",
     priceHistory: priceSeries(
       [84_300, 87_900, 86_200, 89_800, 88_400, 91_200, 90_100, 92_300],
       600,
@@ -258,7 +281,7 @@ export const stockDetails: Record<string, StockDetail> = {
     ...hyundaiMotor,
     currentPrice: 265_000,
     changePercent: 2.1,
-    asOf: "2026-07-07",
+    asOf: "2025-10-02",
     priceHistory: priceSeries(
       [238_000, 246_000, 242_500, 252_000, 249_000, 258_000, 254_500, 265_000],
       2_200,

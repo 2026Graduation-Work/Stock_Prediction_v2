@@ -34,6 +34,7 @@ export interface MetricDefinition {
   group: "ML" | "Trading";
   direction: "higher" | "lower" | "neutral";
   format: "decimal3" | "decimal2" | "percent" | "integer";
+  description?: string;
 }
 
 export const METRICS: MetricDefinition[] = [
@@ -45,6 +46,7 @@ export const METRICS: MetricDefinition[] = [
     group: "ML",
     direction: "higher",
     format: "decimal3",
+    description: "모델이 상승과 하락을 얼마나 잘 구분하는지 나타내며, 1에 가까울수록 판별력이 높습니다.",
   },
   {
     key: "hit_rate",
@@ -54,6 +56,7 @@ export const METRICS: MetricDefinition[] = [
     group: "ML",
     direction: "higher",
     format: "decimal3",
+    description: "모델이 예측한 방향이 실제 방향과 일치한 비율입니다.",
   },
   {
     key: "calibration_brier",
@@ -63,6 +66,7 @@ export const METRICS: MetricDefinition[] = [
     group: "ML",
     direction: "lower",
     format: "decimal3",
+    description: "예측 확률과 실제 결과 사이의 오차를 측정하며, 값이 작을수록 확률 예측이 정교합니다.",
   },
   {
     key: "calibration_ece",
@@ -72,6 +76,7 @@ export const METRICS: MetricDefinition[] = [
     group: "ML",
     direction: "lower",
     format: "decimal3",
+    description: "모델이 제시한 확률이 실제 발생 빈도와 얼마나 어긋나는지 나타내는 보정 오차로, 값이 작을수록 확률을 신뢰할 수 있습니다.",
   },
   {
     key: "sharpe",
@@ -81,6 +86,7 @@ export const METRICS: MetricDefinition[] = [
     group: "Trading",
     direction: "higher",
     format: "decimal2",
+    description: "감수한 변동성 대비 초과 수익의 크기로, 값이 클수록 위험 대비 성과가 좋습니다.",
   },
   {
     key: "mdd",
@@ -90,6 +96,7 @@ export const METRICS: MetricDefinition[] = [
     group: "Trading",
     direction: "higher",
     format: "percent",
+    description: "평가 기간 중 고점 대비 최대 하락폭으로, 0에 가까울수록(하락폭이 작을수록) 안정적입니다.",
   },
   {
     key: "cumulative_return",
@@ -99,6 +106,7 @@ export const METRICS: MetricDefinition[] = [
     group: "Trading",
     direction: "higher",
     format: "percent",
+    description: "평가 기간 동안 누적된 총 수익률입니다.",
   },
   {
     key: "trade_count",
