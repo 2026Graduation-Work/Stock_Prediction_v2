@@ -65,9 +65,9 @@ def _patch_sources(
     monkeypatch: pytest.MonkeyPatch,
     news_by_date: dict[str, list[dict]],
     fin: dict,
-    covered: str = "all",
+    covered: str | set[str] = "all",
 ) -> dict:
-    """수집기를 대역으로 치환. covered: 'all' | 'none' (워크북 존재 여부)."""
+    """수집기를 대역으로 치환. covered: 'all' | 'none' | 커버 날짜 집합 (워크북 존재 여부)."""
     seen: dict[str, str] = {}
 
     def fake_fin(ticker, date):
@@ -75,6 +75,8 @@ def _patch_sources(
         return dict(fin), "dart"
 
     def fake_workbook(name, d, data_dir, ticker=""):
+        if isinstance(covered, set):
+            return object() if d in covered else None
         return object() if covered == "all" else None
 
     monkeypatch.setattr(period_mod.collectors, "collect_financials", fake_fin)
@@ -223,6 +225,26 @@ def test_period_without_workbook_fails_validation(
     assert out["news_source"] == "none"
     assert not out["validation"]["ok"]
     assert any("워크북" in e for e in out["validation"]["errors"])
+
+
+def test_period_partial_coverage_is_excluded_not_zero_filled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """워크북이 일부 날짜만 덮으면 비관측일을 기사 0건으로 채우지 않고 행을 제외한다.
+
+    0으로 채우면 30일 중 10일 관측·5일 기사 → 비율 5/30으로 과소평가되어
+    수집 누락이 '조용한 종목'처럼 학습된다 (PR #67 리뷰 0Cracker 3).
+    """
+    covered = {f"2022-06-{d:02d}" for d in range(1, 11)}  # 30일 중 10일만
+    _patch_sources(monkeypatch, _june_news(), _fin(), covered=covered)
+    out = period_mod.run_period_pipeline("005930", "2022-06", "삼성전자")
+
+    assert out["period_days"] == 30
+    assert out["days_covered"] == 10
+    assert {dm["date"] for dm in out["daily_metrics"]} == covered  # 비관측일 미기록
+    assert not out["validation"]["ok"]
+    assert any("부분 커버리지" in e for e in out["validation"]["errors"])
+    assert features_mod.row_status(out) == "invalid"  # 결측으로 살리지 않는다
 
 
 def test_period_pipeline_is_deterministic(monkeypatch: pytest.MonkeyPatch) -> None:

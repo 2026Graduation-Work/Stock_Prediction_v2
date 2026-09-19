@@ -95,12 +95,14 @@ def run_period_pipeline(ticker: str, period: str, company_name: str = "") -> dic
         workbook = collectors.preprocess.find_news_workbook(
             name, d, collectors.DATA_DIR, ticker
         )
-        items: list[dict] = []
-        if workbook is not None:
-            days_covered += 1
-            items = collectors.preprocess.load_daily_news(
-                name, d, collectors.DATA_DIR, limit=None, ticker=ticker
-            )
+        if workbook is None:
+            # 워크북이 없는 날은 '기사 0건'이 아니라 '관측하지 않음'이다 — daily_metrics에
+            # 0건으로 넣으면 수집 누락이 조용한 날로 학습된다 (PR #67 리뷰 0Cracker 3).
+            continue
+        days_covered += 1
+        items = collectors.preprocess.load_daily_news(
+            name, d, collectors.DATA_DIR, limit=None, ticker=ticker
+        )
         total_raw += len(items)
 
         keep = relevant_indices(items, name)
@@ -179,7 +181,7 @@ def run_period_pipeline(ticker: str, period: str, company_name: str = "") -> dic
         "raw_financials": fin,
     }
     validation = validation_agent(v_state)["validation"]
-    period_days = len(daily)
+    period_days = (end_day - dt.date.fromisoformat(start)).days + 1
     if days_covered == 0:
         validation["errors"].append(
             f"{start}~{end}를 커버하는 빅카인즈 워크북이 없음 → 뉴스 축 전체 무데이터. "
@@ -187,9 +189,13 @@ def run_period_pipeline(ticker: str, period: str, company_name: str = "") -> dic
         )
         validation["ok"] = False
     elif days_covered < period_days:
-        validation["warnings"].append(
-            f"기간 {period_days}일 중 {days_covered}일만 워크북이 커버 → 뉴스 집계가 부분 데이터"
+        # 부분 커버리지는 비율·일평균 피처의 분모를 오염시킨다 → 학습에서 제외(invalid).
+        # '관련 기사 0건' 문구를 쓰지 않으므로 features.row_status가 결측으로 살리지 않는다.
+        validation["errors"].append(
+            f"기간 {period_days}일 중 {days_covered}일만 워크북이 커버 → 부분 커버리지. "
+            "비관측일을 기사 0건으로 볼 수 없어 학습에서 제외"
         )
+        validation["ok"] = False
 
     # 재무 나이(개월): 기간 종료월 − 사업연도 종료월. select_fiscal_year와 같은
     # 12월 결산 가정 — FY(y) 재무의 회계 정보는 y년 12월 말 기준이다.
