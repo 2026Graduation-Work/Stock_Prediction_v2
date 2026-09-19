@@ -124,3 +124,14 @@ docs_cache/
 # value_pipeline CLI 산출물은 기본 저장 위치가 out/ 이며, out/은 위 Node 섹션의
 # `out/` 패턴(임의 깊이 매칭)으로 이미 무시된다. 디렉터리 전체(*.json)를 덮으면
 # tracked 파일·*.example.json 계약 파일까지 가려지므로 넓은 패턴을 쓰지 않는다.
+
+# ---------- 뉴스 원본 (공개 레포 금지) ----------
+# BigKinds Excel·가공 코퍼스는 기사 본문·URL을 담고 있어 Git에 올리지 않는다
+# (docs/decisions/bigkinds-acquisition.md). 위 `**/data/`가 이미 덮지만,
+# 누가 data/를 unignore하더라도 원본이 새지 않도록 경로를 명시한다.
+/data/
+**/NewsResult_*.xlsx
+**/news_corpus*.csv
+backend/analysis/text/data/raw/
+# LLM 캐시는 기사(네이버 검색 결과 포함)를 입력으로 만든 요약이라 함께 제외한다.
+backend/analysis/text/value_pipeline/llm_cache/
