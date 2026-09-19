@@ -105,6 +105,10 @@ backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/experiments/configs/universes/
 !backend/analysis/chart/experiments/configs/universes/kospi_all_2024-12-30.csv
 
+# 심리 피처 정의 문서의 형식 확인용 소규모 샘플만 추적한다.
+# 실제 피처 데이터(data/external, data/feature_store)는 계속 제외한다.
+!backend/analysis/chart/experiments/features/samples/psychology_market_v1_sample.csv
+
 # 차트 분석 블록의 샘플 데이터 및 배포 모델 추적 허용 (협업용 가이드)
 # 상위 디렉토리가 ignore되면 하위 negation이 무효라 디렉토리부터 unignore한다.
 !backend/analysis/chart/data/

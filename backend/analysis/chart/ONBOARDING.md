@@ -348,6 +348,20 @@ python experiments/run_experiment_analysis.py --config experiments/configs/local
 결합 코드 수정은 필요 없다. 피처 구성이 바뀌면 기존 feature store를 덮어쓰지 말고 새
 경로를 사용한다.
 
+### 9.1 시장 심리 피처 (psychology_market_v1)
+
+가격·거래량만으로 계산하는 행동재무학 프록시 4개를 위 계약대로 생성하는 도구가 있다.
+
+```bash
+python -m experiments.features.build_psychology_features \
+  --price-dir data/processed --out data/external/psychology_market_v1.parquet
+```
+
+정의·계산식·윈도우·한계·결합 설정은
+[`experiments/features/PSYCHOLOGY_FEATURES.md`](experiments/features/PSYCHOLOGY_FEATURES.md)를
+따른다. 워밍업이 65거래일이므로 `train_start`는 각 종목의 첫 거래일 + 66거래일 이후여야
+A/B 행 정합성 검사를 통과한다.
+
 ## 10. 기존 161피처 자체를 수정할 때
 
 추가 외부 피처와 달리 다음 파일을 함께 수정한다.
