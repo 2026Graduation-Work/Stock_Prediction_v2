@@ -425,7 +425,11 @@ async function queryStockDetail(
       stockResult.data as StockRow,
       (featureData ?? []) as PredictionFeatureRow[],
     ),
-    profile: mapProfileSummary(userResult.data as UserRow, profile),
+    profile: mapProfileSummary(
+      userResult.data as UserRow,
+      profile,
+      isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
+    ),
     marketStatus: marketResult,
     maxRiskTier: profile.max_risk_tier,
     styleAxes: isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
@@ -451,7 +455,7 @@ async function loadProfileQueryContext(
     client
       .from("ips_profiles")
       .select(
-        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score",
+        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score,style_axes:profile_payload->style_axes",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -470,11 +474,16 @@ async function loadProfileQueryContext(
 
   const avoidedRows = (avoidedResult.data ?? []) as AvoidedAssetRow[];
   const profile = profileResult.data as IpsProfileRow;
+  const payloadStyleAxes = (profileResult.data as { style_axes?: unknown }).style_axes;
   const stocks = await loadAvoidedStocks(client, avoidedRows);
   return {
     settings: toProfileSettings(profile, avoidedRows),
     result: {
-      profile: mapProfileSummary(userResult.data as UserRow, profile),
+      profile: mapProfileSummary(
+        userResult.data as UserRow,
+        profile,
+        isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
+      ),
       maxRiskTier: profile.max_risk_tier,
       avoidedLabels: mapAvoidedAssetLabels(avoidedRows),
       excludedStocks: mapExcludedStocks(stocks, avoidedRows),

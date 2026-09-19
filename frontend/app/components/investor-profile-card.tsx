@@ -33,15 +33,18 @@ export default function InvestorProfileCard({
           href="/survey"
           className="ml-auto inline-flex h-[26px] items-center whitespace-nowrap rounded-lg border border-edge bg-white px-2.5 text-[11.5px] font-semibold text-body hover:border-ghost hover:bg-field hover:no-underline"
         >
-          설정 변경
+          다시 진단
         </Link>
       </div>
-      <span className="inline-flex h-6 items-center self-start rounded-full bg-brand-soft px-3 text-xs font-bold text-brand">
-        {profile.personaLabel}
-      </span>
+      <div className="flex flex-col gap-1">
+        <span className="inline-flex h-6 items-center self-start rounded-full bg-brand-soft px-3 text-xs font-bold text-brand">
+          {profile.profileTypeLabel}
+        </span>
+        <span className="text-xs leading-5 text-body">{profile.personaLabel}</span>
+      </div>
       <div className="flex flex-col gap-2.5">
         <ScoreBar label="위험 감수" value={profile.riskTolerance} />
-        <ScoreBar label="심리 민감도" value={profile.sentimentSensitivity} />
+        <ScoreBar label="흔들림 민감도" value={profile.sentimentSensitivity} />
         <div className="flex flex-col gap-[5px]">
           <div className="flex text-xs">
             <span className="text-muted">투자 기간</span>
@@ -79,7 +82,7 @@ export default function InvestorProfileCard({
         </div>
       </div>
       <span className="text-[11.5px] text-faint">
-        최초 설문({profile.surveyedAt}) 기준 · 성향·회피 항목은 설정에서 수정
+        {profile.surveyedAt} 설문 기준 · 3축은 8축 설문을 묶어 요약한 값
       </span>
     </section>
   );

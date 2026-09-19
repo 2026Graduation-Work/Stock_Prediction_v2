@@ -2,149 +2,98 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
+  applyAdjustments,
   AVOIDED_ASSET_DESCRIPTIONS,
   AVOIDED_ASSET_LABELS,
-  horizonCodeForScore,
-  horizonScoreForMonths,
+  EXPERIENCE_CHOICES,
+  threeAxisSummary,
+  type ExperienceChoice,
   type SurveyAnswers,
 } from "@/lib/profiling-rules";
+import { BIT_LABEL, BIT_SUMMARY, classifyBit } from "@/lib/profiling/bit";
+import {
+  answersFromPattern,
+  AXES,
+  LIKERT_OPTIONS,
+  questionsForMode,
+  scoreStyleAxes,
+  type AxisDefinition,
+  type StyleQuestion,
+} from "@/lib/profiling/style-scoring";
 import { saveProfile } from "@/lib/save-profile";
-import type { ProfilingOutput, RiskFlag } from "@/lib/types";
+import type { ProfilingOutput, RiskFlag, StyleAxes, StyleAxisId } from "@/lib/types";
 import SignOutButton from "../components/sign-out-button";
 
-type QuestionId = "Q1" | "Q2" | "Q3" | "Q4" | "Q5" | "Q6" | "Q7";
+// 한 화면 최대 2문항. 축마다 3문항이라 축 하나가 두 화면(2 + 1)이 된다.
+const QUESTIONS_PER_PAGE = 2;
+const DRAFT_KEY = "signallab.survey-draft.v1";
 
-interface DraftAnswers {
-  Q1: string;
-  Q2: string;
-  Q3: string;
-  Q4: string[];
-  Q5: string;
-  Q6: RiskFlag[];
-  Q7: string;
-}
+type Page =
+  | { kind: "style"; axis: AxisDefinition; axisIndex: number; questions: StyleQuestion[]; lastOfAxis: boolean }
+  | { kind: "experience" }
+  | { kind: "avoided" }
+  | { kind: "freeText" };
 
-interface ChoiceQuestion {
-  id: Exclude<QuestionId, "Q7">;
-  eyebrow: string;
-  title: string;
-  description: string;
-  type: "single" | "multi";
-  choices: { id: string; label: string; detail?: string }[];
-}
-
-interface TextQuestion {
-  id: "Q7";
-  eyebrow: string;
-  title: string;
-  description: string;
-  type: "text";
-}
-
-type SurveyQuestion = ChoiceQuestion | TextQuestion;
-
-const QUESTIONS: SurveyQuestion[] = [
-  {
-    id: "Q1",
-    eyebrow: "위험 감수",
-    title: "투자한 종목이 15% 하락했다면 어떻게 하시겠어요?",
-    description: "실제로 가장 가까운 행동을 골라주세요.",
-    type: "single",
-    choices: [
-      { id: "Q1_A", label: "더 떨어지기 전에 바로 정리해요." },
-      { id: "Q1_B", label: "며칠 지켜보고 원인을 확인한 뒤 결정해요." },
-      { id: "Q1_C", label: "판단이 그대로라면 추가 매수를 검토해요." },
-    ],
-  },
-  {
-    id: "Q2",
-    eyebrow: "투자 기간",
-    title: "이 투자금은 언제 다시 사용할 가능성이 큰가요?",
-    description: "자금이 묶여 있어도 괜찮은 기간을 기준으로 답해주세요.",
-    type: "single",
-    choices: [
-      { id: "Q2_A", label: "1년 안에 사용할 수 있어요." },
-      { id: "Q2_B", label: "3~5년 뒤 사용할 계획이에요." },
-      { id: "Q2_C", label: "10년 이상 투자해도 괜찮아요." },
-    ],
-  },
-  {
-    id: "Q3",
-    eyebrow: "심리 민감도",
-    title: "주변 종목이 단기간에 크게 올랐다는 소식을 들으면 어떤가요?",
-    description: "수익 기회를 놓쳤다고 느꼈을 때의 반응을 골라주세요.",
-    type: "single",
-    choices: [
-      { id: "Q3_A", label: "나만 놓칠까 봐 빨리 따라 사고 싶어져요." },
-      { id: "Q3_B", label: "부럽지만 내 기준에 맞는지 먼저 확인해요." },
-      { id: "Q3_C", label: "이미 오른 종목보다 다른 기회를 찾아봐요." },
-    ],
-  },
-  {
-    id: "Q4",
-    eyebrow: "판단 근거",
-    title: "투자 아이디어를 주로 어디에서 얻나요?",
-    description: "평소 참고하는 곳을 모두 선택해주세요.",
-    type: "multi",
-    choices: [
-      { id: "Q4_A", label: "유튜브·온라인 커뮤니티" },
-      { id: "Q4_B", label: "친구·지인" },
-      { id: "Q4_C", label: "뉴스·공시" },
-      { id: "Q4_D", label: "재무제표·기업 분석" },
-    ],
-  },
-  {
-    id: "Q5",
-    eyebrow: "투자 경험",
-    title: "직접 투자한 경험은 얼마나 되나요?",
-    description: "주식이나 ETF를 직접 매매한 기간을 기준으로 골라주세요.",
-    type: "single",
-    choices: [
-      { id: "Q5_A", label: "6개월 미만" },
-      { id: "Q5_B", label: "6개월~2년" },
-      { id: "Q5_C", label: "2~5년" },
-      { id: "Q5_D", label: "5년 이상" },
-    ],
-  },
-  {
-    id: "Q6",
-    eyebrow: "회피 설정",
-    title: "추천에서 반드시 제외할 종목 유형을 선택해 주세요.",
-    description: "직접 선택한 항목만 추천 후보에서 제외됩니다. 복수 선택할 수 있어요.",
-    type: "multi",
-    choices: (Object.entries(AVOIDED_ASSET_LABELS) as [RiskFlag, string][]).map(
-      ([id, label]) => ({ id, label, detail: AVOIDED_ASSET_DESCRIPTIONS[id] }),
-    ),
-  },
-  {
-    id: "Q7",
-    eyebrow: "현재 마음",
-    title: "투자하면서 요즘 가장 걱정되는 점을 적어주세요.",
-    description: "점수 계산에는 사용하지 않고 결과 설명을 위한 참고 정보로 보관합니다.",
-    type: "text",
-  },
+const QUICK_QUESTIONS = questionsForMode("quick");
+const PAGES: Page[] = [
+  ...AXES.flatMap((axis, axisIndex) => {
+    const questions = QUICK_QUESTIONS.filter(
+      (question) => question.type === "likert" && question.axis === axis.id,
+    );
+    const pages: Page[] = [];
+    for (let start = 0; start < questions.length; start += QUESTIONS_PER_PAGE) {
+      pages.push({
+        kind: "style",
+        axis,
+        axisIndex,
+        questions: questions.slice(start, start + QUESTIONS_PER_PAGE),
+        lastOfAxis: start + QUESTIONS_PER_PAGE >= questions.length,
+      });
+    }
+    return pages;
+  }),
+  { kind: "experience" },
+  { kind: "avoided" },
+  { kind: "freeText" },
 ];
+const FINAL_STEPS = ["experience", "avoided", "freeText"] as const;
+const FINAL_STEP_LABEL = {
+  experience: "투자 경험",
+  avoided: "제외할 종목 유형",
+  freeText: "요즘 걱정되는 점",
+} as const;
 
-const EMPTY_ANSWERS: DraftAnswers = {
-  Q1: "",
-  Q2: "",
-  Q3: "",
-  Q4: [],
-  Q5: "",
-  Q6: [],
-  Q7: "",
-};
+interface Draft {
+  page: number;
+  style: Record<string, number>;
+  experience: ExperienceChoice | "";
+  avoided: RiskFlag[];
+  freeText: string;
+}
 
-const MINJI_DEMO: DraftAnswers = {
-  Q1: "Q1_B",
-  Q2: "Q2_B",
-  Q3: "Q3_A",
-  Q4: ["Q4_A"],
-  Q5: "Q5_B",
-  Q6: ["spac", "managed_stock"],
-  Q7: "남들 다 버는데 나만 뒤처지는 것 같아서 조급해요. 그래도 마이너스 나면 잠을 못 자요.",
+const EMPTY_DRAFT: Draft = { page: 0, style: {}, experience: "", avoided: [], freeText: "" };
+
+// 데모 응답: 김민지와 비슷한 추종형 패턴(축 방향 강도 -2~+2)
+const DEMO_DRAFT: Draft = {
+  page: PAGES.length - 1,
+  style: answersFromPattern(
+    {
+      market_participation: 0,
+      loss_tolerance: -1,
+      turnover: -1,
+      concentration: 0,
+      rule_adherence: 0,
+      information_reliance: 0,
+      urgency: 1,
+      drawdown_reaction: 1,
+    },
+    "quick",
+  ) as Record<string, number>,
+  experience: "6m_2y",
+  avoided: ["spac", "managed_stock"],
+  freeText: "남들 다 버는데 나만 뒤처지는 것 같아서 조급해요. 그래도 마이너스 나면 잠을 못 자요.",
 };
 
 const DEMO_PORTFOLIO: ProfilingOutput["portfolio"] = {
@@ -166,86 +115,83 @@ function createSessionId() {
   return `s_${token}`;
 }
 
-function AxisGauge({
-  label,
-  value,
-  caption,
-  tone,
-}: {
-  label: string;
-  value: number;
-  caption: string;
-  tone: "brand" | "amber" | "green";
-}) {
-  const color = {
-    brand: "bg-brand",
-    amber: "bg-[#d28a22]",
-    green: "bg-[#16856b]",
-  }[tone];
-  return (
-    <div className="flex min-w-0 flex-col gap-2.5">
-      <div className="flex items-baseline gap-2">
-        <span className="text-sm font-bold text-ink">{label}</span>
-        <span className="ml-auto text-xl font-extrabold tabular-nums text-ink">{value}</span>
-      </div>
-      <div className="h-2 overflow-hidden rounded bg-track">
-        <div className={`h-full rounded ${color}`} style={{ width: `${value}%` }} />
-      </div>
-      <span className="text-xs text-muted">{caption}</span>
-    </div>
-  );
+function readDraft(): Draft | null {
+  try {
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(DRAFT_KEY) ?? "null");
+    if (!parsed || typeof parsed !== "object") return null;
+    const draft = { ...EMPTY_DRAFT, ...(parsed as Partial<Draft>) };
+    draft.page = Math.min(Math.max(0, Math.trunc(draft.page) || 0), PAGES.length - 1);
+    return draft;
+  } catch {
+    return null;
+  }
+}
+
+function writeDraft(draft: Draft | null) {
+  try {
+    if (draft) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+    else window.localStorage.removeItem(DRAFT_KEY);
+  } catch {
+    // 저장이 막힌 브라우저(시크릿 모드 등)에서는 중간 저장만 건너뛴다.
+  }
+}
+
+// 축을 다 답하면 보여 주는 한 줄. 판단이 아니라 응답 방향만 알려 준다.
+function axisFeedback(axis: AxisDefinition, style: Record<string, number>): string | null {
+  const answered = QUICK_QUESTIONS.filter(
+    (question) => question.type === "likert" && question.axis === axis.id,
+  ).every(({ id }) => style[id] !== undefined);
+  if (!answered) return null;
+  const ratio = scoreStyleAxes(style, "quick").axes.find(({ axis_id }) => axis_id === axis.id)!.ratio;
+  if (ratio <= -0.2) return `지금까지 답을 보면 '${axis.negative_label}' 쪽이에요.`;
+  if (ratio >= 0.2) return `지금까지 답을 보면 '${axis.positive_label}' 쪽이에요.`;
+  return `지금까지 답을 보면 '${axis.negative_label}'과 '${axis.positive_label}' 사이 중간이에요.`;
 }
 
 export default function SurveyFlow() {
   const router = useRouter();
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState<DraftAnswers>(EMPTY_ANSWERS);
+  const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
+  const [restored, setRestored] = useState(false);
   const [result, setResult] = useState<ProfilingOutput | null>(null);
+  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const question = QUESTIONS[step];
 
-  const currentValue = answers[question.id];
-  const canContinue =
-    question.id === "Q6" ||
-    question.id === "Q7" ||
-    (Array.isArray(currentValue) ? currentValue.length > 0 : currentValue.length > 0);
+  // 중간 저장 불러오기. localStorage는 브라우저에서만 읽을 수 있어 마운트 후에 한 번 읽는다.
+  useEffect(() => {
+    const stored = readDraft();
+    if (!stored) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- 외부 저장소에서 한 번 복원
+    setDraft(stored);
+    setRestored(true);
+  }, []);
 
-  function selectSingle(questionId: QuestionId, choiceId: string) {
-    setAnswers((current) => ({ ...current, [questionId]: choiceId }));
-  }
-
-  function toggleMulti(questionId: "Q4" | "Q6", choiceId: string) {
-    setAnswers((current) => {
-      const selected = current[questionId] as string[];
-      return {
-        ...current,
-        [questionId]: selected.includes(choiceId)
-          ? selected.filter((id) => id !== choiceId)
-          : [...selected, choiceId],
-      };
+  function update(next: Partial<Draft>) {
+    setDraft((current) => {
+      const merged = { ...current, ...next };
+      writeDraft(merged);
+      return merged;
     });
   }
 
-  function loadDemoAnswers() {
-    setAnswers(MINJI_DEMO);
-    setError("");
-  }
+  const page = PAGES[draft.page];
+  const canContinue =
+    page.kind === "style"
+      ? page.questions.every(({ id }) => draft.style[id] !== undefined)
+      : page.kind === "experience"
+        ? draft.experience !== ""
+        : true;
 
-  async function submitSurvey() {
-    setSubmitting(true);
-    setError("");
-    const payload: SurveyAnswers = {
+  function payload(adjusted?: Partial<Record<StyleAxisId, number>>): SurveyAnswers {
+    return {
       user_id: "u_minji_001",
-      session_id: createSessionId(),
-      timestamp: new Date().toISOString(),
-      Q1: answers.Q1 as SurveyAnswers["Q1"],
-      Q2: answers.Q2 as SurveyAnswers["Q2"],
-      Q3: answers.Q3 as SurveyAnswers["Q3"],
-      Q4: answers.Q4 as SurveyAnswers["Q4"],
-      Q5: answers.Q5 as SurveyAnswers["Q5"],
-      Q6: answers.Q6,
-      Q7: answers.Q7,
+      session_id: result?.session_id ?? createSessionId(),
+      timestamp: result?.timestamp ?? new Date().toISOString(),
+      style: draft.style,
+      experience: draft.experience as ExperienceChoice,
+      avoided_assets: draft.avoided,
+      free_text: draft.freeText,
+      ...(adjusted && Object.keys(adjusted).length ? { adjusted_axes: adjusted } : {}),
       preferred_sectors: ["semiconductor", "healthcare"],
       portfolio: DEMO_PORTFOLIO,
       investment_amount_krw: 500000,
@@ -253,26 +199,28 @@ export default function SurveyFlow() {
       market_regime_hint: "high_volatility",
       benchmark_index: "KOSPI",
     };
+  }
 
+  async function requestProfile(body: SurveyAnswers): Promise<ProfilingOutput> {
+    const response = await fetch("/api/profiling", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const parsed = (await response.json()) as ProfilingOutput | { error: string };
+    if (!response.ok) {
+      throw new Error("error" in parsed ? parsed.error : "프로필을 만들지 못했습니다.");
+    }
+    return parsed as ProfilingOutput;
+  }
+
+  async function run(task: () => Promise<void>) {
+    setSubmitting(true);
+    setError("");
     try {
-      const response = await fetch("/api/profiling", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const body = (await response.json()) as ProfilingOutput | { error: string };
-      if (!response.ok) {
-        throw new Error("error" in body ? body.error : "프로필을 만들지 못했습니다.");
-      }
-      const profile = body as ProfilingOutput;
-      await saveProfile(profile);
-      setResult(profile);
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "프로필을 만들지 못했습니다.",
-      );
+      await task();
+    } catch (taskError) {
+      setError(taskError instanceof Error ? taskError.message : "프로필을 만들지 못했습니다.");
     } finally {
       setSubmitting(false);
     }
@@ -280,17 +228,32 @@ export default function SurveyFlow() {
 
   function advance() {
     if (!canContinue) return;
-    if (step === QUESTIONS.length - 1) {
-      void submitSurvey();
+    if (draft.page === PAGES.length - 1) {
+      void run(async () => setResult(await requestProfile(payload())));
       return;
     }
-    setStep((current) => current + 1);
+    update({ page: draft.page + 1 });
+  }
+
+  // 확인 단계에서 확정해야 저장한다. 조정했으면 조정값으로 다시 계산해 저장한다.
+  function confirm(adjusted: Partial<Record<StyleAxisId, number>>) {
+    void run(async () => {
+      const profile = Object.keys(adjusted).length
+        ? await requestProfile(payload(adjusted))
+        : result!;
+      await saveProfile(profile);
+      writeDraft(null);
+      setResult(profile);
+      setSaved(true);
+    });
   }
 
   function restart() {
-    setAnswers(EMPTY_ANSWERS);
+    writeDraft(null);
+    setDraft(EMPTY_DRAFT);
     setResult(null);
-    setStep(0);
+    setSaved(false);
+    setRestored(false);
     setError("");
   }
 
@@ -305,14 +268,15 @@ export default function SurveyFlow() {
             <span className="hidden text-[17px] font-extrabold sm:inline">시그널랩</span>
           </Link>
           <span className="h-5 w-px bg-line" />
-          <span className="whitespace-nowrap text-sm font-semibold text-body">
-            투자 성향 설문
-          </span>
+          <span className="whitespace-nowrap text-sm font-semibold text-body">투자 성향 설문</span>
           <div className="ml-auto flex items-center gap-2">
             {!result && (
               <button
                 type="button"
-                onClick={loadDemoAnswers}
+                onClick={() => {
+                  update(DEMO_DRAFT);
+                  setError("");
+                }}
                 className="rounded-lg px-3 py-2 text-xs font-bold text-brand hover:bg-brand-soft"
               >
                 <span className="hidden sm:inline">데모 응답 불러오기</span>
@@ -326,122 +290,25 @@ export default function SurveyFlow() {
 
       <main className="mx-auto flex w-full max-w-[920px] flex-col px-5 py-8 sm:px-8 sm:py-12">
         {!result ? (
-          <section className="overflow-hidden rounded-lg border border-line bg-white shadow-[0_12px_34px_rgba(27,36,52,0.07)]">
-            <div className="border-b border-line-soft px-6 py-5 sm:px-10">
-              <div className="flex items-center gap-4">
-                <span className="text-xs font-bold tabular-nums text-brand">
-                  {step + 1} / {QUESTIONS.length}
-                </span>
-                <div className="grid flex-1 grid-cols-7 gap-1.5" aria-label="설문 진행률">
-                  {QUESTIONS.map((item, index) => (
-                    <span
-                      key={item.id}
-                      className={`h-1.5 rounded ${index <= step ? "bg-brand" : "bg-track"}`}
-                    />
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="flex min-h-[480px] flex-col px-6 py-8 sm:px-10 sm:py-10">
-              <span className="mb-3 text-xs font-extrabold text-brand">{question.eyebrow}</span>
-              <h1 className="max-w-[680px] text-2xl font-extrabold leading-[1.4] text-ink sm:text-[28px]">
-                {question.title}
-              </h1>
-              <p className="mt-2 text-sm leading-6 text-muted">{question.description}</p>
-
-              <div className="mt-8 flex flex-col gap-2.5">
-                {question.type !== "text" &&
-                  question.choices.map((choice) => {
-                    const selected = Array.isArray(currentValue)
-                      ? (currentValue as readonly string[]).includes(choice.id)
-                      : currentValue === choice.id;
-                    return (
-                      <label
-                        key={choice.id}
-                        className={`flex min-h-[56px] cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
-                          selected
-                            ? "border-brand bg-brand-soft text-brand-deep"
-                            : "border-edge bg-white text-body hover:border-brand hover:bg-field"
-                        }`}
-                      >
-                        <input
-                          type={question.type === "multi" ? "checkbox" : "radio"}
-                          name={question.id}
-                          checked={selected}
-                          onChange={() =>
-                            question.type === "multi"
-                              ? toggleMulti(question.id as "Q4" | "Q6", choice.id)
-                              : selectSingle(question.id, choice.id)
-                          }
-                          className="size-4 flex-none accent-[#2f5fd0]"
-                        />
-                        <span className="inline-flex items-center gap-1.5">
-                          <span>{choice.label}</span>
-                          {choice.detail && (
-                            <span
-                              title={choice.detail}
-                              onClick={(event) => event.preventDefault()}
-                              className="inline-flex size-4 flex-none cursor-help items-center justify-center rounded-full border border-muted text-[10px] font-bold leading-none text-muted"
-                            >
-                              ?
-                            </span>
-                          )}
-                        </span>
-                      </label>
-                    );
-                  })}
-
-                {question.type === "text" && (
-                  <textarea
-                    value={answers.Q7}
-                    onChange={(event) =>
-                      setAnswers((current) => ({ ...current, Q7: event.target.value }))
-                    }
-                    rows={7}
-                    maxLength={500}
-                    placeholder="예: 남들보다 수익이 뒤처질까 조급하지만 손실도 많이 걱정돼요."
-                    className="w-full resize-none rounded-lg border border-edge bg-field px-4 py-3 text-sm leading-6 text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white"
-                  />
-                )}
-              </div>
-
-              {error && (
-                <p role="alert" className="mt-4 text-sm font-semibold text-[#b42318]">
-                  {error}
-                </p>
-              )}
-
-              <div className="mt-auto flex items-center gap-3 pt-8">
-                <button
-                  type="button"
-                  onClick={() => setStep((current) => Math.max(0, current - 1))}
-                  disabled={step === 0 || submitting}
-                  className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  이전
-                </button>
-                {question.id === "Q6" && answers.Q6.length === 0 && (
-                  <span className="text-xs text-faint">선택 없이 진행할 수 있어요</span>
-                )}
-                <button
-                  type="button"
-                  onClick={advance}
-                  disabled={!canContinue || submitting}
-                  className="ml-auto h-11 min-w-[112px] rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
-                >
-                  {submitting
-                    ? "계산 중"
-                    : step === QUESTIONS.length - 1
-                      ? "결과 확인"
-                      : "다음"}
-                </button>
-              </div>
-            </div>
-          </section>
+          <QuestionPage
+            draft={draft}
+            page={page}
+            restored={restored}
+            canContinue={canContinue}
+            submitting={submitting}
+            error={error}
+            onUpdate={update}
+            onBack={() => update({ page: Math.max(0, draft.page - 1) })}
+            onNext={advance}
+            onRestart={restart}
+          />
         ) : (
-          <ResultSummary
+          <ResultView
             result={result}
+            saved={saved}
+            submitting={submitting}
+            error={error}
+            onConfirm={confirm}
             onRestart={restart}
             onDashboard={() => router.push("/")}
           />
@@ -451,65 +318,389 @@ export default function SurveyFlow() {
   );
 }
 
-function ResultSummary({
+function ProgressBar({ draft, page }: { draft: Draft; page: Page }) {
+  const finalIndex = page.kind === "style" ? -1 : FINAL_STEPS.indexOf(page.kind);
+  const label =
+    page.kind === "style"
+      ? `성향 문항 ${page.axisIndex + 1}/${AXES.length} · ${page.axis.section}`
+      : `마무리 ${finalIndex + 1}/${FINAL_STEPS.length} · ${FINAL_STEP_LABEL[page.kind]}`;
+  const currentSegment = page.kind === "style" ? page.axisIndex : AXES.length + finalIndex;
+  return (
+    <div className="border-b border-line-soft px-6 py-5 sm:px-10">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold text-brand">{label}</span>
+          <span className="ml-auto text-xs tabular-nums text-faint">
+            {draft.page + 1} / {PAGES.length} 화면
+          </span>
+        </div>
+        <div
+          className="grid gap-1.5"
+          style={{ gridTemplateColumns: `repeat(${AXES.length + FINAL_STEPS.length}, minmax(0, 1fr))` }}
+          role="progressbar"
+          aria-label="설문 진행률"
+          aria-valuemin={1}
+          aria-valuemax={PAGES.length}
+          aria-valuenow={draft.page + 1}
+        >
+          {Array.from({ length: AXES.length + FINAL_STEPS.length }, (_, index) => (
+            <span
+              key={index}
+              className={`h-1.5 rounded ${index <= currentSegment ? "bg-brand" : "bg-track"} ${
+                index === AXES.length ? "ml-1" : ""
+              }`}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function QuestionPage({
+  draft,
+  page,
+  restored,
+  canContinue,
+  submitting,
+  error,
+  onUpdate,
+  onBack,
+  onNext,
+  onRestart,
+}: {
+  draft: Draft;
+  page: Page;
+  restored: boolean;
+  canContinue: boolean;
+  submitting: boolean;
+  error: string;
+  onUpdate: (next: Partial<Draft>) => void;
+  onBack: () => void;
+  onNext: () => void;
+  onRestart: () => void;
+}) {
+  const last = draft.page === PAGES.length - 1;
+  const feedback = page.kind === "style" && page.lastOfAxis ? axisFeedback(page.axis, draft.style) : null;
+
+  return (
+    <section className="overflow-hidden rounded-lg border border-line bg-white shadow-[0_12px_34px_rgba(27,36,52,0.07)]">
+      <ProgressBar draft={draft} page={page} />
+      <div className="flex min-h-[480px] flex-col px-6 py-8 sm:px-10 sm:py-10">
+        {restored && draft.page > 0 && (
+          <div className="mb-6 flex items-center gap-3 rounded-lg bg-brand-soft px-4 py-3 text-sm text-brand-deep">
+            저장해 둔 응답을 불러왔어요. 이어서 답하면 됩니다.
+            <button type="button" onClick={onRestart} className="ml-auto text-xs font-bold hover:underline">
+              처음부터 하기
+            </button>
+          </div>
+        )}
+
+        {page.kind === "style" && (
+          <>
+            <span className="mb-2 text-xs font-extrabold text-brand">{page.axis.section}</span>
+            <p className="mb-6 text-sm leading-6 text-muted">
+              {page.axis.help}. 맞고 틀린 답은 없어요. 요즘의 나와 가장 가까운 쪽을 골라 주세요.
+            </p>
+            <div className="flex flex-col gap-8">
+              {page.questions.map((question) => (
+                <fieldset key={question.id} className="flex flex-col gap-3">
+                  <legend className="mb-3 text-lg font-extrabold leading-[1.5] text-ink sm:text-xl">
+                    {question.text}
+                  </legend>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+                    {LIKERT_OPTIONS.map((option) => {
+                      const selected = draft.style[question.id] === option.value;
+                      return (
+                        <label
+                          key={option.value}
+                          className={`flex min-h-12 cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2.5 text-sm font-semibold transition-colors sm:flex-col sm:justify-center sm:text-center ${
+                            selected
+                              ? "border-brand bg-brand-soft text-brand-deep"
+                              : "border-edge bg-white text-body hover:border-brand hover:bg-field"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={question.id}
+                            checked={selected}
+                            onChange={() =>
+                              onUpdate({ style: { ...draft.style, [question.id]: option.value } })
+                            }
+                            className="size-4 flex-none accent-[#2f5fd0]"
+                          />
+                          {option.label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+              ))}
+            </div>
+            {feedback && (
+              <p role="status" className="mt-6 rounded-lg bg-field px-4 py-3 text-sm font-semibold text-body">
+                {feedback}
+              </p>
+            )}
+          </>
+        )}
+
+        {page.kind === "experience" && (
+          <>
+            <span className="mb-3 text-xs font-extrabold text-brand">투자 경험</span>
+            <h1 className="text-2xl font-extrabold leading-[1.4] text-ink sm:text-[28px]">
+              직접 투자한 경험은 얼마나 되나요?
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              주식이나 ETF를 직접 사고판 기간을 기준으로 골라 주세요.
+            </p>
+            <div className="mt-8 flex flex-col gap-2.5">
+              {EXPERIENCE_CHOICES.map((choice) => (
+                <ChoiceRow
+                  key={choice.id}
+                  type="radio"
+                  name="experience"
+                  label={choice.label}
+                  selected={draft.experience === choice.id}
+                  onChange={() => onUpdate({ experience: choice.id })}
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {page.kind === "avoided" && (
+          <>
+            <span className="mb-3 text-xs font-extrabold text-brand">제외할 종목 유형 (선택)</span>
+            <h1 className="text-2xl font-extrabold leading-[1.4] text-ink sm:text-[28px]">
+              추천에서 빼고 싶은 종목 유형이 있나요?
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              직접 고른 항목만 추천 후보에서 빠집니다. 성향 점수로는 종목을 빼지 않아요. 없으면 그냥
+              넘어가도 됩니다.
+            </p>
+            <div className="mt-8 flex flex-col gap-2.5">
+              {(Object.entries(AVOIDED_ASSET_LABELS) as [RiskFlag, string][]).map(([flag, label]) => (
+                <ChoiceRow
+                  key={flag}
+                  type="checkbox"
+                  name="avoided"
+                  label={label}
+                  detail={AVOIDED_ASSET_DESCRIPTIONS[flag]}
+                  selected={draft.avoided.includes(flag)}
+                  onChange={() =>
+                    onUpdate({
+                      avoided: draft.avoided.includes(flag)
+                        ? draft.avoided.filter((item) => item !== flag)
+                        : [...draft.avoided, flag],
+                    })
+                  }
+                />
+              ))}
+            </div>
+          </>
+        )}
+
+        {page.kind === "freeText" && (
+          <>
+            <span className="mb-3 text-xs font-extrabold text-brand">요즘 걱정되는 점 (선택)</span>
+            <h1 className="text-2xl font-extrabold leading-[1.4] text-ink sm:text-[28px]">
+              투자하면서 요즘 가장 걱정되는 점이 있다면 적어 주세요.
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-muted">
+              점수 계산에는 쓰지 않고, 결과를 설명할 때 참고로만 보관해요. 비워 둬도 됩니다.
+            </p>
+            <textarea
+              value={draft.freeText}
+              onChange={(event) => onUpdate({ freeText: event.target.value })}
+              rows={6}
+              maxLength={500}
+              placeholder="예: 남들보다 수익이 뒤처질까 조급하지만 손실도 많이 걱정돼요."
+              className="mt-8 w-full resize-none rounded-lg border border-edge bg-field px-4 py-3 text-sm leading-6 text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white"
+            />
+          </>
+        )}
+
+        {error && (
+          <p role="alert" className="mt-4 text-sm font-semibold text-[#b42318]">
+            {error}
+          </p>
+        )}
+
+        <div className="mt-auto flex items-center gap-3 pt-8">
+          <button
+            type="button"
+            onClick={onBack}
+            disabled={draft.page === 0 || submitting}
+            className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            이전
+          </button>
+          <span className="text-xs text-faint">답은 자동으로 저장돼요</span>
+          <button
+            type="button"
+            onClick={onNext}
+            disabled={!canContinue || submitting}
+            className="ml-auto h-11 min-w-[112px] rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
+          >
+            {submitting ? "계산 중" : last ? "결과 확인" : "다음"}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ChoiceRow({
+  type,
+  name,
+  label,
+  detail,
+  selected,
+  onChange,
+}: {
+  type: "radio" | "checkbox";
+  name: string;
+  label: string;
+  detail?: string;
+  selected: boolean;
+  onChange: () => void;
+}) {
+  return (
+    <label
+      className={`flex min-h-[56px] cursor-pointer items-center gap-3 rounded-lg border px-4 py-3 text-sm font-semibold transition-colors ${
+        selected
+          ? "border-brand bg-brand-soft text-brand-deep"
+          : "border-edge bg-white text-body hover:border-brand hover:bg-field"
+      }`}
+    >
+      <input type={type} name={name} checked={selected} onChange={onChange} className="size-4 flex-none accent-[#2f5fd0]" />
+      <span className="flex flex-col gap-0.5">
+        <span>{label}</span>
+        {detail && <span className="text-xs font-normal text-muted">{detail}</span>}
+      </span>
+    </label>
+  );
+}
+
+function AxisGauge({
+  label,
+  value,
+  caption,
+  left,
+  right,
+}: {
+  label: string;
+  value: number;
+  caption: string;
+  left: string;
+  right: string;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <div className="flex items-baseline gap-2">
+        <span className="text-sm font-bold text-ink">{label}</span>
+        <span className="ml-auto text-xl font-extrabold tabular-nums text-ink">{value}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded bg-track">
+        <div className="h-full rounded bg-brand" style={{ width: `${value}%` }} />
+      </div>
+      <span className="flex justify-between text-[11px] text-faint">
+        <span>0 {left}</span>
+        <span>100 {right}</span>
+      </span>
+      <span className="text-xs text-muted">{caption}</span>
+    </div>
+  );
+}
+
+const HORIZON_LABEL = { short: "단기", mid: "중기", long: "장기" } as const;
+
+function ResultView({
   result,
+  saved,
+  submitting,
+  error,
+  onConfirm,
   onRestart,
   onDashboard,
 }: {
   result: ProfilingOutput;
+  saved: boolean;
+  submitting: boolean;
+  error: string;
+  onConfirm: (adjusted: Partial<Record<StyleAxisId, number>>) => void;
   onRestart: () => void;
   onDashboard: () => void;
 }) {
-  const riskScore = Math.round(result.investor_profile.risk_tolerance * 100);
-  const fomoScore = Math.round(result.psychological_state.fomo_index * 100);
-  const horizonScore = horizonScoreForMonths(
-    result.investor_profile.time_horizon_months,
-  );
-  const horizonCode = horizonCodeForScore(horizonScore);
-  const stable = result.investor_profile.profile_type === "stable";
-  const avoidedLabels = result.constraints.avoided_assets.map(
-    (asset) => AVOIDED_ASSET_LABELS[asset],
-  );
+  const [adjusting, setAdjusting] = useState(false);
+  const [adjusted, setAdjusted] = useState<Partial<Record<StyleAxisId, number>>>({});
+  const scored = result.style_axes!;
+  const styleAxes: StyleAxes = applyAdjustments(scored, adjusted);
+  const bit = classifyBit(styleAxes);
+  const summary = threeAxisSummary(styleAxes);
+  const changed = Object.keys(adjusted).length > 0;
+  const avoidedLabels = result.constraints.avoided_assets.map((asset) => AVOIDED_ASSET_LABELS[asset]);
 
   return (
     <section className="overflow-hidden rounded-lg border border-line bg-white shadow-[0_12px_34px_rgba(27,36,52,0.07)]">
       <div className="border-b border-line bg-[#f7fbf9] px-6 py-7 sm:px-10">
-        <span className="text-xs font-extrabold text-[#16856b]">프로필 생성 완료</span>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-end">
-          <h1 className="text-[28px] font-extrabold text-ink sm:text-[32px]">
-            {stable ? "안정추구형" : "수익추구형"}
-          </h1>
-          <span className="mb-1 text-sm font-semibold text-muted">
-            {stable ? "신중하게 기준을 지키는 투자자" : "기회를 적극적으로 탐색하는 투자자"}
-          </span>
-        </div>
+        <span className="text-xs font-extrabold text-[#16856b]">
+          {saved ? "프로필 저장 완료" : "진단 결과 · 아직 저장 전이에요"}
+        </span>
+        <h1 data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="mt-2 text-[28px] font-extrabold text-ink sm:text-[32px]">
+          {bit.lowConfidence ? "유형 확인 중" : BIT_LABEL[bit.type]}
+        </h1>
+        <p className="mt-1 text-sm font-semibold text-muted">
+          {bit.lowConfidence
+            ? "몇몇 질문의 답이 서로 엇갈려 유형을 단정하지 않았어요. 다시 답하거나 아래에서 직접 조정할 수 있어요."
+            : BIT_SUMMARY[bit.type]}
+        </p>
+        <p className="mt-3 text-xs leading-5 text-faint">
+          행동투자자 유형(BIT, Pompian)에서 착안한 분류예요. 금융회사의 투자자 등급과는 다른 것이고,
+          정보를 보여 주는 순서와 주의 안내에만 쓰며 종목을 거르지 않아요.
+        </p>
       </div>
 
       <div className="px-6 py-8 sm:px-10 sm:py-10">
         <div className="grid gap-8 md:grid-cols-3">
           <AxisGauge
             label="위험 감수"
-            value={riskScore}
-            caption="손실과 변동성을 감수하는 정도"
-            tone="brand"
+            value={summary.riskTaking}
+            caption="손실을 견디는 정도와 소수 종목 집중 선호를 합친 값"
+            left="원금 보전"
+            right="수익 기회"
           />
           <AxisGauge
-            label="심리 민감도"
-            value={fomoScore}
-            caption="시장 분위기에 영향을 받는 정도"
-            tone="amber"
+            label="흔들림 민감도"
+            value={summary.sensitivity}
+            caption="조급함·하락 시 이탈·주변 의견 추종을 합친 값"
+            left="차분함"
+            right="흔들림 큼"
           />
           <AxisGauge
             label="투자 기간"
-            value={horizonScore}
-            caption={`${horizonCode} · ${result.investor_profile.time_horizon_months}개월`}
-            tone="green"
+            value={summary.horizonScore}
+            caption={`${HORIZON_LABEL[summary.horizon]} 보유 성향 · 보유 기간과 회전 문항 기준`}
+            left="장기 보유"
+            right="단기 매매"
           />
         </div>
 
-        <div className="mt-10 border-t border-line-soft pt-7">
+        {(result.contradictions?.length ?? 0) > 0 && (
+          <div className="mt-8 flex flex-col gap-2 rounded-lg border border-[#f0e2bd] bg-[#fdf6e8] px-4 py-3">
+            <span className="text-sm font-bold text-[#7a6210]">답변 중 서로 부딪히는 부분이 있어요</span>
+            {result.contradictions!.map((item) => (
+              <p key={item.id} className="m-0 text-[13px] leading-6 text-[#7a6210]">
+                {item.observation} <span className="text-[#98822f]">→ {item.follow_up_question}</span>
+              </p>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-8 border-t border-line-soft pt-6">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-2 text-sm font-bold text-ink">회피 설정</span>
+            <span className="mr-2 text-sm font-bold text-ink">제외할 종목 유형</span>
             {avoidedLabels.length ? (
               avoidedLabels.map((label) => (
                 <span
@@ -520,30 +711,115 @@ function ResultSummary({
                 </span>
               ))
             ) : (
-              <span className="text-sm text-muted">선택한 회피 항목 없음</span>
+              <span className="text-sm text-muted">선택한 항목 없음</span>
             )}
           </div>
-          <p className="mt-3 text-xs leading-5 text-muted">
-            선택한 유형은 추천 후보에서 제외되며, 그 외 성향 점수는 종목 제거가 아닌 정렬과 설명에만 사용됩니다.
-          </p>
         </div>
 
-        <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onRestart}
-            className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field"
-          >
-            다시 응답하기
-          </button>
-          <button
-            type="button"
-            onClick={onDashboard}
-            className="h-11 rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep"
-          >
-            대시보드로 이동
-          </button>
-        </div>
+        {adjusting && !saved && (
+          <div id="style-axes-adjust" className="mt-8 flex flex-col gap-3 rounded-lg border border-line bg-field px-5 py-5">
+            <p className="m-0 text-sm text-body">
+              결과가 나와 다르다고 느껴지는 축만 옮겨 주세요. 유형과 위의 요약이 바로 다시 계산돼요.
+            </p>
+            <div className="grid grid-cols-1 gap-x-8 gap-y-3 md:grid-cols-2">
+              {AXES.map((axis) => {
+                const ratio = styleAxes.axes.find(({ axis_id }) => axis_id === axis.id)!.ratio;
+                return (
+                  <label key={axis.id} className="flex flex-col gap-1 text-xs">
+                    <span className="flex items-center gap-2">
+                      <strong className="text-ink">{axis.section}</strong>
+                      <span className="ml-auto font-bold tabular-nums text-ink">
+                        {ratio > 0 ? "+" : ""}
+                        {ratio.toFixed(2)}
+                      </span>
+                    </span>
+                    <input
+                      type="range"
+                      min={-1}
+                      max={1}
+                      step={0.05}
+                      value={ratio}
+                      aria-label={axis.section}
+                      onChange={(event) =>
+                        setAdjusted((current) => ({ ...current, [axis.id]: Number(event.target.value) }))
+                      }
+                      className="accent-brand"
+                    />
+                    <span className="flex justify-between text-[11px] text-faint">
+                      <span>{axis.negative_label}</span>
+                      <span>{axis.positive_label}</span>
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <p role="alert" className="mt-4 text-sm font-semibold text-[#b42318]">
+            {error}
+          </p>
+        )}
+
+        {saved ? (
+          <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+            <span className="text-sm text-muted sm:mr-auto">
+              저장했어요. 대시보드와 종목 화면이 이 결과를 기준으로 정보를 보여 줘요.
+            </span>
+            <button
+              type="button"
+              onClick={onDashboard}
+              className="h-11 rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep"
+            >
+              대시보드로 이동
+            </button>
+          </div>
+        ) : (
+          <div className="mt-8 flex flex-col gap-3 border-t border-line-soft pt-6">
+            <span className="text-base font-extrabold text-ink">이 결과가 나와 맞나요?</span>
+            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={onRestart}
+                disabled={submitting}
+                className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field"
+              >
+                다시 응답하기
+              </button>
+              {adjusting ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAdjusted({});
+                    setAdjusting(false);
+                  }}
+                  disabled={submitting}
+                  className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field"
+                >
+                  조정 취소
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAdjusting(true)}
+                  aria-controls="style-axes-adjust"
+                  className="h-11 rounded-lg border border-brand bg-white px-5 text-sm font-bold text-brand hover:bg-brand-soft"
+                >
+                  직접 조정하기
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => onConfirm(changed ? adjusted : {})}
+                disabled={submitting}
+                className="h-11 rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:bg-ghost"
+              >
+                {submitting ? "저장 중" : changed ? "조정한 값으로 저장" : "네, 이대로 저장"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );
