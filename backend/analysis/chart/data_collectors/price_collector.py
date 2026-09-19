@@ -1,12 +1,17 @@
 import argparse
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import FinanceDataReader as fdr
 import pandas as pd
 from pykrx import stock as krx
 from tqdm import tqdm
+
+try:
+    from .trading_calendar import get_krx_trading_days
+except ImportError:  # 직접 스크립트 실행: python data_collectors/price_collector.py
+    from trading_calendar import get_krx_trading_days
 
 # 데이터 저장 경로 설정
 DATA_DIR = "./data/raw"
@@ -49,6 +54,8 @@ def get_all_tickers() -> pd.DataFrame:
     # 3. 병합
     all_stocks = pd.concat([active, delisted], ignore_index=True)
     all_stocks = all_stocks.drop_duplicates(subset=["Code"], keep="first")
+    # KRX 한국 증시 표준 규격이 6자리 문자열임
+    # 파이썬, csv 에서 데이터 읽을 때 맨 앞에 0 잘라버려서 이거 신경써줘야함
     all_stocks["Code"] = all_stocks["Code"].str.zfill(6)
     print(f"  [합계] 총 {len(all_stocks)}개 종목")
 
@@ -57,6 +64,7 @@ def get_all_tickers() -> pd.DataFrame:
     return all_stocks
 
 
+# krx -> 한국 거래소 정보데이터 시스템에서 직접 post 요청 날려서 긁어옴.
 def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFrame:
     """
     pykrx로 수정주가(adjusted=True) 기준 일봉 OHLCV를 가져옵니다.
@@ -85,7 +93,7 @@ def _fetch_ohlcv_pykrx(code: str, start_date: str, end_date: str) -> pd.DataFram
         }
     )
     df.index.name = "Date"
-    # 등락률의 NaN 값 보정
+    # 등락률의 NaN 값 보정 -> 이거 첫날 상장때는 등락률 계산이 불가능해서 0으로 처리
     if "Change" in df.columns:
         df["Change"] = df["Change"].fillna(0.0)
     return df
@@ -114,43 +122,33 @@ def _fetch_ohlcv_fdr(code: str, start_date: str, end_date: str) -> pd.DataFrame:
 
 def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
     """
-    FinanceDataReader의 StockListing을 활용하여 최신 거래일 시세를 일괄 다운로드 후 업데이트합니다.
-    이 함수는 개별 종목 API 호출 없이 단 한번에 오늘 시세를 전 종목에 업데이트합니다.
+    KOSPI 지수로 확정한 최신 거래일의 FDR 전 종목 시세를 일괄 업데이트합니다.
+
+    날짜가 없는 StockListing 값을 실행일로 간주하지 않고, 동일 공급자의 KOSPI
+    지수에 존재하는 최신 거래일을 기준일로 사용합니다.
     """
-    print("\n⚡ [FDR 벌크 업데이트] 최신 영업일 시세 일괄 수집 진행...")
+    print("\n⚡ [FDR 벌크 업데이트] 최신 거래일 시세 일괄 수집 진행...")
 
     try:
+        today = datetime.now().date()
+        calendar_start = today - timedelta(days=14)
+        trading_days = get_krx_trading_days(calendar_start.isoformat(), today.isoformat())
+        actual_date = pd.Timestamp(max(trading_days))
+        actual_date_str = actual_date.strftime("%Y-%m-%d")
+
         kospi = fdr.StockListing("KOSPI")
         kosdaq = fdr.StockListing("KOSDAQ")
-        combined_fdr = pd.concat([kospi, kosdaq], ignore_index=True)
-
-        combined_fdr = combined_fdr.rename(
+        market_snapshot = pd.concat([kospi, kosdaq], ignore_index=True).rename(
             columns={
-                "Code": "Code",
-                "Open": "Open",
-                "High": "High",
-                "Low": "Low",
-                "Close": "Close",
-                "Volume": "Volume",
                 "ChagesRatio": "Change",
             }
         )
-
-        combined_fdr = combined_fdr[combined_fdr["Volume"] > 0]
-        combined_fdr["Code"] = combined_fdr["Code"].str.zfill(6)
-
-        # 실제 최신 거래 영업일 날짜 알아내기 (삼성전자 최신 날짜 기준)
-        sample_df = krx.get_market_ohlcv_by_date(
-            (datetime.now() - pd.Timedelta(days=5)).strftime("%Y%m%d"),
-            datetime.now().strftime("%Y%m%d"),
-            "005930",
-        )
-        if not sample_df.empty:
-            actual_date = sample_df.index.max()
-        else:
-            actual_date = pd.to_datetime(datetime.now().strftime("%Y-%m-%d"))
-
-        actual_date_str = actual_date.strftime("%Y-%m-%d")
+        required_columns = {"Code", "Open", "High", "Low", "Close", "Volume", "Change"}
+        missing_columns = required_columns - set(market_snapshot.columns)
+        if missing_columns:
+            raise RuntimeError(f"FDR 전 종목 시세 필수 컬럼 누락: {sorted(missing_columns)}")
+        market_snapshot = market_snapshot[market_snapshot["Volume"] > 0].copy()
+        market_snapshot["Code"] = market_snapshot["Code"].astype(str).str.zfill(6)
         print(f"  📅 수집된 실제 영업일 기준일: {actual_date_str}")
 
         ticker_to_name = dict(zip(all_stocks["Code"], all_stocks["Name"]))
@@ -158,14 +156,14 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
 
         updated_tickers = set()
 
-        for _, row in combined_fdr.iterrows():
+        for _, row in market_snapshot.iterrows():
             code = row["Code"]
             file_path = os.path.join(DATA_DIR, f"{code}.parquet")
 
             name = ticker_to_name.get(code, "")
             is_delisted = ticker_to_delisted.get(code, False)
 
-            # FDR StockListing의 ChangesRatio는 이미 퍼센트(%) 단위이므로 나누지 않고 그대로 사용!
+            # FDR StockListing의 ChagesRatio는 퍼센트(%) 단위입니다.
             change_val = float(row["Change"]) if not pd.isna(row["Change"]) else 0.0
 
             new_row = pd.DataFrame(
@@ -223,7 +221,9 @@ def update_ohlcv_daily():
     개별 종목 API 루프를 돌지 않아 10초 내로 끝납니다.
     """
     all_stocks = get_all_tickers()
-    _ = _update_ohlcv_bulk_fdr(all_stocks)
+    updated_tickers = _update_ohlcv_bulk_fdr(all_stocks)
+    if not updated_tickers:
+        raise RuntimeError("KRX 일일 가격 업데이트에 실패했습니다.")
     print("\n✅ 일일 가격 데일리 업데이트 완료.")
 
 
@@ -237,21 +237,11 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
     all_stocks = get_all_tickers()
     today_str = datetime.now().strftime("%Y-%m-%d")
 
-    # 한국 실제 영업일 기준 캘린더 생성 (삼성전자 기준)
-    samsung_path = os.path.join(DATA_DIR, "005930.parquet")
-    if os.path.exists(samsung_path):
-        samsung_df = pd.read_parquet(samsung_path)
-        samsung_df["Date"] = pd.to_datetime(samsung_df["Date"])
-        actual_business_days = set(
-            samsung_df[samsung_df["Date"] >= pd.to_datetime(start_date)]["Date"].dt.date
-        )
-    else:
-        actual_business_days = set(pd.date_range(start=start_date, end=today_str, freq="B").date)
+    # 개별 종목이 아닌 KRX 시장 메타데이터로 실제 개장일을 확정합니다.
+    actual_business_days = get_krx_trading_days(start_date, today_str)
 
     print(f"\n[*] OHLCV 전체 이력 수집/보정 가동 | 시작일: {start_date} | 종료일: {today_str}")
     failed = []
-
-    dict(zip(all_stocks["Code"], all_stocks["Name"], strict=False))
 
     for _, row in tqdm(all_stocks.iterrows(), total=len(all_stocks), desc="전체 수집 및 갭 복구"):
         code = row["Code"]

@@ -5,13 +5,20 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
+try:
+    from .trading_calendar import get_krx_trading_days, reindex_to_krx_trading_days
+except ImportError:  # 직접 스크립트 실행: python data_collectors/preprocess_data.py
+    from trading_calendar import get_krx_trading_days, reindex_to_krx_trading_days
+
 # 경로 설정
 RAW_DATA_DIR = "./data/raw"
 PROCESSED_DATA_DIR = "./data/processed"
 os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
 
 
-def normalize_trading_halts(df: pd.DataFrame) -> pd.DataFrame:
+def normalize_trading_halts(
+    df: pd.DataFrame, trading_days=None
+) -> pd.DataFrame:
     """
     거래정지·권리락일 처리 (표준 퀀트 관례 적용)
 
@@ -30,17 +37,8 @@ def normalize_trading_halts(df: pd.DataFrame) -> pd.DataFrame:
     """
     df = df.copy()
 
-    # Date 컬럼 인덱스 정렬
-    if "Date" in df.columns:
-        df = df.set_index("Date")
-    df.index = pd.to_datetime(df.index)
-    df = df.sort_index()
-
-    # 1. 전체 영업일 인덱스 생성 및 재구성
-    #    - 종목의 실제 거래 기간(상장~상폐) 범위 내 영업일만 생성
-    full_idx = pd.date_range(start=df.index.min(), end=df.index.max(), freq="B")
-    df = df.reindex(full_idx)
-    df.index.name = "Date"
+    # 1. 종목의 실제 거래 기간(상장~상폐)을 KRX 개장일로만 재구성
+    df = reindex_to_krx_trading_days(df, trading_days)
 
     # 2. OHLCV 0 값 → NaN (pykrx 거래정지 0-값 케이스)
     for col in ["Open", "High", "Low", "Close", "Volume"]:
@@ -296,6 +294,29 @@ def calculate_dynamic_triple_barrier(df, horizon=5, up_mult=1.5, down_mult=1.2):
 _LOOKBACK_DAYS = 65
 
 
+def _load_trading_days_for_files(raw_files: list[str]) -> set:
+    """원본 파일 전체 기간을 덮는 KRX 캘린더를 한 번만 조회합니다."""
+    min_date = None
+    max_date = None
+    for file_path in raw_files:
+        try:
+            dates = pd.to_datetime(pd.read_parquet(file_path, columns=["Date"])["Date"])
+        except Exception:
+            continue
+        if dates.empty:
+            continue
+        file_min = dates.min()
+        file_max = dates.max()
+        min_date = file_min if min_date is None else min(min_date, file_min)
+        max_date = file_max if max_date is None else max(max_date, file_max)
+
+    if min_date is None or max_date is None:
+        return set()
+    return get_krx_trading_days(
+        min_date.strftime("%Y-%m-%d"), max_date.strftime("%Y-%m-%d")
+    )
+
+
 def preprocess_all_data():
     """
     [full 모드] 전체 전처리.
@@ -303,6 +324,7 @@ def preprocess_all_data():
     """
     raw_files = glob.glob(os.path.join(RAW_DATA_DIR, "*.parquet"))
     print(f"총 {len(raw_files)}개의 원본 데이터를 전처리합니다...")
+    trading_days = _load_trading_days_for_files(raw_files)
 
     for file_path in tqdm(raw_files, desc="데이터 전처리 중"):
         file_name = os.path.basename(file_path)
@@ -317,7 +339,7 @@ def preprocess_all_data():
             if len(df) < _LOOKBACK_DAYS:
                 continue
 
-            df = normalize_trading_halts(df)
+            df = normalize_trading_halts(df, trading_days)
             df = generate_full_alpha158_features(df)
             df = calculate_dynamic_triple_barrier(df)
             df = df.dropna(subset=["roc_60", "Sigma"])
@@ -346,6 +368,7 @@ def update_processed_data():
     """
     raw_files = glob.glob(os.path.join(RAW_DATA_DIR, "*.parquet"))
     print(f"총 {len(raw_files)}개 종목 증분 전처리 시작...")
+    trading_days = _load_trading_days_for_files(raw_files)
 
     updated, skipped, created, failed = 0, 0, 0, 0
 
@@ -360,7 +383,7 @@ def update_processed_data():
                 if len(df_raw) < _LOOKBACK_DAYS:
                     skipped += 1
                     continue
-                df_raw = normalize_trading_halts(df_raw)
+                df_raw = normalize_trading_halts(df_raw, trading_days)
                 df_raw = generate_full_alpha158_features(df_raw)
                 df_raw = calculate_dynamic_triple_barrier(df_raw)
                 df_raw = df_raw.dropna(subset=["roc_60", "Sigma"])
@@ -385,7 +408,7 @@ def update_processed_data():
                 continue
 
             # ── 피처·라벨 파이프라인 ────────────────────────────────────
-            df_ctx = normalize_trading_halts(df_ctx)
+            df_ctx = normalize_trading_halts(df_ctx, trading_days)
             df_ctx = generate_full_alpha158_features(df_ctx)
             df_ctx = calculate_dynamic_triple_barrier(df_ctx)
             df_ctx = df_ctx.dropna(subset=["roc_60", "Sigma"])
