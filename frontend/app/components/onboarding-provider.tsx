@@ -97,8 +97,22 @@ export default function OnboardingProvider({
 
   return (
     <OnboardingContext.Provider value={contextValue}>
+      {state.mode === "demo" && state.status !== "signed_out" && <DemoAccountBanner />}
       {children}
     </OnboardingContext.Provider>
+  );
+}
+
+// 데모 계정으로 들어오면 모든 화면 맨 위에 둔다. 실제 계정과 헷갈리지 않게 하는 표시다.
+function DemoAccountBanner() {
+  return (
+    <div
+      role="note"
+      className="bg-[#fff4d6] px-4 py-1.5 text-center text-xs font-bold text-[#8a6100]"
+    >
+      데모 계정 · 예시 데이터
+      <span className="font-normal"> — 가입 없이 둘러보는 중이에요. 설문 결과는 이 브라우저에만 저장돼요.</span>
+    </div>
   );
 }
 
