@@ -5,6 +5,11 @@
 일별(ValueSignal)·기간(PeriodValueSignal) 출력을 모두 지원하며, 한 테이블에
 두 종류를 섞는 것은 거부한다(집계 단위가 달라 행이 비교 불가능해진다).
 
+⚠️ 아직 차트 블록 외부 피처 계약(Date, Code, AvailableDate)과 호환되지 않는다.
+`(ticker, date)`로 가격 행에 직접 조인하면 당일 뉴스가 같은 날 학습 행에 들어가는
+룩어헤드가 생긴다 — 가용 시점 분리(뉴스 다음 개장일·재무 공시일)는 후속 PR에서
+다룬다(PR #67 리뷰 0Cracker 1). 그 전까지 이 CSV를 차트 학습에 쓰지 말 것.
+
 빼는 것과 이유:
 - composite_score / value_investment_signal / confidence — 다른 피처들의 고정 공식
   조합이라 정보량이 0이다. 넣으면 모델이 수작업 공식을 복제하는 쪽으로 쏠린다.
@@ -202,8 +207,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--out", default="features.csv", help="출력 CSV 경로")
     args = ap.parse_args(argv)
 
-    # 배치 manifest(_manifest_*.json)는 피처가 아니므로 자동 제외
-    inputs = [Path(p) for p in args.inputs if not Path(p).name.startswith("_manifest")]
+    # 배치 메타(_manifest_*.json, _provenance.json)는 피처가 아니므로 자동 제외
+    inputs = [Path(p) for p in args.inputs if not Path(p).name.startswith("_")]
     rows, skipped, mode = build_feature_table(inputs)
     for msg in skipped:
         print(f"[제외] {msg}" if not msg.startswith("(참고)") else f"[정보] {msg}",

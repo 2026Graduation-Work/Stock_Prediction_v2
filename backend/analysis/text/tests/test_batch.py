@@ -64,6 +64,9 @@ def test_run_batch_skip_existing_resumes(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     (tmp_path / "005930_2022-06-01.json").write_text("{}", encoding="utf-8")
+    (tmp_path / "_provenance.json").write_text(
+        json.dumps(batch_mod.provenance()), encoding="utf-8"
+    )
     calls: list[str] = []
 
     def fake_pipeline(ticker, date, name):
@@ -77,6 +80,50 @@ def test_run_batch_skip_existing_resumes(
 
     assert calls == ["2022-06-02"]  # 이미 있는 날짜는 건너뜀
     assert manifest["skipped_existing"] == 1
+
+
+def test_run_batch_skip_existing_refuses_mixed_provenance(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """생성 조건이 다르거나 기록이 없는 기존 산출물에 이어 쓰지 않는다 (0Cracker 4)."""
+    (tmp_path / "005930_2022-06-01.json").write_text("{}", encoding="utf-8")
+    monkeypatch.setattr(batch_mod, "run_pipeline", lambda t, d, n: _ok_signal(d))
+
+    with pytest.raises(ValueError, match="재개 거부"):  # 기록 없음
+        batch_mod.run_batch(
+            "005930", "삼성전자", "2022-06-01", "2022-06-02", tmp_path, skip_existing=True
+        )
+
+    other = {**batch_mod.provenance(), "finbert_model": "다른/모델"}
+    (tmp_path / "_provenance.json").write_text(json.dumps(other), encoding="utf-8")
+    with pytest.raises(ValueError, match="재개 거부"):  # 조건 불일치
+        batch_mod.run_batch(
+            "005930", "삼성전자", "2022-06-01", "2022-06-02", tmp_path, skip_existing=True
+        )
+
+
+def test_run_batch_skip_existing_regenerates_corrupt_json(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """중단으로 깨진 JSON은 스킵하지 않고 다시 만든다."""
+    (tmp_path / "005930_2022-06-01.json").write_text('{"ticker": "00', encoding="utf-8")
+    (tmp_path / "_provenance.json").write_text(
+        json.dumps(batch_mod.provenance()), encoding="utf-8"
+    )
+    calls: list[str] = []
+
+    def fake_pipeline(ticker, date, name):
+        calls.append(date)
+        return _ok_signal(date)
+
+    monkeypatch.setattr(batch_mod, "run_pipeline", fake_pipeline)
+    batch_mod.run_batch(
+        "005930", "삼성전자", "2022-06-01", "2022-06-01", tmp_path, skip_existing=True
+    )
+
+    assert calls == ["2022-06-01"]
+    json.loads((tmp_path / "005930_2022-06-01.json").read_text(encoding="utf-8"))
+    assert not list(tmp_path.glob("*.tmp"))  # 임시 파일이 남지 않는다
 
 
 def test_run_batch_aborts_on_financials_unavailable(

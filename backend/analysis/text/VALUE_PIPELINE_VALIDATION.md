@@ -77,7 +77,8 @@ python -m value_pipeline.batch --ticker 005930 --name 삼성전자 \
 DART는 (종목, 사업연도)당 1콜·FDR은 종목당 1콜). **LLM은 강제 OFF** — 대량 생성이
 무료 한도를 태우는 실수를 구조적으로 차단하며 숫자는 LLM 유무와 무관하다.
 하루 실패는 기록 후 계속 진행하고, 요약은 `_manifest_*.json`에 남는다.
-중단된 배치는 `--skip-existing`으로 재개.
+중단된 배치는 `--skip-existing`으로 재개. 단, 기존 산출물의 생성 조건(`_provenance.json`: 코드 버전·FinBERT 모델·설정)이
+현재와 다르면 섞지 않도록 재개를 거부한다 — 새 디렉터리에 생성하거나 기존 파일을 지우고 다시 실행.
 
 **학습용 피처 추출** — 모델(LightGBM)은 JSON을 직접 읽지 않고 `features.py`를 거친다.
 무엇을 모델에 넣고 빼는지의 SSOT이며, 일별(ValueSignal)·기간(PeriodValueSignal)

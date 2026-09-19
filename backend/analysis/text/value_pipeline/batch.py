@@ -16,12 +16,18 @@ LLM은 **강제로 끈다** — 대량 생성 중 무료 한도를 태우는 실
     python -m value_pipeline.batch --ticker 005930 --name 삼성전자 \\
         --start 2016-01-01 --end 2025-12-31 --out-dir out/005930
     # 중단 후 재개: --skip-existing (이미 생성된 날짜는 건너뜀)
+
+재개(--skip-existing)는 기존 산출물의 생성 조건(provenance)이 지금과 같을 때만
+허용한다 — 코드·FinBERT 모델·설정이 다른 JSON이 한 데이터셋에 섞이면 안 된다
+(PR #67 리뷰 0Cracker 4). 조건은 out_dir/_provenance.json에 기록된다.
 """
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -39,6 +45,71 @@ def _iter_days(start: str, end: str):
         day += dt.timedelta(days=1)
 
 
+def _write_json_atomic(path: Path, payload: dict) -> None:
+    """임시 파일에 쓴 뒤 교체 — 중단돼도 반쪽짜리 JSON이 남지 않는다."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _code_version() -> str:
+    """value_pipeline 디렉터리의 마지막 커밋 해시 (+dirty). git이 없으면 'unknown'."""
+    pkg = Path(__file__).resolve().parent
+    try:
+        head = subprocess.run(
+            ["git", "log", "-1", "--format=%H", "--", "."],
+            cwd=pkg, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        dirty = subprocess.run(
+            ["git", "status", "--porcelain", "--", "."],
+            cwd=pkg, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        return "unknown"
+    # ponytail: +dirty는 미커밋 변경끼리 구분하지 못한다 — 필요해지면 diff 해시를 붙일 것
+    return (head or "unknown") + ("+dirty" if dirty else "")
+
+
+def provenance() -> dict:
+    """산출물의 숫자를 바꿀 수 있는 생성 조건. 하나라도 다르면 재사용 불가."""
+    return {
+        "code_version": _code_version(),
+        "finbert_model": SETTINGS.finbert_model,
+        "use_finbert": SETTINGS.use_finbert,
+        "shares_asof_year": SETTINGS.shares_asof_year,
+        "news_lookback_days": SETTINGS.news_lookback_days,
+        "max_daily_articles": SETTINGS.max_daily_articles,
+        "staleness_lookback_articles": SETTINGS.staleness_lookback_articles,
+        "staleness_lookback_days": SETTINGS.staleness_lookback_days,
+        "llm": "disabled",
+    }
+
+
+def _check_resumable(out_dir: Path, ticker: str, current: dict) -> None:
+    """기존 산출물이 있는데 생성 조건이 없거나 다르면 재개를 거부한다."""
+    if not any(out_dir.glob(f"{ticker}_*.json")):
+        return
+    path = out_dir / "_provenance.json"
+    try:
+        recorded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        recorded = None
+    if recorded != current:
+        raise ValueError(
+            f"{out_dir}의 기존 산출물과 생성 조건이 다르거나 기록이 없음 → 섞지 않도록 "
+            f"재개 거부. 새 디렉터리에 생성하거나 기존 파일을 지우고 다시 실행하세요.\n"
+            f"  기록: {recorded}\n  현재: {current}"
+        )
+
+
+def _is_valid_json(path: Path) -> bool:
+    try:
+        json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return True
+
+
 def run_batch(
     ticker: str,
     name: str,
@@ -50,6 +121,10 @@ def run_batch(
     """기간 내 모든 날짜에 대해 일별 파이프라인 실행 → manifest dict 반환."""
     set_llm_enabled(False)  # 대량 생성 경로는 LLM 0콜 (숫자 불변)
     out_dir.mkdir(parents=True, exist_ok=True)
+    prov = provenance()
+    if skip_existing:
+        _check_resumable(out_dir, ticker, prov)
+    _write_json_atomic(out_dir / "_provenance.json", prov)
 
     ok = invalid = skipped = 0
     errors: list[dict] = []
@@ -57,7 +132,7 @@ def run_batch(
 
     for i, d in enumerate(days, start=1):
         out_path = out_dir / f"{ticker}_{d}.json"
-        if skip_existing and out_path.exists():
+        if skip_existing and out_path.exists() and _is_valid_json(out_path):
             skipped += 1
             continue
         try:
@@ -68,9 +143,7 @@ def run_batch(
             errors.append({"date": d, "error": repr(e)})
             continue
 
-        out_path.write_text(
-            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        _write_json_atomic(out_path, result)
         if (result.get("validation") or {}).get("ok"):
             ok += 1
         else:
@@ -96,11 +169,9 @@ def run_batch(
         "llm": "disabled",
         # 재현 조건 기록: 이 값이 다르면 같은 명령이라도 per/pbr가 다를 수 있다
         "shares_asof_year": SETTINGS.shares_asof_year,
+        "provenance": prov,
     }
-    manifest_path = out_dir / f"_manifest_{ticker}_{start}_{end}.json"
-    manifest_path.write_text(
-        json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    _write_json_atomic(out_dir / f"_manifest_{ticker}_{start}_{end}.json", manifest)
     return manifest
 
 
@@ -122,7 +193,7 @@ def main(argv: list[str] | None = None) -> int:
             args.ticker, args.name, args.start, args.end,
             Path(args.out_dir), args.skip_existing,
         )
-    except FinancialsUnavailableError as e:
+    except (FinancialsUnavailableError, ValueError) as e:
         print(f"[중단] {e}", file=sys.stderr)
         return 2
 
