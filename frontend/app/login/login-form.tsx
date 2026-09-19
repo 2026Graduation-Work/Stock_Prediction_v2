@@ -3,18 +3,19 @@
 import { useState, type FormEvent } from "react";
 import { useOnboarding } from "@/app/components/onboarding-provider";
 import {
-  isAccountLoginAvailable,
   requestMagicLink,
   signInWithPassword,
   signUpWithPassword,
   startDemoSession,
 } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase";
 
 type AccountTab = "signin" | "signup";
 
 export default function LoginForm() {
   const { refresh } = useOnboarding();
-  const accountAvailable = isAccountLoginAvailable();
+  // 이메일 계정 기능은 Supabase 환경변수가 있을 때만. 데모 계정은 항상 쓸 수 있다.
+  const accountAvailable = isSupabaseConfigured();
   const [tab, setTab] = useState<AccountTab>("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

@@ -1,5 +1,5 @@
 {
-  "$comment": "8축 투자스타일 문항 정의(정본). 채점은 frontend/lib/profiling/style-scoring.ts가 한다. backend/profiling/survey/style_questions.py·style_personas.py에서 옮겼다.",
+  "$comment": "8축 투자스타일 문항 정의(정본). 채점은 frontend/lib/profiling/style-scoring.ts가 한다. backend/profiling/survey/style_questions.py에서 옮겼다.",
   "likert": {
     "options": [
       {
@@ -466,53 +466,6 @@
     {
       "max_ratio": 1.01,
       "days": 180
-    }
-  ],
-  "personas": [
-    {
-      "id": "cautious_saver",
-      "label": "예금 중심 전환기형",
-      "summary": "원금 보전을 가장 중요하게 보면서 시장 참여는 일부만 원하는 유형입니다. 장기 보유를 전제하지만 하락에는 민감합니다.",
-      "pattern": {
-        "market_participation": -1,
-        "loss_tolerance": -2,
-        "turnover": -2,
-        "concentration": -2,
-        "rule_adherence": -2,
-        "information_reliance": -1,
-        "urgency": -1,
-        "drawdown_reaction": 1
-      }
-    },
-    {
-      "id": "anxious_chaser",
-      "label": "조급한 추종형",
-      "summary": "주변 이야기에 따라 움직이고 조급함이 큰 유형입니다. 손실은 부담스러워하면서 집중투자를 선호해 상충이 드러납니다.",
-      "pattern": {
-        "market_participation": -1,
-        "loss_tolerance": -1,
-        "turnover": 1,
-        "concentration": 2,
-        "rule_adherence": 2,
-        "information_reliance": 2,
-        "urgency": 2,
-        "drawdown_reaction": 2
-      }
-    },
-    {
-      "id": "systematic_investor",
-      "label": "규칙 기반 분산형",
-      "summary": "사전에 정한 기준을 지키며 폭넓게 분산하는 유형입니다. 시장 지수와 비교해 성과를 점검하고 하락에도 계획을 유지합니다.",
-      "pattern": {
-        "market_participation": -2,
-        "loss_tolerance": 1,
-        "turnover": -2,
-        "concentration": -2,
-        "rule_adherence": -2,
-        "information_reliance": -2,
-        "urgency": -2,
-        "drawdown_reaction": -2
-      }
     }
   ]
 }

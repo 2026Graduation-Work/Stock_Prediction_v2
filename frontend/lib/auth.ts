@@ -32,11 +32,6 @@ interface DemoSession {
   signedInAt: string;
 }
 
-// 이메일 계정 기능을 쓸 수 있는지(Supabase 환경변수 유무). 데모 계정은 이와 관계없이 항상 쓸 수 있다.
-export function isAccountLoginAvailable(): boolean {
-  return isSupabaseConfigured();
-}
-
 // 세션이 정해지기 전(로딩 중)의 표시용 모드. 실제 모드는 로그인한 방식으로 정한다.
 export function getAuthMode(): OnboardingState["mode"] {
   return readDemoSession() ? "demo" : isSupabaseConfigured() ? "supabase" : "demo";

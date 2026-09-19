@@ -6,7 +6,6 @@ import {
   answersFromPattern,
   confidencePerAxis,
   detectContradictions,
-  PERSONAS,
   questionsForMode,
   reduceToLegacyFields,
   scoreStyleAxes,
@@ -65,12 +64,20 @@ test("빠른 진단은 24문항, 축당 3문항이고 축마다 역채점 문항
   }
 });
 
-test("프리셋 조립 → 채점하면 패턴의 축 방향이 그대로 나온다", () => {
-  for (const persona of PERSONAS) {
-    const styleAxes = scoreStyleAxes(answersFromPattern(persona.pattern, "quick"), "quick");
-    for (const axis of styleAxes.axes) {
-      close(axis.ratio, persona.pattern[axis.axis_id] / 2, `${persona.id}.${axis.axis_id}`);
-    }
+test("패턴 조립 → 채점하면 패턴의 축 방향이 그대로 나온다(역채점 문항 포함)", () => {
+  const pattern = {
+    market_participation: -1,
+    loss_tolerance: 2,
+    turnover: -2,
+    concentration: 1,
+    rule_adherence: 0,
+    information_reliance: -2,
+    urgency: 1,
+    drawdown_reaction: 2,
+  } as const;
+  const styleAxes = scoreStyleAxes(answersFromPattern(pattern, "quick"), "quick");
+  for (const axis of styleAxes.axes) {
+    close(axis.ratio, pattern[axis.axis_id] / 2, axis.axis_id);
   }
 });
 

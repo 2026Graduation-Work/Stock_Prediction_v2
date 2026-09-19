@@ -5,7 +5,6 @@ import { BIT_LABEL, BIT_SUMMARY, classifyBit } from "./profiling/bit.ts";
 import type {
   ActionIntent,
   InvestorProfileSummary,
-  ProfileType,
   ProfilingOutput,
   RiskFlag,
   StyleAxes,
@@ -21,9 +20,6 @@ import {
 } from "./profiling/style-scoring.ts";
 
 export { STYLE_AXIS_IDS };
-
-// risk_tolerance(0~1)가 이 값 × 0.01 이상이면 aggressive 모델. chart model_type과 매칭된다.
-export const PROFILE_TYPE_THRESHOLD = 60;
 
 export const EXPERIENCE_CHOICES = [
   { id: "under_6m", label: "6개월 미만", years: 0.3 },
@@ -86,11 +82,6 @@ export interface SurveyAnswers {
   benchmark_index?: string;
 }
 
-export function profileTypeForRiskScore(riskScore: number): ProfileType {
-  if (riskScore < 0 || riskScore > 100) throw new Error("riskScore는 0~100이어야 합니다.");
-  return riskScore >= PROFILE_TYPE_THRESHOLD ? "aggressive" : "stable";
-}
-
 // ── 3축 요약: 대시보드 성향 카드와 결과 화면이 같은 8축에서 읽는다 ─────
 // 위험 감수 = mean(loss_tolerance, concentration), 흔들림 민감도 = mean(urgency,
 // drawdown_reaction, information_reliance), 투자 기간 = turnover. 값은 ratio를 0~100으로 옮긴 것이다.
@@ -104,7 +95,7 @@ export interface ThreeAxisSummary {
 const toScore = (ratio: number) => Math.round(((ratio + 1) / 2) * 100);
 const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 
-export function horizonForScore(horizonScore: number): ThreeAxisSummary["horizon"] {
+function horizonForScore(horizonScore: number): ThreeAxisSummary["horizon"] {
   return horizonScore >= 67 ? "short" : horizonScore >= 34 ? "mid" : "long";
 }
 
@@ -122,20 +113,19 @@ export function threeAxisSummary(styleAxes: StyleAxes): ThreeAxisSummary {
 }
 
 // 성향 카드 표시값. 유형명은 BIT만 쓴다(금융회사 투자자 등급명과 겹치는 이름을 쓰지 않는다).
-// 8축이 없는 v1.0 프로필은 유형을 단정하지 않는다.
+// 8축이 없는 프로필(v1.0)은 유형을 단정하지 않는다.
 export function summaryFromStyleAxes(
   styleAxes: StyleAxes | null | undefined,
   identity: Pick<InvestorProfileSummary, "displayName" | "avatarLabel" | "surveyedAt">,
-  legacy?: Pick<InvestorProfileSummary, "riskTolerance" | "sentimentSensitivity" | "horizon">,
 ): InvestorProfileSummary {
   if (!styleAxes) {
     return {
       ...identity,
       profileTypeLabel: "8축 진단 전",
       personaLabel: "설문을 다시 하면 유형이 나와요",
-      riskTolerance: legacy?.riskTolerance ?? 50,
-      sentimentSensitivity: legacy?.sentimentSensitivity ?? 50,
-      horizon: legacy?.horizon ?? "mid",
+      riskTolerance: 50,
+      sentimentSensitivity: 50,
+      horizon: "mid",
     };
   }
   const bit = classifyBit(styleAxes);
@@ -158,16 +148,7 @@ export function summaryFromProfilingOutput(
   const surveyedAt = Number.isNaN(completedAt.getTime())
     ? ""
     : `${completedAt.getFullYear()}.${String(completedAt.getMonth() + 1).padStart(2, "0")}`;
-  const months = output.investor_profile.time_horizon_months;
-  return summaryFromStyleAxes(
-    output.style_axes,
-    { ...identity, surveyedAt },
-    {
-      riskTolerance: Math.round(output.investor_profile.risk_tolerance * 100),
-      sentimentSensitivity: Math.round(output.psychological_state.fomo_index * 100),
-      horizon: months <= 24 ? "short" : months <= 60 ? "mid" : "long",
-    },
-  );
+  return summaryFromStyleAxes(output.style_axes, { ...identity, surveyedAt });
 }
 
 // 결과 확인 단계의 수동 조정을 반영한다. 신뢰도·응답 수는 채점값 그대로 둔다.
@@ -209,7 +190,8 @@ export function convertSurveyAnswers(input: unknown): ProfilingOutput {
       )!.ratio,
       target_return_annual: TARGET_RETURN_ANNUAL,
       investment_experience_years: experience.years,
-      profile_type: profileTypeForRiskScore(Math.round(legacy.risk_tolerance * 100)),
+      // risk_tolerance 0.6 이상이면 aggressive 모델(chart model_type과 매칭)
+      profile_type: legacy.risk_tolerance >= 0.6 ? "aggressive" : "stable",
     },
     psychological_state: {
       fomo_index: legacy.fomo_index,
