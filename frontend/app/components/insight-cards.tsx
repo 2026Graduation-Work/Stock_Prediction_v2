@@ -22,7 +22,15 @@ import {
 } from "recharts";
 import { RISK_GRADE_META } from "@/lib/display";
 import { STYLE_AXIS_IDS } from "@/lib/profiling-rules";
-import { classifyBit, type BitResult, type BitType, type CardId } from "@/lib/profiling/bit";
+import {
+  BIT_LABEL,
+  BIT_TYPES,
+  classifyBit,
+  presetStyleAxes,
+  type BitResult,
+  type BitType,
+  type CardId,
+} from "@/lib/profiling/bit";
 import {
   AXIS_THRESHOLD,
   SCREEN_GUIDE_NOTICE,
@@ -48,7 +56,7 @@ import {
 import type { DataProvenance, StockDetail, StyleAxes, StyleAxisId } from "@/lib/types";
 import SourceChip from "./source-chip";
 
-// 극성은 backend/profiling/survey/style_questions.py AXES와 같다.
+// 극성은 lib/profiling/style-questions.json axes와 같다.
 const AXIS_META: Record<StyleAxisId, { name: string; negative: string; positive: string }> = {
   market_participation: { name: "시장과 내 목표", negative: "시장 수익률 참여", positive: "내 목표 우선" },
   loss_tolerance: { name: "손실 감내", negative: "원금 보전", positive: "수익 기회" },
@@ -58,13 +66,6 @@ const AXIS_META: Record<StyleAxisId, { name: string; negative: string; positive:
   information_reliance: { name: "판단의 근거", negative: "본인 판단", positive: "시장·타인 추종" },
   urgency: { name: "기회를 대하는 태도", negative: "여유", positive: "조급함" },
   drawdown_reaction: { name: "하락에 대한 반응", negative: "하락 시 유지", positive: "하락 시 이탈" },
-};
-
-const BIT_LABEL: Record<BitType, string> = {
-  PRESERVER: "안정 추구형",
-  FOLLOWER: "추종형",
-  INDEPENDENT: "독립 분석형",
-  ACCUMULATOR: "적극 축적형",
 };
 
 const BIAS_MODE_LABEL = {
@@ -132,23 +133,16 @@ const shortDate = (iso: string) => iso.slice(5).replace("-", ".");
 
 export type DemoStyleAxes = ReturnType<typeof useDemoStyleAxes>;
 
-// 데모 슬라이더 값은 이 화면 state에만 둔다. DB·localStorage에 쓰지 않는다.
+// "다른 성향으로 보기": BIT 4유형 프리셋으로 이 화면만 바꿔 본다. DB·localStorage에 쓰지 않는다.
 export function useDemoStyleAxes(original: StyleAxes | null) {
-  const [overrides, setOverrides] = useState<Partial<Record<StyleAxisId, number>>>({});
-  const styleAxes: StyleAxes | null = original && {
-    ...original,
-    axes: original.axes.map((axis) => ({
-      ...axis,
-      ratio: overrides[axis.axis_id] ?? axis.ratio,
-    })),
-  };
+  const [viewAs, setViewAs] = useState<BitType | null>(null);
+  const styleAxes: StyleAxes | null =
+    original && viewAs ? presetStyleAxes(original, viewAs) : original;
   return {
     styleAxes,
     bit: styleAxes ? classifyBit(styleAxes) : null,
-    changed: Object.keys(overrides).length > 0,
-    setAxis: (axisId: StyleAxisId, ratio: number) =>
-      setOverrides((current) => ({ ...current, [axisId]: ratio })),
-    reset: () => setOverrides({}),
+    viewAs,
+    setViewAs,
   };
 }
 
@@ -530,7 +524,6 @@ function FinancialContent({ financial }: { financial: FinancialSnapshot }) {
 }
 
 function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readonly CardId[] }) {
-  const [open, setOpen] = useState(false);
   const { bit, styleAxes } = demo;
 
   return (
@@ -542,9 +535,9 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
         <h2 id="style-profile-title" className="text-[15px] font-extrabold">
           투자 성향 요약
         </h2>
-        {demo.changed && (
+        {demo.viewAs && (
           <span className="inline-flex h-[22px] items-center rounded-md border border-[#e6c96b] bg-[#fff8df] px-2 text-[11.5px] font-bold text-[#8a6500]">
-            데모 값 적용 중
+            {BIT_LABEL[demo.viewAs]}의 시선으로 보는 중 · 내 결과 아님
           </span>
         )}
       </div>
@@ -600,62 +593,32 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
       )}
 
       {styleAxes && (
-        <div className="flex flex-col gap-3 border-t border-line-soft pt-3">
-          <button
-            type="button"
-            aria-expanded={open}
-            aria-controls="style-axes-demo"
-            onClick={() => setOpen((current) => !current)}
-            className="self-start text-[13px] font-bold text-brand hover:text-brand-deep"
-          >
-            {open ? "▾" : "▸"} 8축 값 조정 (데모)
-          </button>
-          {open && (
-            <div id="style-axes-demo" className="flex flex-col gap-2.5">
-              <p className="m-0 text-xs text-muted">
-                이 화면에서만 바뀌고 저장되지 않습니다. 값을 옮기면 유형·카드 순서·넛지가 바로
-                다시 계산됩니다.
-              </p>
-              <div className="grid grid-cols-1 gap-x-8 gap-y-2.5 md:grid-cols-2">
-                {styleAxes.axes.map((axis) => {
-                  const meta = AXIS_META[axis.axis_id];
-                  return (
-                    <label key={axis.axis_id} className="flex flex-col gap-1 text-xs">
-                      <span className="flex items-center gap-2">
-                        <strong className="text-ink">{meta.name}</strong>
-                        <span className="text-faint">{axis.axis_id}</span>
-                        <span className="ml-auto font-bold tabular-nums text-ink">
-                          {signed(axis.ratio)}
-                        </span>
-                      </span>
-                      <input
-                        type="range"
-                        min={-1}
-                        max={1}
-                        step={0.01}
-                        value={axis.ratio}
-                        aria-label={`${meta.name} (${axis.axis_id})`}
-                        onChange={(event) => demo.setAxis(axis.axis_id, Number(event.target.value))}
-                        className="accent-brand"
-                      />
-                      <span className="flex justify-between text-[11px] text-faint">
-                        <span>-1 {meta.negative}</span>
-                        <span>+1 {meta.positive}</span>
-                      </span>
-                    </label>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                onClick={demo.reset}
-                disabled={!demo.changed}
-                className="h-9 self-start rounded-lg border border-edge bg-white px-4 text-xs font-bold text-body hover:border-brand disabled:opacity-50"
-              >
-                원래 응답값으로 되돌리기
-              </button>
-            </div>
-          )}
+        <div className="flex flex-col gap-2.5 border-t border-line-soft pt-3">
+          <span className="text-[13px] font-bold text-ink">다른 성향으로 보기</span>
+          <p className="m-0 text-xs text-muted">
+            같은 종목을 다른 유형은 어떤 순서와 주의 안내로 보게 되는지 바꿔 볼 수 있어요. 이 화면에서만
+            바뀌고 내 설문 결과는 그대로예요.
+          </p>
+          <div role="group" aria-label="다른 성향으로 보기" className="flex flex-wrap gap-2">
+            {[null, ...BIT_TYPES].map((type) => {
+              const active = demo.viewAs === type;
+              return (
+                <button
+                  key={type ?? "mine"}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => demo.setViewAs(type)}
+                  className={`h-9 rounded-lg border px-3.5 text-xs font-bold ${
+                    active
+                      ? "border-brand bg-brand-soft text-brand-deep"
+                      : "border-edge bg-white text-body hover:border-brand"
+                  }`}
+                >
+                  {type ? BIT_LABEL[type] : "내 성향"}
+                </button>
+              );
+            })}
+          </div>
         </div>
       )}
     </section>

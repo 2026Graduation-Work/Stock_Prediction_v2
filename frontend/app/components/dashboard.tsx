@@ -12,12 +12,8 @@ import {
   getAuthenticatedDashboardData,
   type DashboardData,
 } from "@/lib/queries";
-import type {
-  InvestorProfileSummary,
-  ProfilingOutput,
-  RecommendedStock,
-} from "@/lib/types";
-import { AVOIDED_ASSET_LABELS } from "@/lib/profiling-rules";
+import type { RecommendedStock } from "@/lib/types";
+import { AVOIDED_ASSET_LABELS, summaryFromProfilingOutput } from "@/lib/profiling-rules";
 import { holdingAlertsOutside } from "@/lib/recommendation-filter";
 import {
   getSavedProfileSnapshot,
@@ -39,28 +35,6 @@ interface AuthenticatedDashboardResult {
   userId: string;
   data?: DashboardData;
   error?: string;
-}
-
-function profileSummaryFromOutput(
-  output: ProfilingOutput,
-  fallback: InvestorProfileSummary,
-): InvestorProfileSummary {
-  const months = output.investor_profile.time_horizon_months;
-  const horizon = months <= 24 ? "short" : months <= 60 ? "mid" : "long";
-  const stable = output.investor_profile.profile_type === "stable";
-  const completedAt = new Date(output.timestamp);
-  const surveyedAt = Number.isNaN(completedAt.getTime())
-    ? fallback.surveyedAt
-    : `${completedAt.getFullYear()}.${String(completedAt.getMonth() + 1).padStart(2, "0")}`;
-  return {
-    ...fallback,
-    profileTypeLabel: stable ? "안정추구형" : "수익추구형",
-    personaLabel: stable ? "신중한 중장기 투자자" : "적극적인 기회 탐색형 투자자",
-    riskTolerance: Math.round(output.investor_profile.risk_tolerance * 100),
-    sentimentSensitivity: Math.round(output.psychological_state.fomo_index * 100),
-    horizon,
-    surveyedAt,
-  };
 }
 
 export default function Dashboard(initialData: DashboardData) {
@@ -124,7 +98,7 @@ export default function Dashboard(initialData: DashboardData) {
   );
   const savedProfile = parseSavedProfile(savedSnapshot);
   const activeProfile = savedProfile
-    ? profileSummaryFromOutput(savedProfile, profile)
+    ? summaryFromProfilingOutput(savedProfile, profile)
     : profile;
   const activeAvoidedLabels = savedProfile
     ? savedProfile.constraints.avoided_assets

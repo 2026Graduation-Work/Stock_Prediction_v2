@@ -90,3 +90,41 @@ export function classifyBit(styleAxes: StyleAxes): BitResult {
     cardOrder: CARD_ORDER[type],
   };
 }
+
+// 화면 표시 이름. 금융회사 투자자 정보 확인서의 5단계 등급명(안정형~공격투자형)과 겹치지 않게 짓는다.
+export const BIT_LABEL: Record<BitType, string> = {
+  PRESERVER: "자산 보존형",
+  FOLLOWER: "추종형",
+  INDEPENDENT: "독립 분석형",
+  ACCUMULATOR: "적극 축적형",
+};
+
+export const BIT_SUMMARY: Record<BitType, string> = {
+  PRESERVER: "잃지 않는 것을 먼저 생각하고, 산 종목을 오래 들고 가는 편이에요.",
+  FOLLOWER: "시장 흐름과 주변 의견을 참고해 조심스럽게 움직이는 편이에요.",
+  INDEPENDENT: "직접 확인한 근거로 판단하고, 필요하면 적극적으로 움직이는 편이에요.",
+  ACCUMULATOR: "기회를 적극적으로 찾고, 큰 변동도 감수하며 빠르게 움직이는 편이에요.",
+};
+
+export const BIT_TYPES: readonly BitType[] = ["PRESERVER", "FOLLOWER", "INDEPENDENT", "ACCUMULATOR"];
+
+// "다른 성향으로 보기" 프리셋. 분류 3축(turnover·loss_tolerance·concentration)을 각 구간의
+// 한가운데 값으로 두고 나머지 축은 내 응답을 그대로 둔다. 화면 state에만 쓰고 저장하지 않는다.
+const PRESET_RATIO: Record<BitType, number> = {
+  PRESERVER: -0.75,
+  FOLLOWER: -0.25,
+  INDEPENDENT: 0.25,
+  ACCUMULATOR: 0.75,
+};
+const CLASSIFYING_AXES: readonly StyleAxisId[] = ["turnover", "loss_tolerance", "concentration"];
+
+export function presetStyleAxes(base: StyleAxes, type: BitType): StyleAxes {
+  return {
+    ...base,
+    axes: base.axes.map((axis) =>
+      CLASSIFYING_AXES.includes(axis.axis_id)
+        ? { ...axis, ratio: PRESET_RATIO[type], confidence: 1 }
+        : axis,
+    ),
+  };
+}

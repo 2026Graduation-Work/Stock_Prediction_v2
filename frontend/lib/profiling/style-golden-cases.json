@@ -1,0 +1,1143 @@
+{
+  "$comment": "골든 케이스. 삭제 전 Python style_scoring.py(커밋 4df9a7e)로 계산한 기대값이다. TS 채점기(style-scoring.ts)는 이 값과 같아야 한다.",
+  "cases": [
+    {
+      "id": "persona_cautious_saver",
+      "intent": "PRESERVER 대표 (style_personas 프리셋)",
+      "mode": "quick",
+      "answers": {
+        "mp01": 2,
+        "mp02": 4,
+        "mp03": 4,
+        "lt01": 1,
+        "lt02": 5,
+        "lt03": 1,
+        "tv01": 1,
+        "tv02": 5,
+        "tv03": 1,
+        "cd01": 1,
+        "cd02": 5,
+        "cd03": 1,
+        "ra01": 1,
+        "ra02": 5,
+        "ra03": 1,
+        "ir01": 2,
+        "ir02": 4,
+        "ir03": 2,
+        "ug01": 2,
+        "ug02": 4,
+        "ug03": 2,
+        "dr01": 4,
+        "dr02": 2,
+        "dr03": 4
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 0.0,
+          "fomo_index": 0.25,
+          "panic_sell_tendency": 0.75,
+          "herding_score": 0.25,
+          "time_horizon_days": 3600,
+          "time_horizon_months": 120
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "persona_systematic_investor",
+      "intent": "PRESERVER 대표 2 (style_personas 프리셋)",
+      "mode": "quick",
+      "answers": {
+        "mp01": 1,
+        "mp02": 5,
+        "mp03": 5,
+        "lt01": 4,
+        "lt02": 2,
+        "lt03": 4,
+        "tv01": 1,
+        "tv02": 5,
+        "tv03": 1,
+        "cd01": 1,
+        "cd02": 5,
+        "cd03": 1,
+        "ra01": 1,
+        "ra02": 5,
+        "ra03": 1,
+        "ir01": 1,
+        "ir02": 5,
+        "ir03": 1,
+        "ug01": 1,
+        "ug02": 5,
+        "ug03": 1,
+        "dr01": 1,
+        "dr02": 5,
+        "dr03": 1
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": -1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 0.75,
+          "fomo_index": 0.0,
+          "panic_sell_tendency": 0.0,
+          "herding_score": 0.0,
+          "time_horizon_days": 3600,
+          "time_horizon_months": 120
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "follower_representative",
+      "intent": "FOLLOWER 대표: turnover -1, loss 0, concentration -1 → composite -0.375",
+      "mode": "quick",
+      "answers": {
+        "mp01": 3,
+        "mp02": 3,
+        "mp03": 3,
+        "lt01": 3,
+        "lt02": 3,
+        "lt03": 3,
+        "tv01": 2,
+        "tv02": 4,
+        "tv03": 2,
+        "cd01": 2,
+        "cd02": 4,
+        "cd03": 2,
+        "ra01": 3,
+        "ra02": 3,
+        "ra03": 3,
+        "ir01": 4,
+        "ir02": 2,
+        "ir03": 4,
+        "ug01": 4,
+        "ug02": 2,
+        "ug03": 4,
+        "dr01": 3,
+        "dr02": 3,
+        "dr03": 3
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 0.5,
+          "fomo_index": 0.75,
+          "panic_sell_tendency": 0.5,
+          "herding_score": 0.75,
+          "time_horizon_days": 1800,
+          "time_horizon_months": 60
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "persona_anxious_chaser",
+      "intent": "INDEPENDENT 대표 (style_personas 프리셋, 모순 4건)",
+      "mode": "quick",
+      "answers": {
+        "mp01": 2,
+        "mp02": 4,
+        "mp03": 4,
+        "lt01": 2,
+        "lt02": 4,
+        "lt03": 2,
+        "tv01": 4,
+        "tv02": 2,
+        "tv03": 4,
+        "cd01": 5,
+        "cd02": 1,
+        "cd03": 5,
+        "ra01": 5,
+        "ra02": 1,
+        "ra03": 5,
+        "ir01": 5,
+        "ir02": 1,
+        "ir03": 5,
+        "ug01": 5,
+        "ug02": 1,
+        "ug03": 5,
+        "dr01": 5,
+        "dr02": 1,
+        "dr03": 5
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [
+          {
+            "id": "loss_averse_but_concentrated",
+            "axes": [
+              "loss_tolerance",
+              "concentration"
+            ],
+            "severity": "high",
+            "observation": "원금 보전을 우선한다고 답했으나 소수 종목 집중을 선호한다고도 답했습니다.",
+            "follow_up_question": "한 종목이 전체의 몇 %를 넘으면 부담스럽게 느끼시나요?"
+          },
+          {
+            "id": "discretionary_but_loss_averse",
+            "axes": [
+              "rule_adherence",
+              "loss_tolerance"
+            ],
+            "severity": "caution",
+            "observation": "손실을 크게 부담스러워하면서도 미리 정한 기준보다 그때의 판단을 선호한다고 답했습니다.",
+            "follow_up_question": "다시 점검할 기준을 미리 정해두는 것과 그때 판단하는 것 중 어느 쪽이 편하신가요?"
+          },
+          {
+            "id": "herding_but_concentrated",
+            "axes": [
+              "information_reliance",
+              "concentration"
+            ],
+            "severity": "high",
+            "observation": "주변과 시장 분위기를 판단 근거로 삼는 편이면서 소수 종목 집중도 함께 선호합니다.",
+            "follow_up_question": "그 종목을 담은 이유를 직접 확인한 자료로 설명할 수 있으신가요?"
+          },
+          {
+            "id": "benchmark_focused_but_short_horizon",
+            "axes": [
+              "market_participation",
+              "turnover"
+            ],
+            "severity": "caution",
+            "observation": "시장 지수를 따라가는 성과를 중시하면서 보유 기간은 짧게 가져가려 합니다.",
+            "follow_up_question": "성과를 어느 기간 단위로 지수와 비교해 보고 싶으신가요?"
+          }
+        ],
+        "legacy": {
+          "risk_tolerance": 0.25,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0,
+          "time_horizon_days": 540,
+          "time_horizon_months": 18
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "accumulator_representative",
+      "intent": "ACCUMULATOR 대표: 분류 3축 모두 +2",
+      "mode": "quick",
+      "answers": {
+        "mp01": 3,
+        "mp02": 3,
+        "mp03": 3,
+        "lt01": 5,
+        "lt02": 1,
+        "lt03": 5,
+        "tv01": 5,
+        "tv02": 1,
+        "tv03": 5,
+        "cd01": 5,
+        "cd02": 1,
+        "cd03": 5,
+        "ra01": 4,
+        "ra02": 2,
+        "ra03": 4,
+        "ir01": 3,
+        "ir02": 3,
+        "ir03": 3,
+        "ug01": 3,
+        "ug02": 3,
+        "ug03": 3,
+        "dr01": 3,
+        "dr02": 3,
+        "dr03": 3
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": 1.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 0.5,
+          "panic_sell_tendency": 0.5,
+          "herding_score": 0.5,
+          "time_horizon_days": 180,
+          "time_horizon_months": 6
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "boundary_minus_half",
+      "intent": "경계값 composite = -0.5 → FOLLOWER(-0.5 미만만 PRESERVER)",
+      "mode": "quick",
+      "answers": {
+        "mp01": 3,
+        "mp02": 3,
+        "mp03": 3,
+        "lt01": 2,
+        "lt02": 4,
+        "lt03": 2,
+        "tv01": 2,
+        "tv02": 4,
+        "tv03": 2,
+        "cd01": 2,
+        "cd02": 4,
+        "cd03": 2,
+        "ra01": 3,
+        "ra02": 3,
+        "ra03": 3,
+        "ir01": 3,
+        "ir02": 3,
+        "ir03": 3,
+        "ug01": 3,
+        "ug02": 3,
+        "ug03": 3,
+        "dr01": 3,
+        "dr02": 3,
+        "dr03": 3
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": -0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 0.25,
+          "fomo_index": 0.5,
+          "panic_sell_tendency": 0.5,
+          "herding_score": 0.5,
+          "time_horizon_days": 1800,
+          "time_horizon_months": 60
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "boundary_zero_all_neutral",
+      "intent": "경계값 composite = 0 (전부 '보통이다') → INDEPENDENT",
+      "mode": "quick",
+      "answers": {
+        "mp01": 3,
+        "mp02": 3,
+        "mp03": 3,
+        "lt01": 3,
+        "lt02": 3,
+        "lt03": 3,
+        "tv01": 3,
+        "tv02": 3,
+        "tv03": 3,
+        "cd01": 3,
+        "cd02": 3,
+        "cd03": 3,
+        "ra01": 3,
+        "ra02": 3,
+        "ra03": 3,
+        "ir01": 3,
+        "ir02": 3,
+        "ir03": 3,
+        "ug01": 3,
+        "ug02": 3,
+        "ug03": 3,
+        "dr01": 3,
+        "dr02": 3,
+        "dr03": 3
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 0.5,
+          "fomo_index": 0.5,
+          "panic_sell_tendency": 0.5,
+          "herding_score": 0.5,
+          "time_horizon_days": 1080,
+          "time_horizon_months": 36
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "boundary_plus_half",
+      "intent": "경계값 composite = +0.5 → ACCUMULATOR(0.5 이상)",
+      "mode": "quick",
+      "answers": {
+        "mp01": 3,
+        "mp02": 3,
+        "mp03": 3,
+        "lt01": 4,
+        "lt02": 2,
+        "lt03": 4,
+        "tv01": 4,
+        "tv02": 2,
+        "tv03": 4,
+        "cd01": 4,
+        "cd02": 2,
+        "cd03": 4,
+        "ra01": 3,
+        "ra02": 3,
+        "ra03": 3,
+        "ir01": 3,
+        "ir02": 3,
+        "ir03": 3,
+        "ug01": 3,
+        "ug02": 3,
+        "ug03": 3,
+        "dr01": 3,
+        "dr02": 3,
+        "dr03": 3
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": 0.5,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.0,
+              "confidence": 1.0,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 0.75,
+          "fomo_index": 0.5,
+          "panic_sell_tendency": 0.5,
+          "herding_score": 0.5,
+          "time_horizon_days": 540,
+          "time_horizon_months": 18
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 1.0,
+          "fomo_index": 1.0,
+          "panic_sell_tendency": 1.0,
+          "herding_score": 1.0
+        }
+      }
+    },
+    {
+      "id": "reverse_keyed_mismatch_all_agree",
+      "intent": "역채점 불일치: 모든 문항에 '매우 그렇다' → 축 점수는 0 근처, 신뢰도 낮음",
+      "mode": "quick",
+      "answers": {
+        "mp01": 5,
+        "mp02": 5,
+        "mp03": 5,
+        "lt01": 5,
+        "lt02": 5,
+        "lt03": 5,
+        "tv01": 5,
+        "tv02": 5,
+        "tv03": 5,
+        "cd01": 5,
+        "cd02": 5,
+        "cd03": 5,
+        "ra01": 5,
+        "ra02": 5,
+        "ra03": 5,
+        "ir01": 5,
+        "ir02": 5,
+        "ir03": 5,
+        "ug01": 5,
+        "ug02": 5,
+        "ug03": 5,
+        "dr01": 5,
+        "dr02": 5,
+        "dr03": 5
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "quick",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": -0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": 0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": 0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": 0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.333333,
+              "confidence": 0.111111,
+              "answered_count": 3,
+              "question_count": 3
+            }
+          ]
+        },
+        "contradictions": [],
+        "legacy": {
+          "risk_tolerance": 0.666667,
+          "fomo_index": 0.666667,
+          "panic_sell_tendency": 0.666667,
+          "herding_score": 0.666667,
+          "time_horizon_days": 540,
+          "time_horizon_months": 18
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 0.111111,
+          "fomo_index": 0.111111,
+          "panic_sell_tendency": 0.111111,
+          "herding_score": 0.111111
+        }
+      }
+    },
+    {
+      "id": "detailed_partial_answers",
+      "intent": "정밀 모드 + 절반만 응답 → 응답률이 신뢰도를 낮춤",
+      "mode": "detailed",
+      "answers": {
+        "mp01": 4,
+        "mp03": 5,
+        "mp05": 3,
+        "lt02": 2,
+        "lt04": 1,
+        "tv01": 4,
+        "tv03": 5,
+        "tv05": 3,
+        "cd02": 2,
+        "cd04": 1,
+        "ra01": 4,
+        "ra03": 5,
+        "ra05": 3,
+        "ir02": 2,
+        "ir04": 1,
+        "ug01": 4,
+        "ug03": 5,
+        "ug05": 3,
+        "dr02": 2,
+        "dr04": 1
+      },
+      "expected": {
+        "style_axes": {
+          "assessment_mode": "detailed",
+          "axes": [
+            {
+              "axis_id": "market_participation",
+              "ratio": -0.166667,
+              "confidence": 0.266667,
+              "answered_count": 3,
+              "question_count": 5
+            },
+            {
+              "axis_id": "loss_tolerance",
+              "ratio": 0.75,
+              "confidence": 0.3,
+              "answered_count": 2,
+              "question_count": 5
+            },
+            {
+              "axis_id": "turnover",
+              "ratio": 0.5,
+              "confidence": 0.4,
+              "answered_count": 3,
+              "question_count": 5
+            },
+            {
+              "axis_id": "concentration",
+              "ratio": 0.75,
+              "confidence": 0.3,
+              "answered_count": 2,
+              "question_count": 5
+            },
+            {
+              "axis_id": "rule_adherence",
+              "ratio": 0.5,
+              "confidence": 0.4,
+              "answered_count": 3,
+              "question_count": 5
+            },
+            {
+              "axis_id": "information_reliance",
+              "ratio": 0.75,
+              "confidence": 0.3,
+              "answered_count": 2,
+              "question_count": 5
+            },
+            {
+              "axis_id": "urgency",
+              "ratio": 0.5,
+              "confidence": 0.4,
+              "answered_count": 3,
+              "question_count": 5
+            },
+            {
+              "axis_id": "drawdown_reaction",
+              "ratio": 0.75,
+              "confidence": 0.3,
+              "answered_count": 2,
+              "question_count": 5
+            }
+          ]
+        },
+        "contradictions": [
+          {
+            "id": "herding_but_concentrated",
+            "axes": [
+              "information_reliance",
+              "concentration"
+            ],
+            "severity": "high",
+            "observation": "주변과 시장 분위기를 판단 근거로 삼는 편이면서 소수 종목 집중도 함께 선호합니다.",
+            "follow_up_question": "그 종목을 담은 이유를 직접 확인한 자료로 설명할 수 있으신가요?"
+          }
+        ],
+        "legacy": {
+          "risk_tolerance": 0.875,
+          "fomo_index": 0.75,
+          "panic_sell_tendency": 0.875,
+          "herding_score": 0.875,
+          "time_horizon_days": 540,
+          "time_horizon_months": 18
+        },
+        "confidence_per_axis": {
+          "risk_tolerance": 0.3,
+          "fomo_index": 0.4,
+          "panic_sell_tendency": 0.3,
+          "herding_score": 0.3
+        }
+      }
+    }
+  ]
+}

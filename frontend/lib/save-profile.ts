@@ -1,7 +1,7 @@
 "use client";
 
 import type { ProfilingOutput } from "./types";
-import { horizonScoreForMonths, isStyleAxes } from "./profiling-rules";
+import { isStyleAxes, threeAxisSummary } from "./profiling-rules";
 import { getSupabaseClient } from "./supabase";
 
 export const PROFILE_STORAGE_KEY = "signallab.ips-profile.v1";
@@ -55,6 +55,9 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
   const psychology = profile.psychological_state;
   const freeText = profile.free_text_signal;
   const context = profile.context;
+  // 성향 카드 3축(8축 묶음 요약)을 그대로 컬럼에 둔다. SQL로 봐도 화면과 같은 숫자가 나온다.
+  if (!profile.style_axes) throw new Error("8축 진단 결과(style_axes)가 없어 저장할 수 없습니다.");
+  const summary = threeAxisSummary(profile.style_axes);
   const { error: profileError } = await client.from("ips_profiles").upsert(
     {
       user_id: userId,
@@ -62,9 +65,9 @@ export async function saveProfile(profile: ProfilingOutput): Promise<void> {
       surveyed_at: profile.timestamp,
       profile_type: investor.profile_type,
       max_risk_tier: investor.profile_type === "stable" ? 4 : 2,
-      risk_score: Math.round(investor.risk_tolerance * 100),
-      fomo_score: Math.round(psychology.fomo_index * 100),
-      horizon_score: horizonScoreForMonths(investor.time_horizon_months),
+      risk_score: summary.riskTaking,
+      fomo_score: summary.sensitivity,
+      horizon_score: summary.horizonScore,
       risk_tolerance: investor.risk_tolerance,
       time_horizon_months: investor.time_horizon_months,
       liquidity_need_ratio: investor.liquidity_need_ratio,

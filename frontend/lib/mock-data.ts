@@ -2,6 +2,7 @@
 // (수치는 디자인 프로토타입 "Main Dashboard"/"Stock Detail" 기준.
 //  데이터 기준일과 예측 생성일은 하나의 날짜로 통일한다. 팀 리뷰 결정)
 
+import { summaryFromStyleAxes } from "./profiling-rules.ts";
 import type {
   DataProvenance,
   InvestorProfileSummary,
@@ -53,17 +54,6 @@ export const marketStatus: MarketStatus = {
   ],
 };
 
-export const investorProfile: InvestorProfileSummary = {
-  displayName: "김민지",
-  avatarLabel: "민",
-  profileTypeLabel: "안정추구형",
-  personaLabel: "신중한 장기 투자자",
-  riskTolerance: 35,
-  sentimentSensitivity: 62,
-  horizon: "long",
-  surveyedAt: "2026.03",
-};
-
 const samsungElectronics: RecommendedStock = {
   code: "005930",
   name: "삼성전자",
@@ -107,7 +97,7 @@ const celltrion: RecommendedStock = {
   horizonAgreement: { h5: "up", h10: "up", h20: "flat", agreement: "mixed" },
   riskFlags: ["high_volatility"],
   caution:
-    "위험 2등급 종목으로, 안정추구형 성향의 허용 범위(4·5등급) 밖에 있습니다.",
+    "위험 2등급 종목으로, 성향 기준 허용 범위(4·5등급) 밖에 있습니다.",
   provenance: DEMO,
 };
 
@@ -125,7 +115,7 @@ const kakao: RecommendedStock = {
   horizonAgreement: { h5: "down", h10: "down", h20: "flat", agreement: "mixed" },
   riskFlags: [],
   caution:
-    "위험 3등급 종목으로, 안정추구형 성향의 허용 범위(4·5등급) 밖에 있습니다.",
+    "위험 3등급 종목으로, 성향 기준 허용 범위(4·5등급) 밖에 있습니다.",
   provenance: DEMO,
 };
 
@@ -163,6 +153,13 @@ export const investorStyleAxes: StyleAxes = {
     { axis_id: "drawdown_reaction", ratio: 0.3, confidence: 0.7, answered_count: 3, question_count: 3 },
   ],
 };
+
+// 김민지 성향 카드. 3축과 유형명은 위 8축에서 계산한다(대시보드·상세·설문 결과와 같은 규칙).
+export const investorProfile: InvestorProfileSummary = summaryFromStyleAxes(investorStyleAxes, {
+  displayName: "김민지",
+  avatarLabel: "민",
+  surveyedAt: "2026.03",
+});
 
 // supabase/seed.sql portfolio_holdings와 같은 종목·수량·평단 (N08 보유 비중 넛지가 의존)
 export const portfolioHoldings: PortfolioHolding[] = [
@@ -258,7 +255,7 @@ export const stockDetails: Record<string, StockDetail> = {
       },
     ],
     aiAdvice:
-      "현재 셀트리온은 중립(노랑) 신호로, 방향성이 뚜렷하지 않은 구간입니다. 과거 유사한 신호 34건에서 실현 수익률은 -2.0%에서 +7.4% 사이에 넓게 분포했고, 이 구간에서 과거에 실제로 오른 비율은 57%로 확신이 높은 편은 아닙니다. 김민지님은 위험 감수 성향(35)이 낮고 심리 민감도(62)가 높은 편이어서, 변동성이 큰 이 종목의 급등락은 심리적 부담이 될 수 있습니다.",
+      "현재 셀트리온은 중립(노랑) 신호로, 방향성이 뚜렷하지 않은 구간입니다. 과거 유사한 신호 34건에서 실현 수익률은 -2.0%에서 +7.4% 사이에 넓게 분포했고, 이 구간에서 과거에 실제로 오른 비율은 57%로 확신이 높은 편은 아닙니다. 김민지님은 위험 감수(33)가 낮고 흔들림 민감도(65)가 높은 편이어서, 변동성이 큰 이 종목의 급등락은 심리적 부담이 될 수 있습니다.",
   },
   [samsungElectronics.code]: {
     ...samsungElectronics,
@@ -304,7 +301,7 @@ export const stockDetails: Record<string, StockDetail> = {
       },
     ],
     aiAdvice:
-      "삼성전자는 긍정(연두) 신호로, 단기(H5)·중기(H10)·장기(H20) 방향이 모두 위를 가리키고 있습니다. 과거 유사 신호 128건에서 실현 수익률은 -0.8%에서 +4.2% 사이에 분포했고, 이 구간에서 과거에 실제로 오른 비율은 61%였습니다. 위험 4등급(안전) 종목으로 김민지님의 안정추구형 성향(위험 감수 35) 허용 범위 안에 있고, 분포 폭이 좁은 편이라 심리 민감도(62)가 높은 김민지님에게 급등락 부담이 덜한 유형입니다.",
+      "삼성전자는 긍정(연두) 신호로, 단기(H5)·중기(H10)·장기(H20) 방향이 모두 위를 가리키고 있습니다. 과거 유사 신호 128건에서 실현 수익률은 -0.8%에서 +4.2% 사이에 분포했고, 이 구간에서 과거에 실제로 오른 비율은 61%였습니다. 위험 4등급(안전) 종목으로 김민지님의 성향 기준(위험 감수 33) 허용 범위 안에 있고, 분포 폭이 좁은 편이라 흔들림 민감도(65)가 높은 김민지님에게 급등락 부담이 덜한 유형입니다.",
   },
   [hyundaiMotor.code]: {
     ...hyundaiMotor,
@@ -352,6 +349,6 @@ export const stockDetails: Record<string, StockDetail> = {
       },
     ],
     aiAdvice:
-      "현대차는 강한 긍정(초록) 신호로, 오늘 신호 강도 상위 5%에 해당합니다. 과거 유사 신호 52건의 실현 수익률은 +0.6%에서 +7.2%로 분포 하단이 0% 위에 있었고, 이 구간에서 과거에 실제로 오른 비율은 66%였습니다. 다만 유사 사례 수가 52건으로 많지 않아, 분포 폭의 통계적 확신은 사례가 더 많은 신호보다 낮습니다. 위험 5등급(매우 안전)으로 김민지님의 위험 감수 성향(35) 기준에서 여유가 있는 종목입니다.",
+      "현대차는 강한 긍정(초록) 신호로, 오늘 신호 강도 상위 5%에 해당합니다. 과거 유사 신호 52건의 실현 수익률은 +0.6%에서 +7.2%로 분포 하단이 0% 위에 있었고, 이 구간에서 과거에 실제로 오른 비율은 66%였습니다. 다만 유사 사례 수가 52건으로 많지 않아, 분포 폭의 통계적 확신은 사례가 더 많은 신호보다 낮습니다. 위험 5등급(매우 안전)으로 김민지님의 위험 감수(33) 기준에서 여유가 있는 종목입니다.",
   },
 };

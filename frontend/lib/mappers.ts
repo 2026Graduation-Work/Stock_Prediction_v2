@@ -1,4 +1,4 @@
-import { AVOIDED_ASSET_LABELS } from "./profiling-rules";
+import { AVOIDED_ASSET_LABELS, horizonForScore, summaryFromStyleAxes } from "./profiling-rules";
 import type {
   DataProvenance,
   HorizonAgreement,
@@ -14,6 +14,7 @@ import type {
   RiskGrade,
   SignalLight,
   StockDetail,
+  StyleAxes,
 } from "./types";
 
 export interface UserRow {
@@ -220,30 +221,22 @@ export function mapPredictionReasons(
 export function mapProfileSummary(
   user: UserRow,
   profile: IpsProfileRow,
+  styleAxes: StyleAxes | null = null,
 ): InvestorProfileSummary {
-  const horizon =
-    profile.horizon_score >= 67
-      ? "short"
-      : profile.horizon_score >= 34
-        ? "mid"
-        : "long";
-  const stable = profile.profile_type === "stable";
-  const personaLabel = stable
-    ? horizon === "long"
-      ? "신중한 장기 투자자"
-      : "신중한 중장기 투자자"
-    : "적극적인 기회 탐색형 투자자";
-
-  return {
-    displayName: user.display_name,
-    avatarLabel: user.avatar_label,
-    profileTypeLabel: stable ? "안정추구형" : "수익추구형",
-    personaLabel,
-    riskTolerance: profile.risk_score,
-    sentimentSensitivity: profile.fomo_score,
-    horizon,
-    surveyedAt: profile.surveyed_at.slice(0, 7).replace("-", "."),
-  };
+  // risk_score·fomo_score·horizon_score는 3축 요약값이다(save-profile.ts). 8축이 있으면 8축에서 다시 계산한다.
+  return summaryFromStyleAxes(
+    styleAxes,
+    {
+      displayName: user.display_name,
+      avatarLabel: user.avatar_label,
+      surveyedAt: profile.surveyed_at.slice(0, 7).replace("-", "."),
+    },
+    {
+      riskTolerance: profile.risk_score,
+      sentimentSensitivity: profile.fomo_score,
+      horizon: horizonForScore(profile.horizon_score),
+    },
+  );
 }
 
 export function mapPortfolioHolding(

@@ -175,5 +175,5 @@ erDiagram
 
 - `axes`는 8축을 모두 담는다: `market_participation`, `loss_tolerance`, `turnover`, `concentration`,
   `rule_adherence`, `information_reliance`, `urgency`, `drawdown_reaction`.
-- `ratio` -1~+1, `confidence` 0~1. 극성은 `backend/profiling/survey/style_questions.py` `AXES`가 SSOT다.
+- `ratio` -1~+1, `confidence` 0~1. 극성은 `frontend/lib/profiling/style-questions.json` `axes`가 SSOT다.
 - `rule_adherence`는 -1이 사전 규칙 준수, +1이 상황별 재량이다. 이름과 극성 방향이 반대로 읽히니 주의한다.

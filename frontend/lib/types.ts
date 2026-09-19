@@ -1,3 +1,5 @@
+import type { Contradiction } from "./profiling/style-scoring.ts";
+
 // schema/ v1.1에서 파생된 프론트 타입입니다. 스키마 변경 시 반드시 동기화합니다.
 // DB 컬럼 대응은 docs/erd.md.
 // chart_output.schema.json: signal_light·rank_percentile·return_band·confidence·horizon_agreement·risk_flags
@@ -113,10 +115,10 @@ export type InvestmentHorizon = "short" | "mid" | "long";
 export interface InvestorProfileSummary {
   displayName: string;
   avatarLabel: string;
-  profileTypeLabel: string; // 예: 안정추구형 (profiling profile_type의 화면 표기)
+  profileTypeLabel: string; // BIT 유형명. 예: 추종형 (lib/profiling/bit.ts BIT_LABEL)
   personaLabel: string; // 예: 신중한 장기 투자자
-  riskTolerance: number; // 0~100
-  sentimentSensitivity: number; // 0~100
+  riskTolerance: number; // 0~100, 위험 감수 = mean(loss_tolerance, concentration)
+  sentimentSensitivity: number; // 0~100, 흔들림 민감도 = mean(urgency, drawdown_reaction, information_reliance)
   horizon: InvestmentHorizon;
   surveyedAt: string; // 예: 2026.03
 }
@@ -143,7 +145,7 @@ export interface ProfilingHolding {
   avg_buy_price: number;
 }
 
-// schema v1.1 style_axes. 축 id·극성은 backend/profiling/survey/style_questions.py AXES가 SSOT.
+// schema v1.1 style_axes. 축 id·극성은 lib/profiling/style-questions.json axes가 SSOT.
 // ratio: -1 = 주석 왼쪽, +1 = 주석 오른쪽.
 export type StyleAxisId =
   | "market_participation" // 시장 수익률 참여 ↔ 내 목표 우선
@@ -175,6 +177,7 @@ export interface ProfilingOutput {
   investor_profile: {
     risk_tolerance: number;
     time_horizon_months: number;
+    time_horizon_days?: number; // v1.1 optional. turnover 구간표에서 나온 1차 값
     liquidity_need_ratio: number;
     target_return_annual: number;
     investment_experience_years: number;
@@ -203,6 +206,7 @@ export interface ProfilingOutput {
   };
   confidence_per_field: Record<string, number>;
   style_axes?: StyleAxes; // v1.1 optional. 있을 때만 schema_version 1.1.0
+  contradictions?: Contradiction[]; // v1.1 optional. 축 간 상충 관측치
   context: {
     target_ticker?: string;
     investment_amount_krw: number;
