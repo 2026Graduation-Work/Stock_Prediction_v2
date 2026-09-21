@@ -25,8 +25,8 @@ import {
 function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="flex items-baseline gap-2.5 px-0.5">
-      <h2 className="text-lg font-extrabold">{title}</h2>
-      <span className="text-[12.5px] text-faint">{subtitle}</span>
+      <h2 className="text-xl font-semibold">{title}</h2>
+      <span className="text-xs text-faint">{subtitle}</span>
     </div>
   );
 }
@@ -136,24 +136,24 @@ export default function Dashboard(initialData: DashboardData) {
       />
 
       <div
-        className="mx-auto box-border flex w-full max-w-[1440px] flex-col gap-5 px-5 pt-5 sm:px-8"
+        className="mx-auto box-border flex w-full max-w-[1440px] flex-col gap-6 px-5 pt-6 sm:px-8"
         aria-busy={loadingAuthenticatedData}
       >
         {dataError && (
           <div
             role="alert"
-            className="flex flex-col gap-3 rounded-lg border border-[#e8c76a] bg-[#fff9e8] px-4 py-3 sm:flex-row sm:items-center"
+            className="flex flex-col gap-3 rounded-lg border border-warn-line bg-warn-tint px-4 py-3 sm:flex-row sm:items-center"
           >
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#795b08]">
+              <p className="text-sm font-medium text-warn">
                 내 데이터를 불러오지 못해 샘플 데이터를 표시합니다.
               </p>
-              <p className="mt-1 break-words text-xs text-[#806d39]">{dataError}</p>
+              <p className="mt-1 break-words text-xs text-warn">{dataError}</p>
             </div>
             <button
               type="button"
               onClick={retryAuthenticatedData}
-              className="h-9 flex-none rounded-lg border border-[#d5b85e] bg-white px-4 text-xs font-bold text-[#795b08] hover:bg-[#fffdf5] sm:ml-auto"
+              className="h-9 flex-none rounded-lg border border-warn-line bg-white px-4 text-xs font-medium text-warn hover:bg-warn-tint sm:ml-auto"
             >
               다시 시도
             </button>
@@ -163,42 +163,39 @@ export default function Dashboard(initialData: DashboardData) {
         {loadingAuthenticatedData ? (
           <DashboardLoading />
         ) : (
-          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_356px]">
-            <main className="flex flex-col gap-3.5">
+          <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_356px]">
+            <main className="flex flex-col gap-4">
               <SectionTitle
                 title="오늘의 추천 종목"
                 subtitle={`${activeProfile.profileTypeLabel} 기준 · 성향에 맞는 위험등급 ${riskTierLabel}`}
               />
 
               {!keyword && activeExcludedStocks.length > 0 && (
-                <div className="flex flex-col gap-2 rounded-[10px] border border-line bg-track px-4 py-2.5">
+                <div className="flex flex-col gap-2 rounded-md bg-field px-4 py-3">
                   <div className="flex items-center gap-2.5">
-                    <span className="grid size-4 flex-none place-items-center rounded-full bg-faint text-[10px] font-extrabold text-white">
-                      i
-                    </span>
-                    <span className="text-[13px] text-body">
+                    <span className="text-sm text-body">
                       회피 설정({activeAvoidedLabels.join("·")})으로{" "}
                       {activeExcludedStocks.length}개 종목이 제외되었습니다
                     </span>
                     <button
                       type="button"
                       onClick={() => setShowExcluded((open) => !open)}
-                      className="ml-auto text-[12.5px] font-medium text-brand hover:text-brand-deep hover:underline"
+                      className="ml-auto text-xs font-medium text-brand hover:text-brand-deep hover:underline"
                     >
                       {showExcluded ? "접기" : "제외 종목 보기"}
                     </button>
                   </div>
                   {showExcluded && (
-                    <ul className="flex flex-col gap-1 border-t border-line pl-[26px] pt-2">
+                    <ul className="flex flex-col gap-1 border-t border-line pt-2">
                       {activeExcludedStocks.map((stock) => (
-                        <li key={stock.code} className="text-[12.5px] text-body">
+                        <li key={stock.code} className="text-xs text-body">
                           {stock.name}{" "}
                           <span className="text-faint">
                             ({stock.code}) · 제외 사유: {stock.reason}
                           </span>
                         </li>
                       ))}
-                      <li className="text-[11.5px] text-faint">
+                      <li className="text-xs text-faint">
                         회피 항목은 설정에서 변경할 수 있습니다
                       </li>
                     </ul>
@@ -207,9 +204,9 @@ export default function Dashboard(initialData: DashboardData) {
               )}
 
               {!keyword && stocks.length === 0 && holdingAlerts.length === 0 && (
-                <div className="rounded-[14px] border border-dashed border-edge bg-white p-8 text-center">
-                  <p className="text-sm font-bold text-ink">오늘 보여 줄 종목 신호가 아직 없어요</p>
-                  <p className="mt-1.5 text-[13px] text-muted">
+                <div className="rounded-lg border border-dashed border-edge bg-white p-8 text-center">
+                  <p className="text-sm font-medium text-ink">오늘 보여 줄 종목 신호가 아직 없어요</p>
+                  <p className="mt-1.5 text-sm text-muted">
                     예측 데이터가 적재되면 여기에 나타나요. 종목명이나 코드로 검색하면 종목 정보는 바로 볼 수
                     있어요.
                   </p>
@@ -235,11 +232,11 @@ export default function Dashboard(initialData: DashboardData) {
               )}
 
               {noResult && (
-                <div className="flex flex-col gap-2 rounded-[14px] border border-dashed border-edge bg-white p-8 text-center">
-                  <span className="text-sm font-bold">
+                <div className="flex flex-col gap-2 rounded-lg border border-dashed border-edge bg-white p-8 text-center">
+                  <span className="text-sm font-medium">
                     &lsquo;{keyword}&rsquo; — 오늘의 추천 목록에 없는 종목입니다
                   </span>
-                  <span className="text-[13px] text-muted">
+                  <span className="text-sm text-muted">
                     추천 밖 종목도 조회할 수 있습니다.{" "}
                     <Link href={`/stocks/${encodeURIComponent(keyword)}`}>
                       종목 조회로 이동 →
@@ -267,7 +264,7 @@ export default function Dashboard(initialData: DashboardData) {
 
 function DashboardLoading() {
   return (
-    <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_356px]">
+    <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[1fr_356px]">
       <main className="flex flex-col gap-3.5" aria-label="내 대시보드 불러오는 중">
         <div className="h-6 w-44 animate-pulse rounded bg-track" />
         {[0, 1, 2].map((item) => (

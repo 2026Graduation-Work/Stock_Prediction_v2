@@ -260,10 +260,10 @@ export default function SurveyFlow() {
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex min-h-16 w-full max-w-[1080px] items-center gap-2.5 px-4 py-2 sm:h-16 sm:gap-3 sm:px-8 sm:py-0">
           <Link href="/" className="flex items-center gap-2.5 text-ink hover:no-underline">
-            <span className="grid size-7 place-items-center rounded-lg bg-brand text-sm font-extrabold text-white">
+            <span className="grid size-7 place-items-center rounded-lg bg-brand text-sm font-semibold text-white">
               S
             </span>
-            <span className="hidden text-[17px] font-extrabold sm:inline">시그널랩</span>
+            <span className="hidden text-lg font-semibold sm:inline">시그널랩</span>
           </Link>
           <span className="h-5 w-px bg-line" />
           <span className="whitespace-nowrap text-sm font-semibold text-body">투자 성향 설문</span>
@@ -275,7 +275,7 @@ export default function SurveyFlow() {
                   update(DEMO_DRAFT);
                   setError("");
                 }}
-                className="rounded-lg px-3 py-2 text-xs font-bold text-brand hover:bg-brand-soft"
+                className="rounded-lg px-3 py-2 text-xs font-medium text-brand hover:bg-brand-soft"
               >
                 <span className="hidden sm:inline">데모 응답 불러오기</span>
                 <span className="sm:hidden">데모 불러오기</span>
@@ -327,7 +327,7 @@ function ProgressBar({ draft, page }: { draft: Draft; page: Page }) {
     <div className="border-b border-line-soft px-6 py-5 sm:px-10">
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-bold text-brand">{label}</span>
+          <span className="text-xs font-medium text-brand">{label}</span>
           <span className="ml-auto text-xs tabular-nums text-faint">
             {draft.page + 1} / {PAGES.length} 화면
           </span>
@@ -382,13 +382,13 @@ function QuestionPage({
   const feedback = page.kind === "style" && page.lastOfAxis ? axisFeedback(page.axis, draft.style) : null;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-line bg-white shadow-[0_12px_34px_rgba(27,36,52,0.07)]">
+    <section className="overflow-hidden rounded-lg border border-line bg-white shadow-lift">
       <ProgressBar draft={draft} page={page} />
       <div className="flex min-h-[480px] flex-col px-6 py-8 sm:px-10 sm:py-10">
         {restored && draft.page > 0 && (
           <div className="mb-6 flex items-center gap-3 rounded-lg bg-brand-soft px-4 py-3 text-sm text-brand-deep">
             저장해 둔 응답을 불러왔어요. 이어서 답하면 됩니다.
-            <button type="button" onClick={onRestart} className="ml-auto text-xs font-bold hover:underline">
+            <button type="button" onClick={onRestart} className="ml-auto text-xs font-medium hover:underline">
               처음부터 하기
             </button>
           </div>
@@ -396,14 +396,14 @@ function QuestionPage({
 
         {page.kind === "style" && (
           <>
-            <span className="mb-2 text-xs font-extrabold text-brand">{page.axis.section}</span>
+            <span className="mb-2 text-xs font-semibold text-brand">{page.axis.section}</span>
             <p className="mb-6 text-sm leading-6 text-muted">
               {page.axis.help}. 맞고 틀린 답은 없어요. 요즘의 나와 가장 가까운 쪽을 골라 주세요.
             </p>
             <div className="flex flex-col gap-8">
               {page.questions.map((question) => (
                 <fieldset key={question.id} className="flex flex-col gap-3">
-                  <legend className="mb-3 text-lg font-extrabold leading-[1.5] text-ink sm:text-xl">
+                  <legend className="mb-3 text-lg font-semibold leading-[1.5] text-ink sm:text-xl">
                     {question.text}
                   </legend>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
@@ -425,7 +425,7 @@ function QuestionPage({
                             onChange={() =>
                               onUpdate({ style: { ...draft.style, [question.id]: option.value } })
                             }
-                            className="size-4 flex-none accent-[#2f5fd0]"
+                            className="size-4 flex-none accent-[var(--color-brand)]"
                           />
                           {option.label}
                         </label>
@@ -445,8 +445,8 @@ function QuestionPage({
 
         {page.kind === "experience" && (
           <>
-            <span className="mb-3 text-xs font-extrabold text-brand">투자 경험</span>
-            <h1 className="text-2xl font-extrabold leading-[1.4] text-ink sm:text-[28px]">
+            <span className="mb-3 text-xs font-semibold text-brand">투자 경험</span>
+            <h1 className="text-2xl font-semibold leading-[1.4] text-ink sm:text-3xl">
               직접 투자한 경험은 얼마나 되나요?
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted">
@@ -469,8 +469,8 @@ function QuestionPage({
 
         {page.kind === "avoided" && (
           <>
-            <span className="mb-3 text-xs font-extrabold text-brand">제외할 종목 유형 (선택)</span>
-            <h1 className="text-2xl font-extrabold leading-[1.4] text-ink sm:text-[28px]">
+            <span className="mb-3 text-xs font-semibold text-brand">제외할 종목 유형 (선택)</span>
+            <h1 className="text-2xl font-semibold leading-[1.4] text-ink sm:text-3xl">
               추천에서 빼고 싶은 종목 유형이 있나요?
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted">
@@ -501,8 +501,8 @@ function QuestionPage({
 
         {page.kind === "freeText" && (
           <>
-            <span className="mb-3 text-xs font-extrabold text-brand">요즘 걱정되는 점 (선택)</span>
-            <h1 className="text-2xl font-extrabold leading-[1.4] text-ink sm:text-[28px]">
+            <span className="mb-3 text-xs font-semibold text-brand">요즘 걱정되는 점 (선택)</span>
+            <h1 className="text-2xl font-semibold leading-[1.4] text-ink sm:text-3xl">
               투자하면서 요즘 가장 걱정되는 점이 있다면 적어 주세요.
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted">
@@ -520,7 +520,7 @@ function QuestionPage({
         )}
 
         {error && (
-          <p role="alert" className="mt-4 text-sm font-semibold text-[#b42318]">
+          <p role="alert" className="mt-4 text-sm font-semibold text-danger">
             {error}
           </p>
         )}
@@ -530,7 +530,7 @@ function QuestionPage({
             type="button"
             onClick={onBack}
             disabled={draft.page === 0 || submitting}
-            className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field disabled:cursor-not-allowed disabled:opacity-40"
+            className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-medium text-body hover:bg-field disabled:cursor-not-allowed disabled:opacity-40"
           >
             이전
           </button>
@@ -539,7 +539,7 @@ function QuestionPage({
             type="button"
             onClick={onNext}
             disabled={!canContinue || submitting}
-            className="ml-auto h-11 min-w-[112px] rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
+            className="ml-auto h-11 min-w-[112px] rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
           >
             {submitting ? "계산 중" : last ? "결과 확인" : "다음"}
           </button>
@@ -572,7 +572,7 @@ function ChoiceRow({
           : "border-edge bg-white text-body hover:border-brand hover:bg-field"
       }`}
     >
-      <input type={type} name={name} checked={selected} onChange={onChange} className="size-4 flex-none accent-[#2f5fd0]" />
+      <input type={type} name={name} checked={selected} onChange={onChange} className="size-4 flex-none accent-[var(--color-brand)]" />
       <span className="flex flex-col gap-0.5">
         <span>{label}</span>
         {detail && <span className="text-xs font-normal text-muted">{detail}</span>}
@@ -597,13 +597,13 @@ function AxisGauge({
   return (
     <div className="flex min-w-0 flex-col gap-2">
       <div className="flex items-baseline gap-2">
-        <span className="text-sm font-bold text-ink">{label}</span>
-        <span className="ml-auto text-xl font-extrabold tabular-nums text-ink">{value}</span>
+        <span className="text-sm font-medium text-ink">{label}</span>
+        <span className="ml-auto text-xl font-semibold tabular-nums text-ink">{value}</span>
       </div>
       <div className="h-2 overflow-hidden rounded bg-track">
         <div className="h-full rounded bg-brand" style={{ width: `${value}%` }} />
       </div>
-      <span className="flex justify-between text-[11px] text-faint">
+      <span className="flex justify-between text-2xs text-faint">
         <span>0 {left}</span>
         <span>100 {right}</span>
       </span>
@@ -641,12 +641,12 @@ function ResultView({
   const avoidedLabels = result.constraints.avoided_assets.map((asset) => AVOIDED_ASSET_LABELS[asset]);
 
   return (
-    <section className="overflow-hidden rounded-lg border border-line bg-white shadow-[0_12px_34px_rgba(27,36,52,0.07)]">
-      <div className="border-b border-line bg-[#f7fbf9] px-6 py-7 sm:px-10">
-        <span className="text-xs font-extrabold text-[#16856b]">
+    <section className="overflow-hidden rounded-lg border border-line bg-white shadow-lift">
+      <div className="border-b border-line bg-sig-sp-tint px-6 py-7 sm:px-10">
+        <span className="text-xs font-semibold text-cat-2">
           {saved ? "프로필 저장 완료" : "진단 결과 · 아직 저장 전이에요"}
         </span>
-        <h1 data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="mt-2 text-[28px] font-extrabold text-ink sm:text-[32px]">
+        <h1 data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="mt-2 text-3xl font-semibold text-ink sm:text-3xl">
           {bit.lowConfidence ? "유형 확인 중" : BIT_LABEL[bit.type]}
         </h1>
         <p className="mt-1 text-sm font-semibold text-muted">
@@ -686,11 +686,11 @@ function ResultView({
         </div>
 
         {(result.contradictions?.length ?? 0) > 0 && (
-          <div className="mt-8 flex flex-col gap-2 rounded-lg border border-[#f0e2bd] bg-[#fdf6e8] px-4 py-3">
-            <span className="text-sm font-bold text-[#7a6210]">답변 중 서로 부딪히는 부분이 있어요</span>
+          <div className="mt-8 flex flex-col gap-2 rounded-lg border border-warn-line bg-warn-tint px-4 py-3">
+            <span className="text-sm font-medium text-warn">답변 중 서로 부딪히는 부분이 있어요</span>
             {result.contradictions!.map((item) => (
-              <p key={item.id} className="m-0 text-[13px] leading-6 text-[#7a6210]">
-                {item.observation} <span className="text-[#98822f]">→ {item.follow_up_question}</span>
+              <p key={item.id} className="m-0 text-sm leading-6 text-warn">
+                {item.observation} <span className="text-warn">→ {item.follow_up_question}</span>
               </p>
             ))}
           </div>
@@ -698,12 +698,12 @@ function ResultView({
 
         <div className="mt-8 border-t border-line-soft pt-6">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="mr-2 text-sm font-bold text-ink">제외할 종목 유형</span>
+            <span className="mr-2 text-sm font-medium text-ink">제외할 종목 유형</span>
             {avoidedLabels.length ? (
               avoidedLabels.map((label) => (
                 <span
                   key={label}
-                  className="rounded-full border border-[#f0c9c5] bg-[#fff5f3] px-3 py-1.5 text-xs font-bold text-[#a83a31]"
+                  className="rounded-full border border-sig-sn-tint bg-sig-sn-tint px-3 py-1.5 text-xs font-medium text-sig-sn"
                 >
                   {label}
                 </span>
@@ -726,7 +726,7 @@ function ResultView({
                   <label key={axis.id} className="flex flex-col gap-1 text-xs">
                     <span className="flex items-center gap-2">
                       <strong className="text-ink">{axis.section}</strong>
-                      <span className="ml-auto font-bold tabular-nums text-ink">
+                      <span className="ml-auto font-medium tabular-nums text-ink">
                         {ratio > 0 ? "+" : ""}
                         {ratio.toFixed(2)}
                       </span>
@@ -743,7 +743,7 @@ function ResultView({
                       }
                       className="accent-brand"
                     />
-                    <span className="flex justify-between text-[11px] text-faint">
+                    <span className="flex justify-between text-2xs text-faint">
                       <span>{axis.negative_label}</span>
                       <span>{axis.positive_label}</span>
                     </span>
@@ -755,7 +755,7 @@ function ResultView({
         )}
 
         {error && (
-          <p role="alert" className="mt-4 text-sm font-semibold text-[#b42318]">
+          <p role="alert" className="mt-4 text-sm font-semibold text-danger">
             {error}
           </p>
         )}
@@ -768,20 +768,20 @@ function ResultView({
             <button
               type="button"
               onClick={onDashboard}
-              className="h-11 rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep"
+              className="h-11 rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep"
             >
               대시보드로 이동
             </button>
           </div>
         ) : (
           <div className="mt-8 flex flex-col gap-3 border-t border-line-soft pt-6">
-            <span className="text-base font-extrabold text-ink">이 결과가 나와 맞나요?</span>
+            <span className="text-base font-semibold text-ink">이 결과가 나와 맞나요?</span>
             <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
               <button
                 type="button"
                 onClick={onRestart}
                 disabled={submitting}
-                className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field"
+                className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-medium text-body hover:bg-field"
               >
                 다시 응답하기
               </button>
@@ -793,7 +793,7 @@ function ResultView({
                     setAdjusting(false);
                   }}
                   disabled={submitting}
-                  className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-bold text-body hover:bg-field"
+                  className="h-11 rounded-lg border border-edge bg-white px-5 text-sm font-medium text-body hover:bg-field"
                 >
                   조정 취소
                 </button>
@@ -802,7 +802,7 @@ function ResultView({
                   type="button"
                   onClick={() => setAdjusting(true)}
                   aria-controls="style-axes-adjust"
-                  className="h-11 rounded-lg border border-brand bg-white px-5 text-sm font-bold text-brand hover:bg-brand-soft"
+                  className="h-11 rounded-lg border border-brand bg-white px-5 text-sm font-medium text-brand hover:bg-brand-soft"
                 >
                   직접 조정하기
                 </button>
@@ -811,7 +811,7 @@ function ResultView({
                 type="button"
                 onClick={() => onConfirm(changed ? adjusted : {})}
                 disabled={submitting}
-                className="h-11 rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:bg-ghost"
+                className="h-11 rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep disabled:bg-ghost"
               >
                 {submitting ? "저장 중" : changed ? "조정한 값으로 저장" : "네, 이대로 저장"}
               </button>

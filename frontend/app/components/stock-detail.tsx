@@ -8,11 +8,10 @@ import SourceChip from "./source-chip";
 import PriceHistoryChart from "./price-history-chart";
 import ReturnHistogram from "./return-histogram";
 import SiteHeader from "./site-header";
-import { SignalDots } from "./stock-card";
+import { SignalScale } from "./stock-card";
 import {
   AGREEMENT_LABEL,
   HORIZON_META,
-  REASON_SOURCE_META,
   RISK_FLAG_LABEL,
   RISK_GRADE_META,
   SIGNAL_META,
@@ -27,7 +26,6 @@ import type {
 
 // 수익률 밴드 바: 0%가 바 중앙(50%), 수익률 1%p당 5% 이동 (stock-card와 동일 규칙)
 const BAND_SCALE = 5;
-const RANK_BADGE_BG = ["#2f5fd0", "#5c82db", "#8aa5e6"];
 const HORIZON_DAYS = { h5: 5, h10: 10, h20: 20 } as const;
 
 function clamp(value: number, min: number, max: number) {
@@ -51,9 +49,9 @@ function Card({
   emphasized?: boolean;
   className?: string;
 }) {
-  const border = emphasized ? "border-2 border-[#dbe4f6]" : "border border-line";
+  const border = emphasized ? "border border-edge shadow-hairline" : "border border-line";
   return (
-    <section className={`rounded-[14px] bg-white px-7 py-[22px] ${border} ${className}`}>
+    <section className={`rounded-lg bg-white px-7 py-[22px] ${border} ${className}`}>
       {children}
     </section>
   );
@@ -117,7 +115,7 @@ export default function StockDetailView({
     Number.isFinite(detail.changePercent);
   const changePercent = detail.changePercent ?? 0;
   const changeColor =
-    changePercent > 0 ? "#c93b34" : changePercent < 0 ? "#2f5fd0" : "#667085";
+    changePercent > 0 ? "var(--color-sig-sn)" : changePercent < 0 ? "var(--color-brand)" : "var(--color-muted)";
   const changeArrow = changePercent > 0 ? "▲" : changePercent < 0 ? "▼" : "";
   const safeMaxRiskTier =
     Number.isInteger(maxRiskTier) && maxRiskTier >= 1 && maxRiskTier <= 5
@@ -148,7 +146,7 @@ export default function StockDetailView({
       />
 
       <div className="mx-auto box-border flex w-full max-w-[1104px] flex-col gap-4 px-8 pb-6 pt-5">
-        <Link href="/" className="self-start text-[13px] text-muted hover:text-brand">
+        <Link href="/" className="self-start text-sm text-muted hover:text-brand">
           ← 대시보드로 돌아가기
         </Link>
 
@@ -161,19 +159,19 @@ export default function StockDetailView({
         {dataError && (
           <div
             role="alert"
-            className="flex flex-col gap-3 rounded-lg border border-[#e8c76a] bg-[#fff9e8] px-4 py-3 sm:flex-row sm:items-center"
+            className="flex flex-col gap-3 rounded-lg border border-warn-line bg-warn-tint px-4 py-3 sm:flex-row sm:items-center"
           >
             <div className="min-w-0">
-              <p className="text-sm font-bold text-[#795b08]">
+              <p className="text-sm font-medium text-warn">
                 실제 상세 데이터를 불러오지 못해 샘플 데이터를 표시합니다.
               </p>
-              <p className="mt-1 break-words text-xs text-[#806d39]">{dataError}</p>
+              <p className="mt-1 break-words text-xs text-warn">{dataError}</p>
             </div>
             {onRetry && (
               <button
                 type="button"
                 onClick={onRetry}
-                className="h-9 flex-none rounded-lg border border-[#d5b85e] bg-white px-4 text-xs font-bold text-[#795b08] hover:bg-[#fffdf5] sm:ml-auto"
+                className="h-9 flex-none rounded-lg border border-warn-line bg-white px-4 text-xs font-medium text-warn hover:bg-warn-tint sm:ml-auto"
               >
                 다시 시도
               </button>
@@ -183,7 +181,7 @@ export default function StockDetailView({
 
         {source === "supabase" &&
           (priceHistory.length < 2 || realizedReturns.length === 0) && (
-            <div className="rounded-lg border border-[#b9c9e8] bg-brand-soft px-4 py-3 text-sm text-[#31558f]">
+            <div className="rounded-md bg-field px-4 py-3 text-sm text-body">
               예측·신뢰도·Top 근거는 Supabase 조회값입니다. 저장 계약이 없는 시세 이력과
               수익률 분포 원본은 샘플로 대체하지 않고 비워 둡니다.
             </div>
@@ -193,36 +191,30 @@ export default function StockDetailView({
         <Card className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
           <div className="flex flex-col gap-1.5">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl font-extrabold tracking-tight">{detail.name}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">{detail.name}</h1>
               <span className="text-sm text-faint">
                 {detail.code} · {detail.market}
               </span>
-              <span
-                className="inline-flex h-[22px] items-center rounded-md px-2 text-[11.5px] font-bold"
-                style={{ backgroundColor: grade.bg, color: grade.text }}
-              >
+              <span className={`text-sm ${grade.tone === "warn" ? "text-warn" : "text-muted"}`}>
                 위험등급 {detail.riskGrade} · {grade.label}
               </span>
-              {detail.riskFlags.map((flag) => (
-                <span
-                  key={flag}
-                  className="inline-flex h-[22px] items-center rounded-md bg-[#fdf1e3] px-2 text-[11.5px] font-bold text-[#b45814]"
-                >
-                  {RISK_FLAG_LABEL[flag]}
+              {detail.riskFlags.length > 0 && (
+                <span className="text-sm text-warn">
+                  {detail.riskFlags.map((flag) => RISK_FLAG_LABEL[flag]).join(" · ")}
                 </span>
-              ))}
+              )}
               <SourceChip provenance={detail.provenance} />
             </div>
-            <span className="text-[12.5px] text-faint">
+            <span className="text-xs text-faint">
               데이터·예측 기준일 {formatDate(detail.asOf)} · 장 마감 후 생성
             </span>
           </div>
           {hasCurrentPrice ? (
             <div className="ml-auto flex items-baseline gap-2.5">
-              <span className="text-[26px] font-extrabold tabular-nums">
+              <span className="text-3xl font-semibold tabular-nums">
                 {detail.currentPrice?.toLocaleString("ko-KR")}원
               </span>
-              <span className="text-base font-bold tabular-nums" style={{ color: changeColor }}>
+              <span className="text-base font-medium tabular-nums" style={{ color: changeColor }}>
                 {changeArrow} {formatPercent(changePercent)}
               </span>
             </div>
@@ -243,9 +235,9 @@ export default function StockDetailView({
         <Card className="grid grid-cols-2 gap-7 xl:grid-cols-4">
           <div className="flex flex-col gap-2.5">
             <span className="text-xs text-muted">신호등</span>
-            <SignalDots active={detail.signalLight} />
+            <SignalScale active={detail.signalLight} />
             <div className="flex flex-col gap-0.5">
-              <span className="text-[17px] font-extrabold" style={{ color: signal.text }}>
+              <span className="text-lg font-semibold" style={{ color: signal.ink }}>
                 {signal.label}
               </span>
               <span className="text-xs text-faint">신호 강도 상위 {topPercent}%</span>
@@ -255,8 +247,7 @@ export default function StockDetailView({
           <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
             <span className="text-xs text-muted">위험 계층</span>
             <span
-              className="inline-flex h-[30px] items-center self-start rounded-lg px-3.5 text-[15px] font-extrabold"
-              style={{ backgroundColor: grade.bg, color: grade.text }}
+              className={`text-lg font-semibold ${grade.tone === "warn" ? "text-warn" : ""}`}
             >
               {detail.riskGrade}등급 · {grade.label}
             </span>
@@ -264,46 +255,51 @@ export default function StockDetailView({
               {([1, 2, 3, 4, 5] as const).map((tier) => (
                 <span
                   key={tier}
-                  className="h-[5px] rounded-[3px]"
+                  className="h-[5px] rounded-full"
                   style={{
-                    backgroundColor: tier <= detail.riskGrade ? grade.text : "#eef1f5",
-                    opacity: tier === detail.riskGrade ? 1 : tier < detail.riskGrade ? 0.35 : 1,
+                    backgroundColor:
+                      tier <= detail.riskGrade
+                        ? grade.tone === "warn"
+                          ? "var(--color-warn)"
+                          : "var(--color-ink)"
+                        : "var(--color-track)",
+                    opacity: tier === detail.riskGrade ? 1 : tier < detail.riskGrade ? 0.3 : 1,
                   }}
                 />
               ))}
             </div>
-            <span className="text-[11.5px] text-faint">1=매우 위험 ~ 5=매우 안전</span>
+            <span className="text-xs text-faint">1=매우 위험 ~ 5=매우 안전</span>
           </div>
 
           <div className="flex flex-col gap-2.5 xl:border-l xl:border-line-soft xl:pl-7">
             <span className="text-xs text-muted">
               예상 수익률 밴드 <span className="text-ghost">· {ciPercent}% 신뢰구간</span>
             </span>
-            <div className="relative mt-1.5 h-2.5 rounded-[5px] bg-track">
-              <span className="absolute left-1/2 top-[-4px] h-[18px] w-px bg-[#c2cad6]" />
+            <div className="relative mt-1.5 h-2.5 rounded-full bg-track">
+              <span className="absolute left-1/2 top-[-4px] h-[18px] w-px bg-edge" />
               <span
-                className="absolute h-2.5 rounded-[5px]"
+                className="absolute h-2.5 rounded-full"
                 style={{
                   left: `${bandLeft}%`,
                   width: `${bandRight - bandLeft}%`,
-                  background: `linear-gradient(90deg, ${signal.bandFrom}, ${signal.bandTo})`,
+                  backgroundColor: signal.ink,
                 }}
               />
             </div>
-            <span className="text-[19px] font-extrabold tabular-nums">
+            <span className="text-xl font-semibold tabular-nums">
               {formatPercent(detail.returnBand.low)} ~ {formatPercent(detail.returnBand.high)}
             </span>
-            <span className="text-[11.5px] text-faint">
+            <span className="text-xs text-faint">
               과거 유사 신호 구간의 실현 수익률 분포
             </span>
           </div>
 
           <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
             <span className="text-xs text-muted">신뢰도</span>
-            <span className="text-[19px] font-extrabold">
+            <span className="text-xl font-semibold">
               상승 비율 {Math.round(detail.hitRate * 100)}%
             </span>
-            <span className="text-[12.5px] text-body">이 확률 구간에서 과거에 실제로 오른 비율</span>
+            <span className="text-xs text-body">이 확률 구간에서 과거에 실제로 오른 비율</span>
             <span className="text-xs text-faint">과거 유사 사례 {detail.similarCaseCount}건</span>
           </div>
         </Card>
@@ -311,14 +307,14 @@ export default function StockDetailView({
         {/* 실현 수익률 분포 — 화이트박스 핵심 근거라 가장 눈에 띄게(강조 테두리) 배치 */}
         <Card emphasized className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-base font-extrabold">
+            <span className="text-base font-semibold">
               과거 유사 신호 {detail.similarCaseCount}건의 실현 수익률 분포
             </span>
             <span className="text-xs text-faint">
               이 신호가 과거에 실제로 낸 결과 · 향후 {returnHorizonDays}거래일(
               {returnHorizon.toUpperCase()}) 기준
             </span>
-            <span className="ml-auto inline-flex h-[22px] items-center rounded-md bg-brand-soft px-2 text-[11.5px] font-bold text-brand">
+            <span className="ml-auto inline-flex h-[22px] items-center rounded-md bg-brand-soft px-2 text-xs font-medium text-brand">
               {realizedReturns.length > 0 ? "예측 밴드의 출처" : "분포 원본 미연결"}
             </span>
           </div>
@@ -330,7 +326,7 @@ export default function StockDetailView({
                 caseCount={detail.similarCaseCount}
                 signal={signal}
               />
-              <span className="text-[11.5px] text-faint">
+              <span className="text-xs text-faint">
                 예상 수익률 밴드 {formatPercent(detail.returnBand.low)} ~{" "}
                 {formatPercent(detail.returnBand.high)}는 이 분포의 {ciPercent}% 구간입니다 · 미래
                 가격 경로가 아닌 {returnHorizon.toUpperCase()} 시점의 분포 범위입니다
@@ -347,7 +343,7 @@ export default function StockDetailView({
         {/* 주가 흐름 — 과거 실선만, 미래 영역은 수익률 세로 구간 하나 */}
         <Card className="flex flex-col gap-3">
           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-[15px] font-extrabold">주가 흐름</span>
+            <span className="text-base font-semibold">주가 흐름</span>
             <span className="text-xs text-faint">
               최근 60거래일 · 지난 주가만 표시(예측선 없음)
               {priceDataPeriod &&
@@ -363,7 +359,7 @@ export default function StockDetailView({
                 <span className="inline-flex items-center gap-1.5">
                   <span
                     className="box-border h-2.5 w-[7px] rounded-full border"
-                    style={{ backgroundColor: `${signal.dot}29`, borderColor: signal.dot }}
+                    style={{ backgroundColor: signal.tint, borderColor: signal.ink }}
                   />
                   {returnHorizon.toUpperCase()} 분포 범위
                 </span>
@@ -378,7 +374,7 @@ export default function StockDetailView({
                 signal={signal}
                 asOfLabel={asOfLabel}
               />
-              <span className="text-[11.5px] text-faint">
+              <span className="text-xs text-faint">
                 미래 가격 곡선은 그리지 않습니다 · 오른쪽 세로 구간은{" "}
                 {returnHorizon.toUpperCase()} 시점 예상 수익률 범위({ciPercent}%)로, 위 분포
                 히스토그램에서 나온 값입니다
@@ -393,15 +389,15 @@ export default function StockDetailView({
 
         {/* 기간별 신호 일치 */}
         <Card className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <span className="min-w-[150px] text-[15px] font-extrabold">기간별 신호 일치</span>
+          <span className="min-w-[150px] text-base font-semibold">기간별 신호 일치</span>
           <div className="flex flex-wrap items-center gap-2">
             {horizons.map(([label, direction]) => {
               const meta = HORIZON_META[direction];
               return (
                 <span
                   key={label}
-                  className="inline-flex h-[30px] items-center gap-1.5 rounded-lg px-3 text-[13px] font-bold"
-                  style={{ backgroundColor: meta.bg, color: meta.text }}
+                  className="text-base font-semibold tabular-nums"
+                  style={{ color: meta.ink }}
                 >
                   {label} {meta.arrow}
                 </span>
@@ -417,7 +413,7 @@ export default function StockDetailView({
         {/* 예측 근거 Top 3 */}
         <Card emphasized className="flex flex-col gap-4">
           <div className="flex items-baseline gap-2.5">
-            <span className="text-base font-extrabold">
+            <span className="text-base font-semibold">
               모델이 이 신호를 낸 이유{" "}
               <span className="text-brand">
                 {detail.reasons.length > 0 ? `Top ${detail.reasons.length}` : "근거 없음"}
@@ -428,26 +424,19 @@ export default function StockDetailView({
           {detail.reasons.length > 0 ? (
             <div className="flex flex-col gap-3">
               {detail.reasons.map((reason, i) => {
-                const source = REASON_SOURCE_META[reason.source];
                 return (
                   <div
                     key={`${reason.source}:${reason.title}:${i}`}
-                    className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-[10px] bg-field px-4 py-3.5"
+                    className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-md bg-field px-4 py-3.5"
                   >
-                    <span
-                      className="grid size-[26px] flex-none place-items-center rounded-lg text-[13px] font-extrabold text-white"
-                      style={{ backgroundColor: RANK_BADGE_BG[i] }}
-                    >
+                    <span className="flex-none text-sm font-semibold tabular-nums text-ghost">
                       {i + 1}
                     </span>
                     <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                      <span className="text-[14.5px] font-bold">{reason.title}</span>
+                      <span className="text-base font-medium">{reason.title}</span>
                       <span className="text-xs text-faint">{reason.detail}</span>
                     </div>
-                    <span
-                      className="inline-flex h-6 flex-none items-center rounded-md px-2.5 text-[11.5px] font-bold"
-                      style={{ backgroundColor: source.bg, color: source.text }}
-                    >
+                    <span className="flex-none whitespace-nowrap text-2xs text-faint">
                       출처: {reason.sourceLabel}
                     </span>
                   </div>
@@ -464,36 +453,36 @@ export default function StockDetailView({
         {/* 리스크 고지: 사용자 성향 수치와 연결하되 행동은 제안하지 않는다 */}
         <Card className="flex flex-col gap-3.5">
           <div className="flex items-center gap-2.5">
-            <span className="text-[15px] font-extrabold">리스크 고지</span>
+            <span className="text-base font-semibold">리스크 고지</span>
             {detail.riskFlags.map((flag) => (
               <span
                 key={flag}
-                className="inline-flex h-[22px] items-center rounded-md bg-[#fdf1e3] px-2 text-[11.5px] font-bold text-[#b45814]"
+                className="inline-flex h-[22px] items-center rounded-md bg-sig-ng-tint px-2 text-xs font-medium text-sig-ng"
               >
                 {RISK_FLAG_LABEL[flag]}
               </span>
             ))}
-            <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
+            <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-xs font-medium text-muted">
               {detail.market}
             </span>
           </div>
           {belowTolerance ? (
-            <div className="flex gap-3 rounded-[10px] border border-[#f0e2bd] bg-[#fdf6e8] px-4 py-3.5">
-              <span className="mt-px grid size-[18px] flex-none place-items-center rounded-full bg-[#d9a514] text-[11px] font-extrabold text-white">
+            <div className="flex gap-3 rounded-md border border-warn-line bg-warn-tint px-4 py-3.5">
+              <span className="mt-px grid size-[18px] flex-none place-items-center rounded-full bg-warn text-2xs font-semibold text-white">
                 !
               </span>
-              <span className="text-[13.5px] leading-relaxed text-[#7a6210]">
+              <span className="text-sm leading-relaxed text-warn">
                 {profile.displayName}님의 위험 감수 성향({profile.riskTolerance})보다 변동성이 큰
                 종목입니다. 위험 {detail.riskGrade}등급({grade.label})으로, 현재 성향 기준 허용
                 범위({allowedRiskLabel}) 밖에 있습니다.
               </span>
             </div>
           ) : (
-            <div className="flex gap-3 rounded-[10px] border border-line bg-field px-4 py-3.5">
-              <span className="mt-px grid size-[18px] flex-none place-items-center rounded-full bg-faint text-[11px] font-extrabold text-white">
+            <div className="flex gap-3 rounded-md border border-line bg-field px-4 py-3.5">
+              <span className="mt-px grid size-[18px] flex-none place-items-center rounded-full bg-faint text-2xs font-semibold text-white">
                 i
               </span>
-              <span className="text-[13.5px] leading-relaxed text-body">
+              <span className="text-sm leading-relaxed text-body">
                 위험 {detail.riskGrade}등급({grade.label}) 종목으로, {profile.displayName}님의{" "}
                 {profile.profileTypeLabel} 성향(위험 감수 {profile.riskTolerance}) 기준 허용
                 범위({allowedRiskLabel}) 안에 있습니다.
@@ -506,12 +495,12 @@ export default function StockDetailView({
         {hasAiAdvice && (
           <Card className="flex flex-col gap-3">
             <div className="flex items-center gap-2.5">
-              <span className="text-[15px] font-extrabold">AI 신호 해설</span>
-              <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
+              <span className="text-base font-semibold">AI 신호 해설</span>
+              <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-xs font-medium text-muted">
                 설명 전용 · 매매 조언 아님
               </span>
             </div>
-            <p className="m-0 text-[14.5px] leading-[1.7] text-[#38404e]">
+            <p className="m-0 text-base leading-[1.7] text-body">
               {detail.aiAdvice}
             </p>
             <p className="m-0 text-xs leading-5 text-muted">
@@ -535,10 +524,10 @@ export default function StockDetailView({
                   key={key}
                   type="button"
                   onClick={() => setChoice(key)}
-                  className={`h-11 whitespace-nowrap rounded-[10px] border px-5 text-sm font-bold transition-colors hover:border-brand ${
+                  className={`h-11 whitespace-nowrap rounded-md border px-5 text-sm font-medium transition-colors hover:border-brand ${
                     selected
                       ? "border-brand bg-brand-soft text-brand"
-                      : "border-edge bg-white text-[#38404e]"
+                      : "border-edge bg-white text-body"
                   }`}
                 >
                   {choiceLabels[key]}
@@ -547,7 +536,7 @@ export default function StockDetailView({
             })}
           </div>
           {choice && (
-            <span className="text-[13px] font-semibold text-brand">
+            <span className="text-sm font-semibold text-brand">
               &lsquo;{choiceLabels[choice]}&rsquo;가 참고용으로 기록되었습니다. 실제 주문은
               실행되지 않습니다.
             </span>

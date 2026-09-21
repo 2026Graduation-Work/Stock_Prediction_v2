@@ -71,23 +71,23 @@ export default function LoginForm() {
     <div className="min-h-screen bg-page">
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex h-16 w-full max-w-[1080px] items-center gap-2.5 px-5 sm:px-8">
-          <span className="grid size-8 place-items-center rounded-lg bg-brand text-sm font-extrabold text-white">
+          <span className="grid size-8 place-items-center rounded-lg bg-brand text-sm font-semibold text-white">
             S
           </span>
-          <span className="text-[17px] font-extrabold text-ink">시그널랩</span>
+          <span className="text-lg font-semibold text-ink">시그널랩</span>
         </div>
       </header>
 
       <main className="mx-auto grid min-h-[calc(100vh-65px)] w-full max-w-[1080px] place-items-center px-5 py-10 sm:px-8">
-        <section className="w-full max-w-[440px] rounded-lg border border-line bg-white px-6 py-8 shadow-[0_12px_34px_rgba(27,36,52,0.07)] sm:px-9 sm:py-10">
-          <h1 className="text-[28px] font-extrabold text-ink">시그널랩 로그인</h1>
+        <section className="w-full max-w-[440px] rounded-lg border border-line bg-white px-6 py-8 shadow-lift sm:px-9 sm:py-10">
+          <h1 className="text-3xl font-semibold text-ink">시그널랩 로그인</h1>
           <p className="mt-2 text-sm leading-6 text-muted">
             처음 투자하는 사람도 종목을 판단할 근거를 쉽게 확인하도록 돕는 서비스예요. 설문으로 내 투자
             성향을 알면 정보를 보여 주는 순서와 주의 안내가 나에게 맞춰집니다.
           </p>
 
           <div className="mt-8">
-            <h2 className="text-sm font-extrabold text-ink">이메일로 시작</h2>
+            <h2 className="text-sm font-semibold text-ink">이메일로 시작</h2>
             {accountAvailable ? (
               <>
                 <div role="tablist" aria-label="계정" className="mt-3 grid grid-cols-2 gap-1 rounded-lg bg-track p-1">
@@ -107,7 +107,7 @@ export default function LoginForm() {
                         setError("");
                         setNotice("");
                       }}
-                      className={`h-9 rounded-md text-xs font-bold ${
+                      className={`h-9 rounded-md text-xs font-medium ${
                         tab === id ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink"
                       }`}
                     >
@@ -116,7 +116,7 @@ export default function LoginForm() {
                   ))}
                 </div>
                 <form onSubmit={submitAccount} className="mt-4 flex flex-col gap-3">
-                  <label className="flex flex-col gap-1.5 text-sm font-bold text-ink">
+                  <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
                     이메일
                     <input
                       type="email"
@@ -128,7 +128,7 @@ export default function LoginForm() {
                       className="h-11 w-full rounded-lg border border-edge bg-field px-3.5 text-sm font-normal text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white"
                     />
                   </label>
-                  <label className="flex flex-col gap-1.5 text-sm font-bold text-ink">
+                  <label className="flex flex-col gap-1.5 text-sm font-medium text-ink">
                     비밀번호
                     <input
                       type="password"
@@ -144,7 +144,7 @@ export default function LoginForm() {
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="h-11 w-full rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
+                    className="h-11 w-full rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
                   >
                     {submitting ? "처리 중" : tab === "signin" ? "로그인" : "가입하고 시작"}
                   </button>
@@ -152,7 +152,7 @@ export default function LoginForm() {
                     type="button"
                     onClick={sendMagicLink}
                     disabled={submitting || !email.trim()}
-                    className="self-start text-xs font-bold text-brand hover:text-brand-deep disabled:cursor-not-allowed disabled:text-ghost"
+                    className="self-start text-xs font-medium text-brand hover:text-brand-deep disabled:cursor-not-allowed disabled:text-ghost"
                   >
                     비밀번호 없이 로그인 링크 받기
                   </button>
@@ -167,12 +167,12 @@ export default function LoginForm() {
           </div>
 
           {notice && (
-            <p role="status" className="mt-4 rounded-lg border border-[#b8dfd4] bg-[#f1faf7] px-4 py-3 text-sm leading-6 text-[#126b58]">
+            <p role="status" className="mt-4 rounded-lg border border-cat-2-tint bg-cat-2-tint px-4 py-3 text-sm leading-6 text-cat-2">
               {notice}
             </p>
           )}
           {error && (
-            <p role="alert" className="mt-4 text-sm font-semibold text-[#b42318]">
+            <p role="alert" className="mt-4 text-sm font-semibold text-danger">
               {error}
             </p>
           )}
@@ -187,7 +187,7 @@ export default function LoginForm() {
             type="button"
             onClick={startDemo}
             disabled={submitting}
-            className="h-11 w-full rounded-lg border border-brand bg-white px-5 text-sm font-bold text-brand hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
+            className="h-11 w-full rounded-lg border border-brand bg-white px-5 text-sm font-medium text-brand hover:bg-brand-soft disabled:cursor-not-allowed disabled:opacity-50"
           >
             데모 계정으로 둘러보기
           </button>

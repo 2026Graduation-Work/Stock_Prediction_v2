@@ -23,6 +23,7 @@ import {
   type DeltaOutcome,
   type MetricDefinition,
 } from "@/lib/performance-display";
+import { CHART } from "@/lib/chart-colors";
 import type {
   ComparisonDeltaRow,
   ComparisonMetricRow,
@@ -49,13 +50,13 @@ const CONTROL_CONDITIONS = [
 
 const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; cell: string; label: string }> = {
   improved: {
-    text: "text-[#1e7d4f]",
-    cell: "bg-[#eef6f1]",
+    text: "text-sig-sp",
+    cell: "bg-sig-sp-tint",
     label: "개선",
   },
   worsened: {
-    text: "text-[#b03a34]",
-    cell: "bg-[#fbe9e8]",
+    text: "text-sig-sn",
+    cell: "bg-sig-sn-tint",
     label: "저하",
   },
   unchanged: {
@@ -76,10 +77,10 @@ const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; cell: string; label: s
 };
 
 const CHART_SERIES = [
-  { key: "stableA", label: "안정형 A", fill: "#98a2b3" },
-  { key: "stableB", label: "안정형 B", fill: "#2f5fd0" },
-  { key: "aggressiveA", label: "공격형 A", fill: "#c58a52" },
-  { key: "aggressiveB", label: "공격형 B", fill: "#1e7d4f" },
+  { key: "stableA", label: "안정형 A", fill: CHART.faint },
+  { key: "stableB", label: "안정형 B", fill: CHART.brand },
+  { key: "aggressiveA", label: "공격형 A", fill: CHART.cat4 },
+  { key: "aggressiveB", label: "공격형 B", fill: CHART.sigSp },
 ] as const;
 
 export default function PerformanceDashboard({
@@ -102,13 +103,13 @@ export default function PerformanceDashboard({
         <div className="mx-auto box-border w-full max-w-[1440px] px-6 py-6 lg:px-8">
           <div className="flex flex-wrap items-center gap-2.5">
             {isSample && (
-              <span className="rounded-md border border-[#e6c96b] bg-[#fff8df] px-2.5 py-1 text-[11px] font-extrabold text-[#8a6500]">
+              <span className="rounded-md border border-warn-line bg-warn-tint px-2.5 py-1 text-2xs font-semibold text-warn">
                 샘플 데이터
               </span>
             )}
             <span className="text-xs font-semibold text-muted">연구 질문</span>
           </div>
-          <h1 className="mt-2 text-[26px] font-extrabold leading-tight">
+          <h1 className="mt-2 text-3xl font-semibold leading-tight">
             심리 지수를 반영하면 예측이 나아지는가?
           </h1>
           <p className="mt-2 max-w-[920px] text-sm leading-6 text-body">
@@ -119,7 +120,7 @@ export default function PerformanceDashboard({
             {CONTROL_CONDITIONS.map((condition) => (
               <span
                 key={condition}
-                className="rounded-md border border-edge bg-field px-2.5 py-1.5 text-xs font-bold text-body"
+                className="rounded-md border border-edge bg-field px-2.5 py-1.5 text-xs font-medium text-body"
               >
                 {condition}
               </span>
@@ -141,7 +142,7 @@ export default function PerformanceDashboard({
               deltas={data.comparison_deltas.filter(({ sample }) => sample === "all")}
             />
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 px-1 text-[11px] text-faint">
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 px-1 text-2xs text-faint">
             <span>AUC·방향 일치율·Sharpe·MDD·누적수익률: 값이 클수록 우수</span>
             <span>Brier·ECE: 값이 작을수록 우수</span>
             <span>거래 수: 우열 없이 규모만 비교</span>
@@ -178,10 +179,10 @@ export default function PerformanceDashboard({
           className="border-l-4 border-brand bg-white px-5 py-5"
         >
           <div className="flex flex-wrap items-center gap-2.5">
-            <h2 id="conclusion-title" className="text-base font-extrabold">
+            <h2 id="conclusion-title" className="text-base font-semibold">
               연구 결론
             </h2>
-            <span className="rounded-md bg-track px-2 py-1 text-[10.5px] font-bold text-muted">
+            <span className="rounded-md bg-track px-2 py-1 text-2xs font-medium text-muted">
               {isSample ? "실제 결과 반영 전" : "러너 결과 반영"}
             </span>
           </div>
@@ -208,11 +209,11 @@ function SectionHeading({
   return (
     <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-0.5">
       {marker && (
-        <span className="rounded-md bg-brand-soft px-2 py-1 text-[10.5px] font-extrabold text-brand">
+        <span className="rounded-md bg-brand-soft px-2 py-1 text-2xs font-semibold text-brand">
           {marker}
         </span>
       )}
-      <h2 id={id} className="text-lg font-extrabold">
+      <h2 id={id} className="text-lg font-semibold">
         {title}
       </h2>
       <span className="text-xs text-faint">{description}</span>
@@ -228,7 +229,7 @@ function MetricInfoBadge({ description }: { description?: string }) {
       tabIndex={0}
       role="img"
       aria-label={description}
-      className="inline-flex size-3.5 flex-none cursor-help items-center justify-center rounded-full border border-edge bg-white text-[9px] font-bold leading-none text-faint"
+      className="inline-flex size-3.5 flex-none cursor-help items-center justify-center rounded-full border border-edge bg-white text-2xs font-medium leading-none text-faint"
     >
       ?
     </span>
@@ -245,7 +246,7 @@ function FourRunTable({
   return (
     <table className="min-w-[940px] w-full table-fixed border-collapse text-left">
       <thead>
-        <tr className="border-b border-line bg-field text-[11px] font-bold text-muted">
+        <tr className="border-b border-line bg-field text-2xs font-medium text-muted">
           <th rowSpan={2} className="w-[160px] border-r border-line px-4 py-3">
             실험 런
           </th>
@@ -256,7 +257,7 @@ function FourRunTable({
             Trading 지표
           </th>
         </tr>
-        <tr className="border-b border-line bg-field text-[11px] font-bold text-body">
+        <tr className="border-b border-line bg-field text-2xs font-medium text-body">
           {METRICS.map((metric, index) => (
             <th
               key={metric.key}
@@ -283,9 +284,9 @@ function FourRunTable({
             >
               <th className="border-r border-line px-4 py-3.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-extrabold">{PROFILE_LABEL[row.profile]}</span>
+                  <span className="font-semibold">{PROFILE_LABEL[row.profile]}</span>
                   <span
-                    className={`grid size-6 place-items-center rounded-md text-[11px] font-extrabold ${
+                    className={`grid size-6 place-items-center rounded-md text-2xs font-semibold ${
                       row.variant === "B"
                         ? "bg-brand text-white"
                         : "border border-edge bg-field text-body"
@@ -294,7 +295,7 @@ function FourRunTable({
                     {row.variant}
                   </span>
                 </div>
-                <div className="mt-1 text-[10.5px] font-medium text-faint">
+                <div className="mt-1 text-2xs font-medium text-faint">
                   {row.feature_set === "baseline" ? "차트 피처" : "차트 + 심리 피처"} · {row.feature_count}개
                 </div>
               </th>
@@ -308,11 +309,11 @@ function FourRunTable({
                       index === ML_METRICS.length - 1 ? "border-r border-line" : ""
                     } ${outcome ? OUTCOME_STYLE[outcome].cell : ""}`}
                   >
-                    <div className="text-[13px] font-bold text-ink">
+                    <div className="text-sm font-medium text-ink">
                       {formatMetricValue(row[metric.key], metric)}
                     </div>
                     {row.variant === "B" && (
-                      <div className={`mt-0.5 text-[10.5px] font-bold ${OUTCOME_STYLE[outcome!].text}`}>
+                      <div className={`mt-0.5 text-2xs font-medium ${OUTCOME_STYLE[outcome!].text}`}>
                         Δ {formatDeltaValue(deltaValue, metric)} · {OUTCOME_STYLE[outcome!].label}
                       </div>
                     )}
@@ -351,14 +352,14 @@ function SamplePanel({
   return (
     <article className="min-w-0 rounded-lg border border-line bg-white">
       <div className="border-b border-line px-4 py-3.5">
-        <h3 className="text-sm font-extrabold">{title}</h3>
-        <p className="mt-0.5 text-[11px] text-faint">{subtitle}</p>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="mt-0.5 text-2xs text-faint">{subtitle}</p>
       </div>
 
       <div className="px-3 pb-1 pt-3">
         <div className="flex items-center justify-between px-1">
-          <span className="text-[11px] font-bold text-muted">ML 지표 절대값</span>
-          <span className="text-[10px] text-faint">y축 0~1 고정</span>
+          <span className="text-2xs font-medium text-muted">ML 지표 절대값</span>
+          <span className="text-2xs text-faint">y축 0~1 고정</span>
         </div>
         <div className="mt-1 h-[230px] min-w-0">
           <ResponsiveContainer
@@ -369,25 +370,25 @@ function SamplePanel({
             initialDimension={{ width: 560, height: 230 }}
           >
             <BarChart data={chartData} margin={{ top: 10, right: 4, left: -18, bottom: 0 }}>
-              <CartesianGrid stroke="#eef1f5" vertical={false} />
+              <CartesianGrid stroke={CHART.track} vertical={false} />
               <XAxis
                 dataKey="metric"
-                tick={{ fill: "#667085", fontSize: 10 }}
-                axisLine={{ stroke: "#d5dae3" }}
+                tick={{ fill: CHART.muted, fontSize: 10 }}
+                axisLine={{ stroke: CHART.edge }}
                 tickLine={false}
               />
               <YAxis
                 domain={[0, 1]}
                 ticks={[0, 0.25, 0.5, 0.75, 1]}
-                tick={{ fill: "#98a2b3", fontSize: 9 }}
+                tick={{ fill: CHART.faint, fontSize: 9 }}
                 axisLine={false}
                 tickLine={false}
                 width={34}
               />
               <Tooltip
-                cursor={{ fill: "#f4f5f7" }}
+                cursor={{ fill: CHART.page }}
                 contentStyle={{
-                  border: "1px solid #e4e7ec",
+                  border: `1px solid ${CHART.line}`,
                   borderRadius: 6,
                   fontSize: 11,
                 }}
@@ -417,7 +418,7 @@ function SamplePanel({
       <div className="overflow-x-auto border-t border-line">
         <table className="w-full min-w-[440px] table-fixed border-collapse">
           <thead>
-            <tr className="bg-field text-[10.5px] font-bold text-muted">
+            <tr className="bg-field text-2xs font-medium text-muted">
               <th className="w-[92px] px-3 py-2 text-left">지표</th>
               <th className="px-2 py-2 text-left">안정형 A → B</th>
               <th className="px-2 py-2 text-left">공격형 A → B</th>
@@ -426,7 +427,7 @@ function SamplePanel({
           <tbody>
             {METRICS.map((metric) => (
               <tr key={metric.key} className="border-t border-line-soft">
-                <th className="px-3 py-2 text-left text-[10.5px] font-bold text-body">
+                <th className="px-3 py-2 text-left text-2xs font-medium text-body">
                   <span className="inline-flex items-center gap-1">
                     {metric.shortLabel}
                     <MetricInfoBadge description={metric.description} />
@@ -475,11 +476,11 @@ function PairCell({
 
   return (
     <td className="px-2 py-2 tabular-nums">
-      <div className="whitespace-nowrap text-[10.5px] font-semibold text-body">
+      <div className="whitespace-nowrap text-2xs font-semibold text-body">
         A {formatMetricValue(baselineValue, metric)} → B{" "}
         {formatMetricValue(treatmentValue, metric)}
       </div>
-      <div className={`mt-0.5 text-[10px] font-extrabold ${style.text}`}>
+      <div className={`mt-0.5 text-2xs font-semibold ${style.text}`}>
         Δ {formatDeltaValue(deltaValue, metric)} · {style.label}
       </div>
     </td>
