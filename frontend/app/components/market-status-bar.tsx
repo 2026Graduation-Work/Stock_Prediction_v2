@@ -22,7 +22,7 @@ function QuoteCell({ quote }: { quote: MarketIndexQuote }) {
   const arrow = positive ? "▲" : negative ? "▼" : "";
 
   return (
-    <div className="flex h-9 min-w-[112px] flex-col justify-center border-l border-line-soft px-3 first:border-l-0">
+    <div className="flex h-9 flex-none flex-col justify-center border-l border-line-soft px-3 first:border-l-0">
       <span className="text-2xs font-semibold text-muted">{quote.label}</span>
       <div className="flex items-baseline gap-1.5 whitespace-nowrap">
         <span className="text-sm font-semibold tabular-nums">{formatValue(quote)}</span>
@@ -38,9 +38,9 @@ function QuoteCell({ quote }: { quote: MarketIndexQuote }) {
 function Score({ label, value }: { label: string; value: number | null }) {
   return (
     <div className="hidden items-baseline gap-1.5 whitespace-nowrap lg:flex">
-      <span className="text-2xs text-faint">{label}</span>
+      <span className="text-2xs text-muted">{label}</span>
       {value === null ? (
-        <span className="text-xs font-medium text-faint">예시</span>
+        <span className="text-xs font-medium text-muted">예시</span>
       ) : (
         <span className="text-xs font-semibold tabular-nums">{value}</span>
       )}
@@ -54,7 +54,7 @@ export default function MarketStatusBar({ status }: { status: MarketStatus }) {
 
   return (
     <section aria-label="시장 지수와 시장 상태" className="border-t border-line bg-field">
-      <div className="mx-auto grid h-[50px] w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:px-8">
+      <div className="mx-auto grid h-[50px] w-full max-w-[1200px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:px-8">
         <div className="hidden min-w-[110px] flex-col lg:flex">
           <span className="text-2xs font-semibold text-muted">시장 브리핑</span>
           <span className="text-2xs font-medium tabular-nums">
@@ -66,7 +66,7 @@ export default function MarketStatusBar({ status }: { status: MarketStatus }) {
           {status.indexQuotes.length > 0 ? (
             status.indexQuotes.map((quote) => <QuoteCell key={quote.symbol} quote={quote} />)
           ) : (
-            <span className="px-3 text-xs text-faint">지수 데이터 미등록</span>
+            <span className="px-3 text-xs text-muted">지수 데이터 미등록</span>
           )}
         </div>
 

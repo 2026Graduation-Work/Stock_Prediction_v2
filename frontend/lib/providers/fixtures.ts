@@ -91,6 +91,11 @@ export const HYUNDAI_SENTIMENT: SentimentSeries = {
 };
 
 // 원점수 weight는 부호 없는 크기. provider가 합 100으로 정규화한다.
+// direction은 그 근거가 신호를 어느 쪽으로 밀었는지(+1 오르는 쪽, -1 내리는 쪽)다.
+// 수급 근거는 위 SUPPLY_FIXTURE 20일 합계의 부호에서 계산하고, 나머지는 예시 신호(긍정)와 같은 쪽으로 둔다.
+const flowDirection = (code: string, key: "foreign" | "institution"): 1 | -1 =>
+  SUPPLY_FIXTURE[code].reduce((sum, day) => sum + day[key], 0) >= 0 ? 1 : -1;
+
 // description은 신호의 정의만 적는다. 다른 카드 수치와 어긋나는 사실 주장을 넣지 않는다.
 export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
   "005930": [
@@ -120,6 +125,7 @@ export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
       label: "외국인 20일 누적 순매수",
       category: "supply",
       weight: 15,
+      direction: flowDirection("005930", "foreign"),
       description: "최근 20영업일 외국인 순매수 합계의 크기와 부호를 봅니다.",
     },
     {
@@ -143,6 +149,7 @@ export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
       label: "기관 20일 누적 순매수",
       category: "supply",
       weight: 22,
+      direction: flowDirection("005380", "institution"),
       description: "최근 20영업일 기관 순매수 합계의 크기와 부호를 봅니다.",
     },
     {

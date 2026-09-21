@@ -113,7 +113,7 @@ export default function PriceHistoryChart({
         {ticks.map((tick) => (
           <g key={tick}>
             <line x1={X0} y1={y(tick)} x2={VB_W - 10} y2={y(tick)} style={{ stroke: "var(--color-line-soft)" }} />
-            <text x={X0 + 4} y={y(tick) - 5} fontSize={11} style={{ fill: "var(--color-faint)" }}>
+            <text x={X0 + 4} y={y(tick) - 5} fontSize={11} style={{ fill: "var(--color-muted)" }}>
               {tick.toLocaleString("ko-KR")}
             </text>
           </g>
@@ -121,10 +121,10 @@ export default function PriceHistoryChart({
 
         {/* 오늘 경계선 — 오른쪽 미래 영역에는 H10 세로 구간 외에 아무것도 그리지 않는다 */}
         <line x1={X1} y1={PAD.top} x2={X1} y2={baseline} style={{ stroke: "var(--color-line)" }} />
-        <text x={X0} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-faint)" }}>
+        <text x={X0} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-muted)" }}>
           60거래일 전
         </text>
-        <text x={X1} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-faint)" }} textAnchor="end">
+        <text x={X1} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-muted)" }} textAnchor="end">
           오늘 ({asOfLabel})
         </text>
 
@@ -194,7 +194,7 @@ export default function PriceHistoryChart({
         >
           {formatSigned(band.low)}
         </text>
-        <text x={XH} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-faint)" }} textAnchor="middle">
+        <text x={XH} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-muted)" }} textAnchor="middle">
           H10 · 10거래일 후
         </text>
 
@@ -223,7 +223,7 @@ export default function PriceHistoryChart({
 
       {hovered !== null && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-line bg-white px-2.5 py-1.5 shadow-lift"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap surface px-2.5 py-1.5 shadow-lift"
           style={{
             left: `${(xAt(hovered) / VB_W) * 100}%`,
             top: `${((y(prices[hovered]) - 10) / VB_H) * 100}%`,

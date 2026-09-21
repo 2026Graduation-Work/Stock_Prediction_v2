@@ -62,11 +62,11 @@ export default function PortfolioHeatmap({
         : { kind: "mock", source: "" };
 
   return (
-    <section className="flex flex-col gap-3 rounded-md border border-line bg-white px-4 py-4">
+    <section className="flex flex-col gap-3 surface px-4 py-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-sm font-semibold">내 포트폴리오 맵</h2>
-          <p className="mt-0.5 text-2xs text-faint">면적은 등록 매입금액 기준</p>
+          <p className="mt-0.5 text-2xs text-muted">면적은 등록 매입금액 기준</p>
         </div>
         <div className="flex flex-col items-end gap-1">
           <Link href="/portfolio" className="text-2xs text-muted hover:text-ink">
@@ -141,7 +141,7 @@ export default function PortfolioHeatmap({
             />
           ))}
         </div>
-        <div className="mt-1 flex justify-between text-2xs text-faint">
+        <div className="mt-1 flex justify-between text-2xs text-muted">
           <span>강한 부정</span>
           <span>중립</span>
           <span>강한 긍정</span>
@@ -153,7 +153,7 @@ export default function PortfolioHeatmap({
           않았습니다. 신호가 생기면 자동으로 나타납니다.
         </p>
       )}
-      <p className="text-2xs leading-4 text-faint">
+      <p className="text-2xs leading-4 text-muted">
         색상은 수익률이 아닌 오늘의 5단계 모델 신호입니다. 보유 수량과 평균 매입가는 수동
         등록값입니다.
       </p>

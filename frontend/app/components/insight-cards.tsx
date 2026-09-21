@@ -6,7 +6,6 @@
 import { Fragment, useState, type ReactNode } from "react";
 import {
   CartesianGrid,
-  Legend,
   Line,
   LineChart,
   PolarAngleAxis,
@@ -108,21 +107,19 @@ const WHY: Record<CardId, string> = {
     "회사가 이익을 내는 힘과 재무 구조를 봅니다. 가격 움직임과 별개로 회사의 기초 체력을 확인하는 용도입니다.",
 };
 
-const CATEGORY_META: Record<
-  ContributionCategory,
-  { label: string; bar: string; bg: string; text: string }
-> = {
-  technical: { label: "기술적", bar: CHART.cat1, bg: CHART.cat1Tint, text: CHART.cat1 },
-  financial: { label: "재무", bar: CHART.cat2, bg: CHART.cat2Tint, text: CHART.cat2 },
-  sentiment: { label: "감성", bar: CHART.cat3, bg: CHART.cat3Tint, text: CHART.cat3 },
-  supply: { label: "수급", bar: CHART.cat4, bg: CHART.cat4Tint, text: CHART.cat4 },
+// 범주는 색이 아니라 라벨로 구분한다. 색은 방향(적 = 오르는 쪽, 청 = 내리는 쪽)에만 쓴다.
+const CATEGORY_LABEL: Record<ContributionCategory, string> = {
+  technical: "가격 흐름",
+  financial: "회사 체력",
+  sentiment: "뉴스 분위기",
+  supply: "사고판 주체",
 };
 
 const SUPPLY_SERIES = [
-  { key: "retail", label: "개인", color: CHART.cat4 },
-  { key: "foreign", label: "외국인", color: CHART.cat1 },
-  { key: "institution", label: "기관", color: CHART.cat2 },
-  { key: "otherCorp", label: "기타법인", color: CHART.cat5 },
+  { key: "retail", label: "개인" },
+  { key: "foreign", label: "외국인" },
+  { key: "institution", label: "기관" },
+  { key: "otherCorp", label: "기타법인" },
 ] as const;
 
 const TOOLTIP_STYLE = { border: `1px solid ${CHART.line}`, borderRadius: 6, fontSize: 11 };
@@ -171,7 +168,7 @@ function WhyTooltip({ id, text }: { id: string; text: string }) {
         <span
           role="tooltip"
           id={id}
-          className="absolute left-0 top-6 z-20 w-[min(300px,80vw)] rounded-lg border border-line bg-white px-3 py-2.5 text-xs font-normal leading-5 text-body shadow-modal"
+          className="absolute left-0 top-6 z-20 w-[min(300px,80vw)] surface px-3 py-2.5 text-xs font-normal leading-5 text-body shadow-modal"
         >
           <strong className="mb-0.5 block text-ink">이 지표를 왜 봐야 하나</strong>
           {text}
@@ -186,7 +183,6 @@ function InsightCard({
   title,
   note,
   provenance,
-  emphasized = false,
   children,
 }: {
   id: CardId;
@@ -196,19 +192,18 @@ function InsightCard({
   emphasized?: boolean;
   children: ReactNode;
 }) {
-  const border = emphasized ? "border border-edge shadow-hairline" : "border border-line";
   return (
     <section
       data-card={id}
       aria-labelledby={`insight-${id}`}
-      className={`flex flex-col gap-3.5 rounded-lg bg-white px-7 py-[22px] ${border}`}
+      className={`flex flex-col gap-3.5 rounded-lg bg-white px-7 py-[22px]`}
     >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <h2 id={`insight-${id}`} className="text-base font-semibold">
           {title}
         </h2>
         <WhyTooltip id={`why-${id}`} text={WHY[id]} />
-        {note && <span className="text-xs text-faint">{note}</span>}
+        {note && <span className="text-xs text-muted">{note}</span>}
         <span className="ml-auto">
           <SourceChip provenance={provenance} />
         </span>
@@ -278,104 +273,85 @@ function NudgeContent({
   );
 }
 
+// 부호 막대: 가운데 0에서 오른쪽(적)은 오르는 쪽으로 기여, 왼쪽(청)은 내리는 쪽으로 기여.
 function ContributionContent({ contributions }: { contributions: ContributionSignal[] }) {
+  const max = Math.max(...contributions.map(({ share }) => share), 1);
   return (
-    <div className="flex flex-col gap-3.5">
+    <ul className="m-0 flex list-none flex-col gap-4 p-0">
       {contributions.map((signal) => {
-        const meta = CATEGORY_META[signal.category];
+        const up = signal.direction > 0;
+        const width = (signal.share / max) * 50;
         return (
-          <div key={signal.signal} className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2 text-sm">
+          <li key={signal.signal} className="flex flex-col gap-1.5">
+            <div className="flex items-baseline gap-2">
+              <span className="text-sm font-medium text-ink">{signal.label}</span>
+              <span className="text-xs text-muted">{CATEGORY_LABEL[signal.category]}</span>
               <span
-                className="inline-flex h-[22px] items-center rounded-md px-2 text-xs font-medium"
-                style={{ backgroundColor: meta.bg, color: meta.text }}
+                className="ml-auto text-sm font-semibold tabular-nums"
+                style={{ color: up ? "var(--color-up)" : "var(--color-down)" }}
               >
-                {meta.label}
-              </span>
-              <span className="font-medium text-ink">{signal.label}</span>
-              <span className="ml-auto font-semibold tabular-nums">
-                {Math.round(signal.share)}%
+                {up ? "▲" : "▼"} {Math.round(signal.share)}%
               </span>
             </div>
-            <div className="h-2 rounded bg-track">
-              <div
-                className="h-2 rounded"
-                style={{ width: `${signal.share}%`, backgroundColor: meta.bar }}
+            <div className="relative h-1.5 rounded-full bg-track" aria-hidden>
+              <span className="absolute inset-y-[-3px] left-1/2 w-px bg-line" />
+              <span
+                className="absolute inset-y-0 rounded-full"
+                style={{
+                  [up ? "left" : "right"]: "50%",
+                  width: `${width}%`,
+                  backgroundColor: up ? "var(--color-up)" : "var(--color-down)",
+                }}
               />
             </div>
-            <span className="text-xs text-faint">{signal.description}</span>
-          </div>
+            <span className="text-xs text-muted">{signal.description}</span>
+          </li>
         );
       })}
-    </div>
+    </ul>
   );
 }
 
+// 투자자별 20일 순매수 합계를 가운데 0 기준 막대로. 순매수 = 적, 순매도 = 청.
 function SupplyContent({ supply }: { supply: SupplyDemandDay[] }) {
-  const latest = supply[supply.length - 1];
+  const totals = SUPPLY_SERIES.map((series) => ({
+    ...series,
+    total: supply.reduce((sum, day) => sum + day[series.key], 0),
+    latest: supply[supply.length - 1][series.key],
+  }));
+  const max = Math.max(...totals.map(({ total }) => Math.abs(total)), 1);
   return (
     <>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {SUPPLY_SERIES.map((series) => (
-          <div key={series.key} className="rounded-lg bg-field px-4 py-3">
-            <span className="text-xs font-medium" style={{ color: series.color }}>
-              {series.label}
-            </span>
-            <div className="mt-1 text-lg font-semibold tabular-nums">
-              {eok(supply.reduce((sum, day) => sum + day[series.key], 0))}
-            </div>
-            <span className="text-xs text-faint tabular-nums">
-              20일 합계 · 최근일 {eok(latest[series.key])}
-            </span>
-          </div>
-        ))}
-      </div>
-      <div className="h-[220px] min-w-0">
-        <ResponsiveContainer
-          width="100%"
-          height="100%"
-          minWidth={1}
-          minHeight={1}
-          initialDimension={{ width: 960, height: 220 }}
-        >
-          <LineChart
-            data={supply.map((day) => ({ ...day, label: shortDate(day.date) }))}
-            margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
-          >
-            <CartesianGrid stroke={CHART.track} vertical={false} />
-            <XAxis
-              dataKey="label"
-              tick={{ fill: CHART.muted, fontSize: 10 }}
-              axisLine={{ stroke: CHART.edge }}
-              tickLine={false}
-              interval={3}
-            />
-            <YAxis
-              tick={{ fill: CHART.faint, fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-              width={56}
-              tickFormatter={(value) => `${Number(value).toLocaleString("ko-KR")}억`}
-            />
-            <ReferenceLine y={0} stroke={CHART.edge} />
-            <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => eok(Number(value))} />
-            <Legend iconType="plainline" wrapperStyle={{ fontSize: 11 }} />
-            {SUPPLY_SERIES.map((series) => (
-              <Line
-                key={series.key}
-                dataKey={series.key}
-                name={series.label}
-                stroke={series.color}
-                strokeWidth={2}
-                dot={false}
-                isAnimationActive={false}
-              />
-            ))}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-      <p className="m-0 text-xs text-faint">
-        순매수(+)·순매도(-) 금액의 일별 기록입니다. 거래 주체가 왜 거래했는지는 담겨 있지 않습니다.
+      <ul className="m-0 flex list-none flex-col gap-3.5 p-0">
+        {totals.map(({ key, label, total, latest }) => {
+          const buy = total >= 0;
+          const color = buy ? "var(--color-up)" : "var(--color-down)";
+          return (
+            <li key={key} className="grid grid-cols-[4.5rem_minmax(0,1fr)_7.5rem] items-center gap-3">
+              <span className="text-sm text-body">{label}</span>
+              <div className="relative h-2 rounded-full bg-track" aria-hidden>
+                <span className="absolute inset-y-[-4px] left-1/2 w-px bg-line" />
+                <span
+                  className="absolute inset-y-0 rounded-full"
+                  style={{
+                    [buy ? "left" : "right"]: "50%",
+                    width: `${(Math.abs(total) / max) * 50}%`,
+                    backgroundColor: color,
+                  }}
+                />
+              </div>
+              <span className="text-right text-sm font-semibold tabular-nums" style={{ color }}>
+                {eok(total)}
+                <span className="block text-2xs font-normal text-muted">
+                  {buy ? "순매수" : "순매도"} · 최근일 {eok(latest)}
+                </span>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="m-0 text-xs text-muted">
+        최근 20영업일 합계예요. 누가 어느 쪽으로 거래했는지는 알 수 있지만, 왜 거래했는지는 담겨 있지 않아요.
       </p>
     </>
   );
@@ -396,7 +372,7 @@ function SentimentContent({
       {periodMismatch && (
         <p
           data-period-mismatch
-          className="m-0 rounded-lg border border-warn-line bg-warn-tint px-3.5 py-2 text-xs font-semibold text-warn"
+          className="m-0 rounded-lg bg-field px-3.5 py-2 text-xs font-semibold text-body"
         >
           현재 시세 데이터와 기간이 다릅니다. 실데이터 연동 시 정합됩니다.
         </p>
@@ -431,7 +407,7 @@ function SentimentContent({
             <YAxis
               domain={[-1, 1]}
               ticks={[-1, -0.5, 0, 0.5, 1]}
-              tick={{ fill: CHART.faint, fontSize: 10 }}
+              tick={{ fill: CHART.muted, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               width={34}
@@ -441,7 +417,7 @@ function SentimentContent({
             <Line
               dataKey="score"
               name="감성 점수"
-              stroke={CHART.cat3}
+              stroke={CHART.priceLine}
               strokeWidth={2}
               dot={{ r: 2 }}
               isAnimationActive={false}
@@ -457,7 +433,7 @@ function SentimentContent({
               key={`${headline.date}:${headline.title}`}
               className="flex flex-wrap gap-x-2 rounded-lg bg-field px-3.5 py-2.5 text-sm"
             >
-              <span className="text-xs text-faint tabular-nums">
+              <span className="text-xs text-muted tabular-nums">
                 {shortDate(headline.date)} · {headline.press}
               </span>
               <span className="text-ink">{headline.title}</span>
@@ -465,7 +441,7 @@ function SentimentContent({
           ))}
         </ul>
       </div>
-      <p className="m-0 text-xs text-faint">점수 -1(부정) ~ +1(긍정)</p>
+      <p className="m-0 text-xs text-muted">점수 -1(부정) ~ +1(긍정)</p>
     </>
   );
 }
@@ -482,25 +458,25 @@ function RiskContent({ detail }: { detail: StockDetail }) {
         <span className="text-xl font-semibold tabular-nums">
           {(risk.volatilityAnnual * 100).toFixed(1)}%
         </span>
-        <span className="text-xs text-faint">최근 60거래일 · 시장 상위 {volatilityTop}%</span>
+        <span className="text-xs text-muted">최근 60거래일 · 시장 상위 {volatilityTop}%</span>
       </div>
       <div className="flex flex-col gap-1.5 rounded-lg bg-field px-4 py-3.5">
         <span className="text-xs text-muted">위험등급</span>
         <span
           className={`text-xl font-semibold tabular-nums ${
-            grade.tone === "warn" ? "text-warn" : ""
+            grade.tone === "warn" ? "text-body" : ""
           }`}
         >
           {risk.riskGrade}등급 · {grade.label}
         </span>
-        <span className="text-xs text-faint">숫자가 클수록 안전합니다 (1 매우 위험 ~ 5 매우 안전)</span>
+        <span className="text-xs text-muted">숫자가 클수록 안전합니다 (1 매우 위험 ~ 5 매우 안전)</span>
       </div>
       <div className="flex flex-col gap-1 rounded-lg bg-field px-4 py-3.5">
         <span className="text-xs text-muted">3개월 고점 대비</span>
         <span className="text-xl font-semibold tabular-nums">
           {signedPercent(risk.drawdownFrom3mHigh)}
         </span>
-        <span className="text-xs text-faint tabular-nums">
+        <span className="text-xs text-muted tabular-nums">
           최근 3거래일 {signedPercent(risk.return3d)}
         </span>
       </div>
@@ -518,7 +494,7 @@ function FinancialContent({ financial }: { financial: FinancialSnapshot }) {
             {metric.value.toLocaleString("ko-KR")}
             {metric.unit}
           </span>
-          <span className="text-xs leading-4 text-faint">{metric.description}</span>
+          <span className="text-xs leading-4 text-muted">{metric.description}</span>
         </div>
       ))}
     </div>
@@ -531,14 +507,14 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
   return (
     <section
       aria-labelledby="style-profile-title"
-      className="flex flex-col gap-4 rounded-lg border border-line bg-white px-7 py-[22px]"
+      className="flex flex-col gap-4 surface px-7 py-[22px]"
     >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
         <h2 id="style-profile-title" className="text-base font-semibold">
           투자 성향 요약
         </h2>
         {demo.viewAs && (
-          <span className="inline-flex h-[22px] items-center rounded-md border border-warn-line bg-warn-tint px-2 text-xs font-medium text-warn">
+          <span className="inline-flex h-[22px] items-center rounded-md bg-field px-2 text-xs font-medium text-body">
             {BIT_LABEL[demo.viewAs]}의 시선으로 보는 중 · 내 결과 아님
           </span>
         )}
@@ -570,7 +546,7 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
                 <span data-card-order={order.join(",")} className="text-xs text-muted">
                   카드 순서: {order.map((id) => CARD_LABEL[id]).join(" → ")}
                 </span>
-                <span className="text-xs leading-5 text-faint">
+                <span className="text-xs leading-5 text-muted">
                   Pompian 행동투자자 유형(BIT)에서 착안한 근사 분류입니다.
                 </span>
               </div>
@@ -591,13 +567,13 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
               <PolarRadiusAxis domain={[-1, 1]} tick={false} axisLine={false} />
               <Radar
                 dataKey="ratio"
-                stroke={CHART.brand}
-                fill={CHART.brand}
+                stroke={CHART.accent}
+                fill={CHART.accent}
                 fillOpacity={0.18}
                 isAnimationActive={false}
               />
             </RadarChart>
-            <span className="block text-center text-2xs text-faint">
+            <span className="block text-center text-2xs text-muted">
               바깥쪽 = 축의 +1 방향 · 중심 = -1
             </span>
           </div>

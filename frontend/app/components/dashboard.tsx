@@ -32,7 +32,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
   return (
     <div className="flex items-baseline gap-2.5 px-0.5">
       <h2 className="text-xl font-semibold">{title}</h2>
-      <span className="text-xs text-faint">{subtitle}</span>
+      <span className="text-xs text-muted">{subtitle}</span>
     </div>
   );
 }
@@ -173,24 +173,24 @@ export default function Dashboard(initialData: DashboardData) {
       />
 
       <div
-        className="mx-auto box-border flex w-full max-w-[1440px] flex-col gap-6 px-5 pt-6 sm:px-8"
+        className="mx-auto box-border flex w-full max-w-[1200px] flex-col gap-6 px-5 pt-6 sm:px-8"
         aria-busy={loadingAuthenticatedData}
       >
         {dataError && (
           <div
             role="alert"
-            className="flex flex-col gap-3 rounded-lg border border-warn-line bg-warn-tint px-4 py-3 sm:flex-row sm:items-center"
+            className="flex flex-col gap-3 rounded-lg bg-field px-4 py-3 sm:flex-row sm:items-center"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium text-warn">
+              <p className="text-sm font-medium text-body">
                 내 데이터를 불러오지 못해 샘플 데이터를 표시합니다.
               </p>
-              <p className="mt-1 break-words text-xs text-warn">{dataError}</p>
+              <p className="mt-1 break-words text-xs text-body">{dataError}</p>
             </div>
             <button
               type="button"
               onClick={retryAuthenticatedData}
-              className="h-9 flex-none rounded-lg border border-warn-line bg-white px-4 text-xs font-medium text-warn hover:bg-warn-tint sm:ml-auto"
+              className="h-9 flex-none surface px-4 text-xs font-medium text-body hover:bg-field sm:ml-auto"
             >
               다시 시도
             </button>
@@ -227,12 +227,12 @@ export default function Dashboard(initialData: DashboardData) {
                       {activeExcludedStocks.map((stock) => (
                         <li key={stock.code} className="text-xs text-body">
                           {stock.name}{" "}
-                          <span className="text-faint">
+                          <span className="text-muted">
                             ({stock.code}) · 제외 사유: {stock.reason}
                           </span>
                         </li>
                       ))}
-                      <li className="text-xs text-faint">
+                      <li className="text-xs text-muted">
                         회피 항목은 설정에서 변경할 수 있습니다
                       </li>
                     </ul>
@@ -310,7 +310,7 @@ function DashboardLoading() {
         {[0, 1, 2].map((item) => (
           <div
             key={item}
-            className="h-[190px] animate-pulse rounded-lg border border-line bg-white p-6"
+            className="h-[190px] animate-pulse surface p-6"
           >
             <div className="h-5 w-36 rounded bg-track" />
             <div className="mt-8 h-3 w-full rounded bg-field" />
@@ -319,12 +319,12 @@ function DashboardLoading() {
         ))}
       </main>
       <aside className="flex flex-col gap-4">
-        <div className="h-[280px] animate-pulse rounded-lg border border-line bg-white p-5">
+        <div className="h-[280px] animate-pulse surface p-5">
           <div className="h-5 w-28 rounded bg-track" />
           <div className="mt-8 h-3 w-full rounded bg-field" />
           <div className="mt-4 h-3 w-4/5 rounded bg-field" />
         </div>
-        <div className="h-[320px] animate-pulse rounded-lg border border-line bg-white p-5">
+        <div className="h-[320px] animate-pulse surface p-5">
           <div className="h-5 w-32 rounded bg-track" />
         </div>
       </aside>

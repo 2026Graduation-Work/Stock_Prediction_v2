@@ -3,8 +3,7 @@
 import {
   Bar,
   BarChart,
-  CartesianGrid,
-  Legend,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -48,40 +47,17 @@ const CONTROL_CONDITIONS = [
   "공용 평가함수",
 ];
 
-const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; cell: string; label: string }> = {
-  improved: {
-    text: "text-sig-sp",
-    cell: "bg-sig-sp-tint",
-    label: "개선",
-  },
-  worsened: {
-    text: "text-sig-sn",
-    cell: "bg-sig-sn-tint",
-    label: "저하",
-  },
-  unchanged: {
-    text: "text-muted",
-    cell: "bg-field",
-    label: "동일",
-  },
-  neutral: {
-    text: "text-body",
-    cell: "bg-field",
-    label: "증감",
-  },
-  unavailable: {
-    text: "text-faint",
-    cell: "bg-field",
-    label: "미산출",
-  },
+// 개선·저하는 색이 아니라 ▲▼와 단어로 읽힌다. 가격 방향색(적·청)과 섞이지 않게 무채색으로 둔다.
+const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; mark: string; label: string }> = {
+  improved: { text: "text-ink", mark: "▲", label: "개선" },
+  worsened: { text: "text-ink", mark: "▼", label: "저하" },
+  unchanged: { text: "text-muted", mark: "", label: "동일" },
+  neutral: { text: "text-muted", mark: "", label: "증감" },
+  unavailable: { text: "text-muted", mark: "", label: "미산출" },
 };
 
-const CHART_SERIES = [
-  { key: "stableA", label: "안정형 A", fill: CHART.faint },
-  { key: "stableB", label: "안정형 B", fill: CHART.brand },
-  { key: "aggressiveA", label: "공격형 A", fill: CHART.cat4 },
-  { key: "aggressiveB", label: "공격형 B", fill: CHART.sigSp },
-] as const;
+// A/B 두 막대만 명암으로 나누고, 안정형·공격형은 차트를 따로 그려 위치로 구분한다.
+const VARIANT_FILL = { A: CHART.line, B: CHART.priceLine } as const;
 
 export default function PerformanceDashboard({
   data,
@@ -100,10 +76,10 @@ export default function PerformanceDashboard({
       />
 
       <section className="border-b border-line bg-white">
-        <div className="mx-auto box-border w-full max-w-[1440px] px-6 py-6 lg:px-8">
+        <div className="mx-auto box-border w-full max-w-[1200px] px-6 py-6 lg:px-8">
           <div className="flex flex-wrap items-center gap-2.5">
             {isSample && (
-              <span className="rounded-md border border-warn-line bg-warn-tint px-2.5 py-1 text-2xs font-semibold text-warn">
+              <span className="rounded-md bg-field px-2.5 py-1 text-2xs font-semibold text-body">
                 샘플 데이터
               </span>
             )}
@@ -129,20 +105,20 @@ export default function PerformanceDashboard({
         </div>
       </section>
 
-      <main className="mx-auto box-border flex w-full max-w-[1440px] flex-col gap-8 px-6 py-7 lg:px-8">
+      <main className="mx-auto box-border flex w-full max-w-[1200px] flex-col gap-8 px-6 py-7 lg:px-8">
         <section aria-labelledby="four-run-title">
           <SectionHeading
             id="four-run-title"
             title="4런 전체 구간 비교"
             description="안정형·공격형 각각 A/B를 같은 표본에서 평가"
           />
-          <div className="mt-3 overflow-x-auto rounded-lg border border-line bg-white">
+          <div className="mt-3 overflow-x-auto surface">
             <FourRunTable
               rows={data.four_run_metrics}
               deltas={data.comparison_deltas.filter(({ sample }) => sample === "all")}
             />
           </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 px-1 text-2xs text-faint">
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 px-1 text-2xs text-muted">
             <span>AUC·방향 일치율·Sharpe·MDD·누적수익률: 값이 클수록 우수</span>
             <span>Brier·ECE: 값이 작을수록 우수</span>
             <span>거래 수: 우열 없이 규모만 비교</span>
@@ -216,7 +192,7 @@ function SectionHeading({
       <h2 id={id} className="text-lg font-semibold">
         {title}
       </h2>
-      <span className="text-xs text-faint">{description}</span>
+      <span className="text-xs text-muted">{description}</span>
     </div>
   );
 }
@@ -229,7 +205,7 @@ function MetricInfoBadge({ description }: { description?: string }) {
       tabIndex={0}
       role="img"
       aria-label={description}
-      className="inline-flex size-3.5 flex-none cursor-help items-center justify-center rounded-full border border-edge bg-white text-2xs font-medium leading-none text-faint"
+      className="inline-flex size-3.5 flex-none cursor-help items-center justify-center rounded-full border border-edge bg-white text-2xs font-medium leading-none text-muted"
     >
       ?
     </span>
@@ -295,7 +271,7 @@ function FourRunTable({
                     {row.variant}
                   </span>
                 </div>
-                <div className="mt-1 text-2xs font-medium text-faint">
+                <div className="mt-1 text-2xs font-medium text-muted">
                   {row.feature_set === "baseline" ? "차트 피처" : "차트 + 심리 피처"} · {row.feature_count}개
                 </div>
               </th>
@@ -307,14 +283,14 @@ function FourRunTable({
                     key={metric.key}
                     className={`px-2 py-3 text-right tabular-nums ${
                       index === ML_METRICS.length - 1 ? "border-r border-line" : ""
-                    } ${outcome ? OUTCOME_STYLE[outcome].cell : ""}`}
+                    } `}
                   >
                     <div className="text-sm font-medium text-ink">
                       {formatMetricValue(row[metric.key], metric)}
                     </div>
                     {row.variant === "B" && (
                       <div className={`mt-0.5 text-2xs font-medium ${OUTCOME_STYLE[outcome!].text}`}>
-                        Δ {formatDeltaValue(deltaValue, metric)} · {OUTCOME_STYLE[outcome!].label}
+                        {OUTCOME_STYLE[outcome!].mark} {formatDeltaValue(deltaValue, metric)} · {OUTCOME_STYLE[outcome!].label}
                       </div>
                     )}
                   </td>
@@ -341,78 +317,57 @@ function SamplePanel({
   rows: ComparisonMetricRow[];
   deltas: ComparisonDeltaRow[];
 }) {
-  const chartData = ML_METRICS.map((metric) => ({
-    metric: metric.shortLabel,
-    stableA: metricValue(rows, "stable", "A", metric),
-    stableB: metricValue(rows, "stable", "B", metric),
-    aggressiveA: metricValue(rows, "aggressive", "A", metric),
-    aggressiveB: metricValue(rows, "aggressive", "B", metric),
-  }));
+  const chartData = (profile: ComparisonProfile) =>
+    ML_METRICS.map((metric) => ({
+      metric: metric.shortLabel,
+      A: metricValue(rows, profile, "A", metric),
+      B: metricValue(rows, profile, "B", metric),
+    }));
 
   return (
-    <article className="min-w-0 rounded-lg border border-line bg-white">
+    <article className="min-w-0 surface">
       <div className="border-b border-line px-4 py-3.5">
         <h3 className="text-sm font-semibold">{title}</h3>
-        <p className="mt-0.5 text-2xs text-faint">{subtitle}</p>
+        <p className="mt-0.5 text-2xs text-muted">{subtitle}</p>
       </div>
 
-      <div className="px-3 pb-1 pt-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-2xs font-medium text-muted">ML 지표 절대값</span>
-          <span className="text-2xs text-faint">y축 0~1 고정</span>
-        </div>
-        <div className="mt-1 h-[230px] min-w-0">
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-            minWidth={1}
-            minHeight={1}
-            initialDimension={{ width: 560, height: 230 }}
-          >
-            <BarChart data={chartData} margin={{ top: 10, right: 4, left: -18, bottom: 0 }}>
-              <CartesianGrid stroke={CHART.track} vertical={false} />
-              <XAxis
-                dataKey="metric"
-                tick={{ fill: CHART.muted, fontSize: 10 }}
-                axisLine={{ stroke: CHART.edge }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 1]}
-                ticks={[0, 0.25, 0.5, 0.75, 1]}
-                tick={{ fill: CHART.faint, fontSize: 9 }}
-                axisLine={false}
-                tickLine={false}
-                width={34}
-              />
-              <Tooltip
-                cursor={{ fill: CHART.page }}
-                contentStyle={{
-                  border: `1px solid ${CHART.line}`,
-                  borderRadius: 6,
-                  fontSize: 11,
-                }}
-                formatter={(value) => Number(value).toFixed(3)}
-              />
-              <Legend
-                iconType="square"
-                iconSize={8}
-                wrapperStyle={{ fontSize: 10 }}
-                itemSorter={null}
-              />
-              {CHART_SERIES.map((series) => (
-                <Bar
-                  key={series.key}
-                  dataKey={series.key}
-                  name={series.label}
-                  fill={series.fill}
-                  maxBarSize={18}
-                  isAnimationActive={false}
-                />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="grid grid-cols-1 gap-2 px-3 pb-1 pt-3 sm:grid-cols-2">
+        {(["stable", "aggressive"] as const).map((chartProfile) => (
+          <div key={chartProfile} className="min-w-0">
+            <span className="px-1 text-xs font-medium text-body">
+              {PROFILE_LABEL[chartProfile]} · 옅은 막대 A, 진한 막대 B
+            </span>
+            <div className="mt-1 h-[200px] min-w-0">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={1}
+                minHeight={1}
+                initialDimension={{ width: 280, height: 200 }}
+              >
+                <BarChart data={chartData(chartProfile)} margin={{ top: 16, right: 4, left: -18, bottom: 0 }}>
+                  <XAxis
+                    dataKey="metric"
+                    tick={{ fill: CHART.muted, fontSize: 11 }}
+                    axisLine={{ stroke: CHART.edge }}
+                    tickLine={false}
+                  />
+                  <YAxis domain={[0, 1]} ticks={[0, 0.5, 1]} tick={{ fill: CHART.muted, fontSize: 11 }} axisLine={false} tickLine={false} width={34} />
+                  <Tooltip
+                    cursor={{ fill: CHART.page }}
+                    contentStyle={{ border: `1px solid ${CHART.line}`, borderRadius: 8, fontSize: 12 }}
+                    formatter={(value) => Number(value).toFixed(3)}
+                  />
+                  {(["A", "B"] as const).map((variant) => (
+                    <Bar key={variant} dataKey={variant} name={variant} fill={VARIANT_FILL[variant]} maxBarSize={16} isAnimationActive={false}>
+                      <LabelList dataKey={variant} position="top" formatter={() => variant} style={{ fill: CHART.muted, fontSize: 11 }} />
+                    </Bar>
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="overflow-x-auto border-t border-line">
@@ -481,7 +436,7 @@ function PairCell({
         {formatMetricValue(treatmentValue, metric)}
       </div>
       <div className={`mt-0.5 text-2xs font-semibold ${style.text}`}>
-        Δ {formatDeltaValue(deltaValue, metric)} · {style.label}
+        {style.mark} {formatDeltaValue(deltaValue, metric)} · {style.label}
       </div>
     </td>
   );

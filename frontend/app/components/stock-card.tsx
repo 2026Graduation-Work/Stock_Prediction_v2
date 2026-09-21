@@ -54,7 +54,7 @@ function Metric({
     <div className="flex min-w-0 flex-col gap-1.5">
       <span className="text-xs text-muted">{label}</span>
       {children}
-      {hint && <span className="text-2xs text-faint">{hint}</span>}
+      {hint && <span className="text-2xs text-muted">{hint}</span>}
     </div>
   );
 }
@@ -87,7 +87,7 @@ export default function StockCard({
 
   return (
     <article
-      className={`group flex flex-col gap-4 rounded-lg border border-line bg-white px-6 py-5 transition-shadow duration-200 hover:shadow-lift ${
+      className={`group flex flex-col gap-4 surface px-6 py-5 transition-shadow duration-200 hover:shadow-lift ${
         isHolding ? "border-l-[3px] border-l-edge" : ""
       }`}
     >
@@ -95,11 +95,11 @@ export default function StockCard({
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex items-baseline gap-2">
             <h3 className="truncate text-lg font-semibold">{stock.name}</h3>
-            {isHolding && <span className="flex-none text-2xs text-faint">보유 알림</span>}
+            {isHolding && <span className="flex-none text-2xs text-muted">보유 알림</span>}
           </div>
-          <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-faint">
+          <p className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
             {meta.map((item, i) => (
-              <span key={item} className={grade.tone === "warn" && i === 1 ? "text-warn" : ""}>
+              <span key={item} className={grade.tone === "warn" && i === 1 ? "text-body" : ""}>
                 {i > 0 && <span className="mr-1.5 text-ghost">·</span>}
                 {item}
               </span>
@@ -112,7 +112,7 @@ export default function StockCard({
             {signal.label}
           </span>
           <SignalScale active={stock.signalLight} />
-          <span className="text-2xs text-faint tabular-nums">신호 강도 상위 {topPercent}%</span>
+          <span className="text-2xs text-muted tabular-nums">신호 강도 상위 {topPercent}%</span>
         </div>
       </div>
 
@@ -159,7 +159,7 @@ export default function StockCard({
       </div>
 
       {stock.caution && (
-        <p className="rounded-md bg-warn-tint px-3.5 py-2.5 text-xs text-warn">{stock.caution}</p>
+        <p className="rounded-md bg-field px-3.5 py-2.5 text-xs text-body">{stock.caution}</p>
       )}
 
       <div className="flex items-center justify-between gap-3">
