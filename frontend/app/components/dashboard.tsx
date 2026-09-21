@@ -16,6 +16,12 @@ import type { RecommendedStock } from "@/lib/types";
 import { AVOIDED_ASSET_LABELS, summaryFromProfilingOutput } from "@/lib/profiling-rules";
 import { holdingAlertsOutside } from "@/lib/recommendation-filter";
 import {
+  getSavedHoldingsSnapshot,
+  getServerHoldingsSnapshot,
+  parseSavedHoldings,
+  subscribeToSavedHoldings,
+} from "@/lib/save-holdings";
+import {
   getSavedProfileSnapshot,
   getServerProfileSnapshot,
   parseSavedProfile,
@@ -97,6 +103,37 @@ export default function Dashboard(initialData: DashboardData) {
     getServerProfileSnapshot,
   );
   const savedProfile = parseSavedProfile(savedSnapshot);
+  const savedHoldingsSnapshot = useSyncExternalStore(
+    subscribeToSavedHoldings,
+    getSavedHoldingsSnapshot,
+    getServerHoldingsSnapshot,
+  );
+  const savedHoldings = parseSavedHoldings(savedHoldingsSnapshot);
+  // 사용자가 등록한 종목에 오늘 신호를 붙인다. 신호가 없는 종목은 중립으로
+  // 꾸미지 않고 맵에서 빼고 개수만 알린다 — 없는 판단을 지어내지 않는다.
+  const signalByCode = new Map(
+    [...holdings, ...stocks, ...rawHoldingAlerts].map((item) => [item.code, item]),
+  );
+  const activeHoldings = savedHoldings
+    ? savedHoldings.flatMap((saved) => {
+        const source = signalByCode.get(saved.code);
+        return source
+          ? [
+              {
+                code: saved.code,
+                name: saved.name,
+                signalLight: source.signalLight,
+                quantity: saved.quantity,
+                avgBuyPrice: saved.avgBuyPrice,
+                provenance: source.provenance,
+              },
+            ]
+          : [];
+      })
+    : holdings;
+  const holdingsWithoutSignal = savedHoldings
+    ? savedHoldings.length - activeHoldings.length
+    : 0;
   const activeProfile = savedProfile
     ? summaryFromProfilingOutput(savedProfile, profile)
     : profile;
@@ -251,7 +288,10 @@ export default function Dashboard(initialData: DashboardData) {
                 profile={activeProfile}
                 avoidedLabels={activeAvoidedLabels}
               />
-              <PortfolioHeatmap holdings={holdings} />
+              <PortfolioHeatmap
+                holdings={activeHoldings}
+                withoutSignalCount={holdingsWithoutSignal}
+              />
             </aside>
           </div>
         )}

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SIGNAL_META } from "@/lib/display";
 import type { DataProvenance, PortfolioHolding, SignalLight } from "@/lib/types";
 import SourceChip from "./source-chip";
@@ -41,7 +42,13 @@ function formatAmount(amount: number): string {
   return `${Math.round(amount / 10_000).toLocaleString("ko-KR")}만원`;
 }
 
-export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHolding[] }) {
+export default function PortfolioHeatmap({
+  holdings,
+  withoutSignalCount = 0,
+}: {
+  holdings: PortfolioHolding[];
+  withoutSignalCount?: number;
+}) {
   const columns = splitIntoColumns(holdings);
   const columnTotals = columns.map((column) =>
     column.reduce((sum, item) => sum + item.amount, 0),
@@ -62,14 +69,27 @@ export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHold
           <p className="mt-0.5 text-2xs text-faint">면적은 등록 매입금액 기준</p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className="text-2xs text-muted">오늘 모델 신호</span>
+          <Link href="/portfolio" className="text-2xs text-muted hover:text-ink">
+            보유 종목 편집
+          </Link>
           {provenance && <SourceChip provenance={provenance} />}
         </div>
       </div>
 
       {holdings.length === 0 ? (
-        <div className="grid h-[252px] place-items-center border border-dashed border-edge bg-field text-xs text-muted">
-          등록된 보유 종목이 없습니다
+        <div className="flex h-[252px] flex-col items-center justify-center gap-2 rounded-md bg-field px-5 text-center">
+          <p className="text-sm font-medium">아직 등록한 보유 종목이 없습니다</p>
+          <p className="text-xs leading-5 text-muted">
+            수량과 평균 매입가를 직접 입력하면
+            <br />
+            보유 종목의 오늘 신호를 한눈에 볼 수 있어요
+          </p>
+          <Link
+            href="/portfolio"
+            className="mt-1 inline-flex h-8 items-center rounded-md bg-ink px-4 text-xs font-medium text-white hover:bg-body hover:no-underline"
+          >
+            보유 종목 등록하기
+          </Link>
         </div>
       ) : (
         <div
@@ -127,6 +147,12 @@ export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHold
           <span>강한 긍정</span>
         </div>
       </div>
+      {withoutSignalCount > 0 && (
+        <p className="text-2xs leading-4 text-muted">
+          등록한 종목 중 {withoutSignalCount}개는 오늘 모델 신호가 없어 맵에 넣지
+          않았습니다. 신호가 생기면 자동으로 나타납니다.
+        </p>
+      )}
       <p className="text-2xs leading-4 text-faint">
         색상은 수익률이 아닌 오늘의 5단계 모델 신호입니다. 보유 수량과 평균 매입가는 수동
         등록값입니다.
