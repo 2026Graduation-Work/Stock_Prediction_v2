@@ -25,27 +25,33 @@
   --color-edge: #d8dde5;
 
   /* ── 신호 5단계 ─────────────────────────────────────────
-     ink=글자·마크(흰 배경 AA 통과), tint=아주 옅은 배경,
-     solid=흰 글자를 얹는 면(히트맵 타일). 채도를 낮춰 차분하게. */
-  --color-sig-sp: #0f6b46;
-  --color-sig-sp-tint: #eef5f1;
-  --color-sig-sp-solid: #16714a;
+     국내 관례를 따른다: 긍정 = 적색, 부정 = 청색, 중립 = 회색.
+     등락률(up/down)과 같은 색을 쓴다 — 한 화면에 "긍정인데 초록,
+     상승인데 빨강"이 같이 있으면 초보자가 반대로 읽는다.
 
-  --color-sig-p: #2f7d57;
-  --color-sig-p-tint: #f1f7f3;
-  --color-sig-p-solid: #35855e;
+     덤으로 적-청 발산 배색은 적-녹보다 적록색약에서 잘 구분된다.
 
-  --color-sig-n: #8a6d1f;
-  --color-sig-n-tint: #f7f4ea;
-  --color-sig-n-solid: #866a20;
+     ink=글자·마크, tint=아주 옅은 배경, solid=흰 글자를 얹는 면.
+     다섯 색 모두 흰 배경/흰 글자 양쪽에서 4.5:1을 넘는다. */
+  --color-sig-sp: #b0342a; /* 강한 긍정 — 6.2:1 */
+  --color-sig-sp-tint: #fdf0ee;
+  --color-sig-sp-solid: #b0342a;
 
-  --color-sig-ng: #a85c26;
-  --color-sig-ng-tint: #faf3ec;
-  --color-sig-ng-solid: #b06428;
+  --color-sig-p: #bb5245; /* 긍정 — 4.8:1 */
+  --color-sig-p-tint: #fdf4f2;
+  --color-sig-p-solid: #bb5245;
 
-  --color-sig-sn: #a63f39;
-  --color-sig-sn-tint: #faefee;
-  --color-sig-sn-solid: #ae443e;
+  --color-sig-n: #6b7280; /* 중립 — 4.8:1 */
+  --color-sig-n-tint: #f3f4f6;
+  --color-sig-n-solid: #6b7280;
+
+  --color-sig-ng: #4666b5; /* 부정 — 5.5:1 */
+  --color-sig-ng-tint: #eff2fa;
+  --color-sig-ng-solid: #4666b5;
+
+  --color-sig-sn: #274b96; /* 강한 부정 — 8.3:1 */
+  --color-sig-sn-tint: #edf1f9;
+  --color-sig-sn-solid: #274b96;
 
   /* ── 주의·경고 ──────────────────────────────────────── */
   --color-warn: #8a6a12;
@@ -73,9 +79,9 @@
   /* ── 브랜드 보조선 ──────────────────────────────────── */
   --color-brand-line: #c6d3ee;
 
-  /* ── 등락 (국내 관례: 상승 적색 / 하락 청색) ────────── */
-  --color-up: #b8443e;
-  --color-down: #2f5fd0;
+  /* ── 등락 — 신호색과 같은 값을 쓴다 (국내 관례: 상승 적 / 하락 청) */
+  --color-up: #b0342a;
+  --color-down: #274b96;
 
   /* ── 타이포 스케일 ───────────────────────────────────────
      7단계 고정. text-[13.5px] 같은 임의값 금지.

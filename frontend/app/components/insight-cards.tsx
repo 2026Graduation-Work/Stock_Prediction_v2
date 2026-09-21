@@ -112,17 +112,17 @@ const CATEGORY_META: Record<
   ContributionCategory,
   { label: string; bar: string; bg: string; text: string }
 > = {
-  technical: { label: "기술적", bar: CHART.brand, bg: CHART.brandSoft, text: CHART.brand },
+  technical: { label: "기술적", bar: CHART.cat1, bg: CHART.cat1Tint, text: CHART.cat1 },
   financial: { label: "재무", bar: CHART.cat2, bg: CHART.cat2Tint, text: CHART.cat2 },
   sentiment: { label: "감성", bar: CHART.cat3, bg: CHART.cat3Tint, text: CHART.cat3 },
-  supply: { label: "수급", bar: CHART.cat4, bg: CHART.sigNgTint, text: CHART.sigNg },
+  supply: { label: "수급", bar: CHART.cat4, bg: CHART.cat4Tint, text: CHART.cat4 },
 };
 
 const SUPPLY_SERIES = [
-  { key: "retail", label: "개인", color: CHART.sigNg },
-  { key: "foreign", label: "외국인", color: CHART.brand },
+  { key: "retail", label: "개인", color: CHART.cat4 },
+  { key: "foreign", label: "외국인", color: CHART.cat1 },
   { key: "institution", label: "기관", color: CHART.cat2 },
-  { key: "otherCorp", label: "기타법인", color: CHART.cat3 },
+  { key: "otherCorp", label: "기타법인", color: CHART.cat5 },
 ] as const;
 
 const TOOLTIP_STYLE = { border: `1px solid ${CHART.line}`, borderRadius: 6, fontSize: 11 };

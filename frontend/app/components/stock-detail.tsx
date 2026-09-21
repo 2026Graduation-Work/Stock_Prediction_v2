@@ -1,5 +1,6 @@
 "use client";
 
+import { CHART } from "@/lib/chart-colors";
 import { useState } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "./disclaimer-footer";
@@ -353,7 +354,7 @@ export default function StockDetailView({
             {priceHistory.length >= 2 && (
               <div className="ml-auto flex items-center gap-3.5 text-xs text-muted">
                 <span className="inline-flex items-center gap-1.5">
-                  <span className="h-0.5 w-3.5 bg-brand" />
+                  <span className="h-0.5 w-3.5" style={{ backgroundColor: CHART.priceLine }} />
                   실제 주가
                 </span>
                 <span className="inline-flex items-center gap-1.5">

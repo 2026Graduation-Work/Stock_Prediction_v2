@@ -31,9 +31,15 @@ export const CHART = {
   cat4Tint: "#f8f2e9",
   cat5: "#7d8899",
 
-  // 신호 5단계
-  sigSp: "#0f6b46",
-  sigNg: "#a85c26",
-  sigNgTint: "#faf3ec",
-  sigSn: "#a63f39",
+  // 주가 실선 — 신호가 아니라 "사실"이라 무채색으로 둔다.
+  // 파랑으로 두면 부정 신호(청)와 같은 색이라 초보자가 하락으로 읽는다.
+  priceLine: "#3f4855",
+
+  // 신호 5단계 (국내 관례: 긍정 적 / 부정 청)
+  sigSp: "#b0342a",
+  sigP: "#bb5245",
+  sigN: "#6b7280",
+  sigNg: "#4666b5",
+  sigNgTint: "#eff2fa",
+  sigSn: "#274b96",
 } as const;
