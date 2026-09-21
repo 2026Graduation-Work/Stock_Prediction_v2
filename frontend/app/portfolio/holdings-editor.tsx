@@ -174,7 +174,7 @@ export default function HoldingsEditor({
         </div>
 
         {/* 추가 폼 */}
-        <section className="flex flex-col gap-3 rounded-lg border border-line bg-white px-5 py-5">
+        <section className="flex flex-col gap-3 surface px-5 py-5">
           <h2 className="text-sm font-semibold">종목 추가</h2>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_0.8fr_1fr_max-content]">
             <label className="flex flex-col gap-1.5">
@@ -184,7 +184,7 @@ export default function HoldingsEditor({
                 value={draft.name}
                 onChange={(event) => setDraft({ ...draft, name: event.target.value })}
                 placeholder="삼성전자"
-                className="h-10 rounded-md border border-edge bg-field px-3 text-sm outline-none placeholder:text-faint focus:border-brand focus:bg-white"
+                className="h-10 rounded-md border border-edge bg-field px-3 text-sm outline-none placeholder:text-muted focus:border-brand focus:bg-white"
               />
               <datalist id="stock-catalog">
                 {options.map((item) => (
@@ -201,7 +201,7 @@ export default function HoldingsEditor({
                 value={draft.quantity}
                 onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
                 placeholder="10"
-                className="h-10 rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none placeholder:text-faint focus:border-brand focus:bg-white"
+                className="h-10 rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none placeholder:text-muted focus:border-brand focus:bg-white"
               />
             </label>
             <label className="flex flex-col gap-1.5">
@@ -211,7 +211,7 @@ export default function HoldingsEditor({
                 value={draft.avgBuyPrice}
                 onChange={(event) => setDraft({ ...draft, avgBuyPrice: event.target.value })}
                 placeholder="71,200"
-                className="h-10 rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none placeholder:text-faint focus:border-brand focus:bg-white"
+                className="h-10 rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none placeholder:text-muted focus:border-brand focus:bg-white"
               />
             </label>
             <button
@@ -230,7 +230,7 @@ export default function HoldingsEditor({
         </section>
 
         {/* 목록 */}
-        <section className="flex flex-col gap-3 rounded-lg border border-line bg-white px-5 py-5">
+        <section className="flex flex-col gap-3 surface px-5 py-5">
           <div className="flex items-baseline justify-between gap-3">
             <h2 className="text-sm font-semibold">
               등록한 종목 <span className="text-muted tabular-nums">{rows.length}개</span>
@@ -258,7 +258,7 @@ export default function HoldingsEditor({
                 >
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{row.name}</span>
-                    <span className="text-xs text-faint tabular-nums">{row.code}</span>
+                    <span className="text-xs text-muted tabular-nums">{row.code}</span>
                   </div>
                   <label className="flex items-center gap-2">
                     <span className="text-xs text-muted sm:hidden">수량</span>
@@ -302,7 +302,7 @@ export default function HoldingsEditor({
             type="button"
             onClick={submit}
             disabled={status === "saving"}
-            className="h-10 rounded-md bg-brand px-6 text-sm font-medium text-white hover:bg-brand-deep disabled:opacity-60"
+            className="btn-primary"
           >
             {status === "saving" ? "저장 중…" : "저장"}
           </button>
@@ -312,7 +312,7 @@ export default function HoldingsEditor({
               <Link href="/">대시보드에서 확인하기 →</Link>
             </span>
           )}
-          <span className="ml-auto text-xs text-faint">
+          <span className="ml-auto text-xs text-muted">
             {supabaseMode
               ? "내 계정에 저장됩니다"
               : "데모 계정이라 이 브라우저에만 저장됩니다"}

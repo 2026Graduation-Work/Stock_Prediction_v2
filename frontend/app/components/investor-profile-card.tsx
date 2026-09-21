@@ -12,7 +12,7 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
         <span className="ml-auto font-medium tabular-nums">{value}</span>
       </div>
       <div className="h-[5px] rounded-full bg-track">
-        <div className="h-full rounded-full bg-brand" style={{ width: `${value}%` }} />
+        <div className="h-full rounded-full bg-brand-accent" style={{ width: `${value}%` }} />
       </div>
     </div>
   );
@@ -26,7 +26,7 @@ export default function InvestorProfileCard({
   avoidedLabels: string[];
 }) {
   return (
-    <section className="flex flex-col gap-3.5 rounded-lg border border-line bg-white px-5 py-[18px]">
+    <section className="flex flex-col gap-3.5 surface px-5 py-[18px]">
       <div className="flex items-center">
         <span className="text-sm font-semibold">나의 투자 성향</span>
         <Link
@@ -57,7 +57,7 @@ export default function InvestorProfileCard({
               <span
                 key={segment}
                 className={`h-[5px] rounded-full ${
-                  segment === profile.horizon ? "bg-brand" : "bg-track"
+                  segment === profile.horizon ? "bg-brand-accent" : "bg-track"
                 }`}
               />
             ))}
@@ -77,11 +77,11 @@ export default function InvestorProfileCard({
               </span>
             ))
           ) : (
-            <span className="text-xs text-faint">없음</span>
+            <span className="text-xs text-muted">없음</span>
           )}
         </div>
       </div>
-      <span className="text-xs text-faint">
+      <span className="text-xs text-muted">
         {profile.surveyedAt} 설문 기준 · 3축은 8축 설문을 묶어 요약한 값
       </span>
     </section>

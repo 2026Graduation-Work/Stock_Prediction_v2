@@ -124,7 +124,7 @@ test("new user: 8축 설문 -> 결과 확인 -> 대시보드 -> 종목 상세까
   await page.getByRole("button", { name: "내 성향" }).click();
   await expect(page.locator('[data-bit-type="ACCUMULATOR"]')).toBeVisible();
 
-  await page.getByRole("link", { name: "모델 성능" }).click();
+  await page.getByRole("link", { name: "모델 성적표" }).click();
   await expect(page).toHaveURL(/\/performance$/);
   await expect(page.getByRole("heading", { name: "4런 전체 구간 비교" })).toBeVisible();
 

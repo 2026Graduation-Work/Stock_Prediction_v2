@@ -143,12 +143,12 @@ export default function ReturnHistogram({
               style={{ stroke: "var(--color-line-soft)" }}
               strokeWidth={1}
             />
-            <text x={PAD.left - 6} y={y(count) + 4} textAnchor="end" fontSize={11} style={{ fill: "var(--color-faint)" }}>
+            <text x={PAD.left - 6} y={y(count) + 4} textAnchor="end" fontSize={11} style={{ fill: "var(--color-muted)" }}>
               {count}
             </text>
           </g>
         ))}
-        <text x={PAD.left - 6} y={PAD.top - 22} textAnchor="end" fontSize={11} style={{ fill: "var(--color-faint)" }}>
+        <text x={PAD.left - 6} y={PAD.top - 22} textAnchor="end" fontSize={11} style={{ fill: "var(--color-muted)" }}>
           건수
         </text>
 
@@ -198,12 +198,12 @@ export default function ReturnHistogram({
             y={baseline + 16}
             textAnchor="middle"
             fontSize={11}
-            style={{ fill: "var(--color-faint)" }}
+            style={{ fill: "var(--color-muted)" }}
           >
             {formatSigned(edge)}
           </text>
         ))}
-        <text x={VB_W - PAD.right} y={baseline + 30} textAnchor="end" fontSize={11} style={{ fill: "var(--color-faint)" }}>
+        <text x={VB_W - PAD.right} y={baseline + 30} textAnchor="end" fontSize={11} style={{ fill: "var(--color-muted)" }}>
           실현 수익률 (향후 10거래일)
         </text>
 
@@ -224,7 +224,7 @@ export default function ReturnHistogram({
 
       {hovered !== null && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-line bg-white px-2.5 py-1.5 shadow-lift"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap surface px-2.5 py-1.5 shadow-lift"
           style={{
             left: `${(((x(bins[hovered].from) + x(bins[hovered].to)) / 2) / VB_W) * 100}%`,
             top: `${((y(bins[hovered].count) - 8) / VB_H) * 100}%`,

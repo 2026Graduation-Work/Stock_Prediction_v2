@@ -7,38 +7,30 @@
 //
 // ⚠️ app/globals.css의 @theme 값과 1:1로 같아야 한다. 한쪽만 고치지 말 것.
 // DOM 요소(className·style)에는 이 파일이 아니라 토큰을 쓴다.
+//
+// 범주색은 없다. 범주(투자자·지표·실험 런)는 색이 아니라 라벨과 위치로 구분한다.
 export const CHART = {
-  ink: "#1b2434",
-  muted: "#667085",
-  faint: "#8b95a5",
-  line: "#e6e9ee",
-  lineSoft: "#f0f2f5",
-  track: "#eef0f4",
-  page: "#f6f7f9",
-  edge: "#d8dde5",
+  ink: "#1d1d1f",
+  muted: "#6e6e73",
+  ghost: "#86868b",
+  line: "#d2d2d7",
+  lineSoft: "#e8e8ed",
+  track: "#e8e8ed",
+  page: "#f5f5f7",
+  edge: "#d2d2d7",
 
-  brand: "#2f5fd0",
-  brandSoft: "#eef2fc",
-
-  // 계열(범주형) — 순서 없는 항목 구분용
-  cat1: "#3a62c4",
-  cat1Tint: "#eef2fc",
-  cat2: "#1a7a63",
-  cat2Tint: "#e9f4f1",
-  cat3: "#6b58bd",
-  cat3Tint: "#efedf9",
-  cat4: "#a9762c",
-  cat4Tint: "#f8f2e9",
-  cat5: "#7d8899",
+  // 차트의 "나" 표시(성향 레이더 등) — 성균 연두. 글자에는 쓰지 않는다.
+  accent: "#8dc63f",
 
   // 주가 실선 — 신호가 아니라 "사실"이라 무채색으로 둔다.
-  // 파랑으로 두면 부정 신호(청)와 같은 색이라 초보자가 하락으로 읽는다.
-  priceLine: "#3f4855",
+  priceLine: "#424245",
 
-  // 신호 5단계 (국내 관례: 긍정 적 / 부정 청)
+  // 가격 방향 (국내 관례: 상승·긍정 적 / 하락·부정 청)
+  up: "#b0342a",
+  down: "#274b96",
   sigSp: "#b0342a",
-  sigP: "#bb5245",
-  sigN: "#6b7280",
+  sigP: "#ad4436",
+  sigN: "#6e6e73",
   sigNg: "#4666b5",
   sigNgTint: "#eff2fa",
   sigSn: "#274b96",

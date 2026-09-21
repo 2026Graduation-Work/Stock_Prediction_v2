@@ -260,10 +260,7 @@ export default function SurveyFlow() {
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex min-h-16 w-full max-w-[1080px] items-center gap-2.5 px-4 py-2 sm:h-16 sm:gap-3 sm:px-8 sm:py-0">
           <Link href="/" className="flex items-center gap-2.5 text-ink hover:no-underline">
-            <span className="grid size-7 place-items-center rounded-lg bg-brand text-sm font-semibold text-white">
-              S
-            </span>
-            <span className="hidden text-lg font-semibold sm:inline">시그널랩</span>
+            <span className="text-lg font-semibold text-brand">시그널랩</span>
           </Link>
           <span className="h-5 w-px bg-line" />
           <span className="whitespace-nowrap text-sm font-semibold text-body">투자 성향 설문</span>
@@ -328,7 +325,7 @@ function ProgressBar({ draft, page }: { draft: Draft; page: Page }) {
       <div className="flex flex-col gap-2.5">
         <div className="flex items-center gap-3">
           <span className="text-xs font-medium text-brand">{label}</span>
-          <span className="ml-auto text-xs tabular-nums text-faint">
+          <span className="ml-auto text-xs tabular-nums text-muted">
             {draft.page + 1} / {PAGES.length} 화면
           </span>
         </div>
@@ -344,7 +341,7 @@ function ProgressBar({ draft, page }: { draft: Draft; page: Page }) {
           {Array.from({ length: AXES.length + FINAL_STEPS.length }, (_, index) => (
             <span
               key={index}
-              className={`h-1.5 rounded ${index <= currentSegment ? "bg-brand" : "bg-track"} ${
+              className={`h-1.5 rounded ${index <= currentSegment ? "bg-brand-accent" : "bg-track"} ${
                 index === AXES.length ? "ml-1" : ""
               }`}
             />
@@ -382,7 +379,7 @@ function QuestionPage({
   const feedback = page.kind === "style" && page.lastOfAxis ? axisFeedback(page.axis, draft.style) : null;
 
   return (
-    <section className="overflow-hidden rounded-lg border border-line bg-white shadow-lift">
+    <section className="overflow-hidden surface shadow-lift">
       <ProgressBar draft={draft} page={page} />
       <div className="flex min-h-[480px] flex-col px-6 py-8 sm:px-10 sm:py-10">
         {restored && draft.page > 0 && (
@@ -514,7 +511,7 @@ function QuestionPage({
               rows={6}
               maxLength={500}
               placeholder="예: 남들보다 수익이 뒤처질까 조급하지만 손실도 많이 걱정돼요."
-              className="mt-8 w-full resize-none rounded-lg border border-edge bg-field px-4 py-3 text-sm leading-6 text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white"
+              className="mt-8 w-full resize-none rounded-lg border border-edge bg-field px-4 py-3 text-sm leading-6 text-ink outline-none placeholder:text-muted focus:border-brand focus:bg-white"
             />
           </>
         )}
@@ -534,12 +531,12 @@ function QuestionPage({
           >
             이전
           </button>
-          <span className="text-xs text-faint">답은 자동으로 저장돼요</span>
+          <span className="text-xs text-muted">답은 자동으로 저장돼요</span>
           <button
             type="button"
             onClick={onNext}
             disabled={!canContinue || submitting}
-            className="ml-auto h-11 min-w-[112px] rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
+            className="btn-primary ml-auto min-w-[112px]"
           >
             {submitting ? "계산 중" : last ? "결과 확인" : "다음"}
           </button>
@@ -601,9 +598,9 @@ function AxisGauge({
         <span className="ml-auto text-xl font-semibold tabular-nums text-ink">{value}</span>
       </div>
       <div className="h-2 overflow-hidden rounded bg-track">
-        <div className="h-full rounded bg-brand" style={{ width: `${value}%` }} />
+        <div className="h-full rounded bg-brand-accent" style={{ width: `${value}%` }} />
       </div>
-      <span className="flex justify-between text-2xs text-faint">
+      <span className="flex justify-between text-2xs text-muted">
         <span>0 {left}</span>
         <span>100 {right}</span>
       </span>
@@ -641,9 +638,9 @@ function ResultView({
   const avoidedLabels = result.constraints.avoided_assets.map((asset) => AVOIDED_ASSET_LABELS[asset]);
 
   return (
-    <section className="overflow-hidden rounded-lg border border-line bg-white shadow-lift">
+    <section className="overflow-hidden surface shadow-lift">
       <div className="border-b border-line bg-sig-sp-tint px-6 py-7 sm:px-10">
-        <span className="text-xs font-semibold text-cat-2">
+        <span className="text-xs font-semibold text-brand">
           {saved ? "프로필 저장 완료" : "진단 결과 · 아직 저장 전이에요"}
         </span>
         <h1 data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="mt-2 text-3xl font-semibold text-ink sm:text-3xl">
@@ -654,7 +651,7 @@ function ResultView({
             ? "몇몇 질문의 답이 서로 엇갈려 유형을 단정하지 않았어요. 다시 답하거나 아래에서 직접 조정할 수 있어요."
             : BIT_SUMMARY[bit.type]}
         </p>
-        <p className="mt-3 text-xs leading-5 text-faint">
+        <p className="mt-3 text-xs leading-5 text-muted">
           행동투자자 유형(BIT, Pompian)에서 착안한 분류예요. 금융회사의 투자자 등급과는 다른 것이고,
           정보를 보여 주는 순서와 주의 안내에만 쓰며 종목을 거르지 않아요.
         </p>
@@ -686,11 +683,11 @@ function ResultView({
         </div>
 
         {(result.contradictions?.length ?? 0) > 0 && (
-          <div className="mt-8 flex flex-col gap-2 rounded-lg border border-warn-line bg-warn-tint px-4 py-3">
-            <span className="text-sm font-medium text-warn">답변 중 서로 부딪히는 부분이 있어요</span>
+          <div className="mt-8 flex flex-col gap-2 rounded-lg bg-field px-4 py-3">
+            <span className="text-sm font-medium text-body">답변 중 서로 부딪히는 부분이 있어요</span>
             {result.contradictions!.map((item) => (
-              <p key={item.id} className="m-0 text-sm leading-6 text-warn">
-                {item.observation} <span className="text-warn">→ {item.follow_up_question}</span>
+              <p key={item.id} className="m-0 text-sm leading-6 text-body">
+                {item.observation} <span className="text-body">→ {item.follow_up_question}</span>
               </p>
             ))}
           </div>
@@ -743,7 +740,7 @@ function ResultView({
                       }
                       className="accent-brand"
                     />
-                    <span className="flex justify-between text-2xs text-faint">
+                    <span className="flex justify-between text-2xs text-muted">
                       <span>{axis.negative_label}</span>
                       <span>{axis.positive_label}</span>
                     </span>
@@ -768,7 +765,7 @@ function ResultView({
             <button
               type="button"
               onClick={onDashboard}
-              className="h-11 rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep"
+              className="btn-primary"
             >
               대시보드로 이동
             </button>
@@ -802,7 +799,7 @@ function ResultView({
                   type="button"
                   onClick={() => setAdjusting(true)}
                   aria-controls="style-axes-adjust"
-                  className="h-11 rounded-lg border border-brand bg-white px-5 text-sm font-medium text-brand hover:bg-brand-soft"
+                  className="btn-secondary"
                 >
                   직접 조정하기
                 </button>
@@ -811,7 +808,7 @@ function ResultView({
                 type="button"
                 onClick={() => onConfirm(changed ? adjusted : {})}
                 disabled={submitting}
-                className="h-11 rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep disabled:bg-ghost"
+                className="btn-primary"
               >
                 {submitting ? "저장 중" : changed ? "조정한 값으로 저장" : "네, 이대로 저장"}
               </button>

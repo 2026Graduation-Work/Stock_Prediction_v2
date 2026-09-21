@@ -49,10 +49,12 @@ export interface ContributionSignalInput {
   label: string;
   category: ContributionCategory;
   weight: number;
+  direction?: 1 | -1; // 신호를 미는 쪽. +1 오르는 쪽(기본), -1 내리는 쪽
   description: string;
 }
-export interface ContributionSignal extends Omit<ContributionSignalInput, "weight"> {
+export interface ContributionSignal extends Omit<ContributionSignalInput, "weight" | "direction"> {
   share: number; // 0~100, 종목 안에서 합 100
+  direction: 1 | -1;
 }
 export type ContributionProvider = (code: string) => Promise<ContributionSignal[] | null>;
 
@@ -85,7 +87,11 @@ export const contributionProvider: ContributionProvider = async (code) => {
   if (!inputs) return null;
   const total = inputs.reduce((sum, { weight }) => sum + Math.abs(weight), 0);
   return inputs
-    .map(({ weight, ...signal }) => ({ ...signal, share: (Math.abs(weight) / total) * 100 }))
+    .map(({ weight, direction = 1, ...signal }) => ({
+      ...signal,
+      direction,
+      share: (Math.abs(weight) / total) * 100,
+    }))
     .sort((left, right) => right.share - left.share);
 };
 
