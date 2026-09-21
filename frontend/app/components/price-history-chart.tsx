@@ -1,5 +1,6 @@
 "use client";
 
+import { CHART } from "@/lib/chart-colors";
 import { useRef, useState } from "react";
 import type { SignalMeta } from "@/lib/display";
 import type { ReturnBand } from "@/lib/types";
@@ -125,11 +126,11 @@ export default function PriceHistoryChart({
         <polyline
           points={points}
           fill="none"
-          style={{ stroke: "var(--color-brand)" }}
+          style={{ stroke: CHART.priceLine }}
           strokeWidth={2}
           strokeLinejoin="round"
         />
-        <circle cx={X1} cy={y(last)} r={4} style={{ fill: "var(--color-brand)" }} stroke="#ffffff" strokeWidth={1.5} />
+        <circle cx={X1} cy={y(last)} r={4} style={{ fill: CHART.priceLine }} stroke="#ffffff" strokeWidth={1.5} />
 
         {/* H10 세로 구간: 분포 범위(경로 아님)를 캡슐 하나로 */}
         <rect
@@ -199,7 +200,7 @@ export default function PriceHistoryChart({
               cx={xAt(hovered)}
               cy={y(prices[hovered])}
               r={4.5}
-              style={{ fill: "var(--color-brand)" }}
+              style={{ fill: CHART.priceLine }}
               stroke="#ffffff"
               strokeWidth={2}
             />
