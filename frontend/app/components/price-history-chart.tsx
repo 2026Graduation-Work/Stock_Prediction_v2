@@ -5,8 +5,14 @@ import { useRef, useState } from "react";
 import type { SignalMeta } from "@/lib/display";
 import type { ReturnBand } from "@/lib/types";
 
-// 최근 60거래일 실제 주가 실선. 표현 규칙(미래 주가 곡선·부채꼴 금지)에 따라
-// 미래 영역에는 H10 시점의 수익률 분포 범위를 나타내는 세로 구간 하나만 둔다.
+// 최근 60거래일 실제 주가 실선. 미래 영역에는 H10 시점의 수익률 분포 범위를
+// 나타내는 세로 구간 하나만 둔다.
+//
+// 표현 규칙(미래 주가 곡선 금지)과의 경계:
+// 오늘 종가와 범위 양 끝을 잇는 보조선 두 개는 둔다. 범위가 오늘 가격에서
+// 나온 값임을 보여 줄 뿐 경로를 그리지 않기 때문이다. 대신 두 선 사이를
+// 채우지는 않는다 — 채우면 "가격이 이 안을 지나간다"는 부채꼴이 되어
+// 모델이 하지 않는 경로 예측을 암시한다.
 
 const VB_W = 860;
 const VB_H = 264;
@@ -131,6 +137,13 @@ export default function PriceHistoryChart({
           strokeLinejoin="round"
         />
         <circle cx={X1} cy={y(last)} r={4} style={{ fill: CHART.priceLine }} stroke="#ffffff" strokeWidth={1.5} />
+
+        {/* 오늘 종가 → H10 범위 양 끝 보조선. 가늘고 점선이라 경로가 아니라
+            "여기서 나온 값"이라는 연결 표시로 읽힌다. 사이는 채우지 않는다. */}
+        <g style={{ stroke: signal.ink }} strokeWidth={1} strokeDasharray="3 4" opacity={0.45}>
+          <line x1={X1} y1={y(last)} x2={XH - 11} y2={yHigh} />
+          <line x1={X1} y1={y(last)} x2={XH - 11} y2={yLow} />
+        </g>
 
         {/* H10 세로 구간: 분포 범위(경로 아님)를 캡슐 하나로 */}
         <rect
