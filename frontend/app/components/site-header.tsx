@@ -8,12 +8,13 @@ interface SiteHeaderProps {
   marketStatus: MarketStatus;
   query?: string;
   onQueryChange?: (value: string) => void;
-  activePage?: "dashboard" | "performance";
+  activePage?: "dashboard" | "performance" | "portfolio";
   sectionLabel?: string;
 }
 
 const NAV_ITEMS = [
   { href: "/", label: "대시보드", page: "dashboard" },
+  { href: "/portfolio", label: "보유 종목", page: "portfolio" },
   { href: "/performance", label: "모델 성능", page: "performance" },
 ] as const;
 

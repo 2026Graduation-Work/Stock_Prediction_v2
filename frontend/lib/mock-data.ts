@@ -352,3 +352,12 @@ export const stockDetails: Record<string, StockDetail> = {
       "현대차는 강한 긍정(초록) 신호로, 오늘 신호 강도 상위 5%에 해당합니다. 과거 유사 신호 52건의 실현 수익률은 +0.6%에서 +7.2%로 분포 하단이 0% 위에 있었고, 이 구간에서 과거에 실제로 오른 비율은 66%였습니다. 다만 유사 사례 수가 52건으로 많지 않아, 분포 폭의 통계적 확신은 사례가 더 많은 신호보다 낮습니다. 위험 5등급(매우 안전)으로 김민지님의 위험 감수(33) 기준에서 여유가 있는 종목입니다.",
   },
 };
+
+// 데모 모드에서 보유 종목을 고를 때 쓰는 종목 목록.
+// 로그인 사용자는 Supabase stocks 테이블을 직접 검색한다.
+export const KNOWN_STOCKS: { code: string; name: string }[] = [
+  samsungElectronics,
+  hyundaiMotor,
+  celltrion,
+  kakao,
+].map(({ code, name }) => ({ code, name }));
