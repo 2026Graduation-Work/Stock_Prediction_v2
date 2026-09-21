@@ -1,25 +1,111 @@
 @import "tailwindcss";
 
+/* 디자인 토큰 = 화면 계약(SSOT). 규칙 본문은 frontend/DESIGN.md.
+   컴포넌트에서 새 hex·새 글자 크기를 만들지 않는다. 여기서 골라 쓴다. */
 @theme {
-  /* 브랜드 */
+  /* ── 브랜드 ─────────────────────────────────────────────
+     강조색은 한 화면에 하나. 링크·포커스·현재 위치에만 쓴다. */
   --color-brand: #2f5fd0;
   --color-brand-deep: #22459c;
-  --color-brand-soft: #e8eefb;
+  --color-brand-soft: #eef2fc;
 
-  /* 텍스트 (진한 순) */
+  /* ── 텍스트 (진한 순) ───────────────────────────────── */
   --color-ink: #1b2434;
   --color-body: #4a5568;
   --color-muted: #667085;
-  --color-faint: #98a2b3;
-  --color-ghost: #b6bfcc;
+  --color-faint: #8b95a5;
+  --color-ghost: #aeb7c4;
 
-  /* 면·선 */
-  --color-line: #e4e7ec;
+  /* ── 면·선 ──────────────────────────────────────────── */
+  --color-line: #e6e9ee;
   --color-line-soft: #f0f2f5;
-  --color-track: #eef1f5;
-  --color-page: #f4f5f7;
+  --color-track: #eef0f4;
+  --color-page: #f6f7f9;
   --color-field: #f9fafb;
-  --color-edge: #d5dae3;
+  --color-edge: #d8dde5;
+
+  /* ── 신호 5단계 ─────────────────────────────────────────
+     ink=글자·마크(흰 배경 AA 통과), tint=아주 옅은 배경,
+     solid=흰 글자를 얹는 면(히트맵 타일). 채도를 낮춰 차분하게. */
+  --color-sig-sp: #0f6b46;
+  --color-sig-sp-tint: #eef5f1;
+  --color-sig-sp-solid: #16714a;
+
+  --color-sig-p: #2f7d57;
+  --color-sig-p-tint: #f1f7f3;
+  --color-sig-p-solid: #35855e;
+
+  --color-sig-n: #8a6d1f;
+  --color-sig-n-tint: #f7f4ea;
+  --color-sig-n-solid: #866a20;
+
+  --color-sig-ng: #a85c26;
+  --color-sig-ng-tint: #faf3ec;
+  --color-sig-ng-solid: #b06428;
+
+  --color-sig-sn: #a63f39;
+  --color-sig-sn-tint: #faefee;
+  --color-sig-sn-solid: #ae443e;
+
+  /* ── 주의·경고 ──────────────────────────────────────── */
+  --color-warn: #8a6a12;
+  --color-warn-tint: #faf6ea;
+  --color-warn-line: #e8dfc2;
+
+  /* ── 오류 ───────────────────────────────────────────── */
+  --color-danger: #b42318;
+
+  /* ── 계열 색 (범주형) ───────────────────────────────────
+     "기술적/재무/감성/수급", "안정형 A/B" 처럼 순서가 없는 항목을
+     구분할 때만. 신호 5단계(좋다·나쁘다)에는 쓰지 않는다.
+     채도를 낮춰 신호색과 섞이지 않게 하고, 명도를 벌려 흑백 인쇄와
+     색각 이상에서도 구분되게 한다. */
+  --color-cat-1: #3a62c4;
+  --color-cat-1-tint: #eef2fc;
+  --color-cat-2: #1a7a63;
+  --color-cat-2-tint: #e9f4f1;
+  --color-cat-3: #6b58bd;
+  --color-cat-3-tint: #efedf9;
+  --color-cat-4: #a9762c;
+  --color-cat-4-tint: #f8f2e9;
+  --color-cat-5: #7d8899;
+
+  /* ── 브랜드 보조선 ──────────────────────────────────── */
+  --color-brand-line: #c6d3ee;
+
+  /* ── 등락 (국내 관례: 상승 적색 / 하락 청색) ────────── */
+  --color-up: #b8443e;
+  --color-down: #2f5fd0;
+
+  /* ── 타이포 스케일 ───────────────────────────────────────
+     7단계 고정. text-[13.5px] 같은 임의값 금지.
+     정보 밀도가 높은 화면이라 본문 기준을 13px로 내려 잡는다. */
+  --text-2xs: 0.6875rem; /* 11px — 각주·범례. 이보다 작게 쓰지 않는다 */
+  --text-2xs--line-height: 1.45;
+  --text-xs: 0.75rem; /* 12px — 라벨 */
+  --text-xs--line-height: 1.45;
+  --text-sm: 0.8125rem; /* 13px — 본문 기준 */
+  --text-sm--line-height: 1.55;
+  --text-base: 0.9375rem; /* 15px — 카드 안 핵심 수치 */
+  --text-base--line-height: 1.5;
+  --text-lg: 1.0625rem; /* 17px — 카드 제목 */
+  --text-lg--line-height: 1.4;
+  --text-xl: 1.25rem; /* 20px — 섹션 제목 */
+  --text-xl--line-height: 1.35;
+  --text-3xl: 1.75rem; /* 28px — 화면 대표 수치 */
+  --text-3xl--line-height: 1.2;
+
+  /* ── 모서리 ─────────────────────────────────────────── */
+  --radius-sm: 0.375rem; /* 6px — 칩·작은 컨트롤 */
+  --radius-md: 0.5rem; /* 8px — 입력·버튼 */
+  --radius-lg: 0.75rem; /* 12px — 카드 */
+  --radius-xl: 1rem; /* 16px — 큰 패널 */
+
+  /* ── 그림자 ───────────────────────────────────────────
+     기본은 실선 테두리. 그림자는 떠 있는 것에만. */
+  --shadow-hairline: 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-lift: 0 4px 16px rgba(16, 24, 40, 0.06);
+  --shadow-modal: 0 12px 32px rgba(16, 24, 40, 0.1);
 
   --font-sans: var(--font-pretendard), Pretendard, -apple-system, "Malgun Gothic", sans-serif;
 }
@@ -28,7 +114,21 @@ body {
   background-color: var(--color-page);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  font-size: var(--text-sm);
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 큰 글자일수록 자간을 좁힌다 — 큰 텍스트가 벌어져 보이는 현상 보정 */
+h1,
+h2,
+h3 {
+  letter-spacing: -0.014em;
+}
+
+/* 수치는 항상 자릿수 고정폭. 표·카드에서 숫자가 흔들리지 않게 */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 a {
@@ -38,4 +138,20 @@ a {
 a:hover {
   color: var(--color-brand-deep);
   text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

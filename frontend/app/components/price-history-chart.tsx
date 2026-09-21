@@ -105,19 +105,19 @@ export default function PriceHistoryChart({
         {/* 수평 그리드 + 가격 라벨 */}
         {ticks.map((tick) => (
           <g key={tick}>
-            <line x1={X0} y1={y(tick)} x2={VB_W - 10} y2={y(tick)} stroke="#f0f2f5" />
-            <text x={X0 + 4} y={y(tick) - 5} fontSize={11} fill="#98a2b3">
+            <line x1={X0} y1={y(tick)} x2={VB_W - 10} y2={y(tick)} style={{ stroke: "var(--color-line-soft)" }} />
+            <text x={X0 + 4} y={y(tick) - 5} fontSize={11} style={{ fill: "var(--color-faint)" }}>
               {tick.toLocaleString("ko-KR")}
             </text>
           </g>
         ))}
 
         {/* 오늘 경계선 — 오른쪽 미래 영역에는 H10 세로 구간 외에 아무것도 그리지 않는다 */}
-        <line x1={X1} y1={PAD.top} x2={X1} y2={baseline} stroke="#e4e7ec" />
-        <text x={X0} y={baseline + 17} fontSize={11} fill="#98a2b3">
+        <line x1={X1} y1={PAD.top} x2={X1} y2={baseline} style={{ stroke: "var(--color-line)" }} />
+        <text x={X0} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-faint)" }}>
           60거래일 전
         </text>
-        <text x={X1} y={baseline + 17} fontSize={11} fill="#98a2b3" textAnchor="end">
+        <text x={X1} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-faint)" }} textAnchor="end">
           오늘 ({asOfLabel})
         </text>
 
@@ -125,11 +125,11 @@ export default function PriceHistoryChart({
         <polyline
           points={points}
           fill="none"
-          stroke="#2f5fd0"
+          style={{ stroke: "var(--color-brand)" }}
           strokeWidth={2}
           strokeLinejoin="round"
         />
-        <circle cx={X1} cy={y(last)} r={4} fill="#2f5fd0" stroke="#ffffff" strokeWidth={1.5} />
+        <circle cx={X1} cy={y(last)} r={4} style={{ fill: "var(--color-brand)" }} stroke="#ffffff" strokeWidth={1.5} />
 
         {/* H10 세로 구간: 분포 범위(경로 아님)를 캡슐 하나로 */}
         <rect
@@ -138,7 +138,7 @@ export default function PriceHistoryChart({
           width={16}
           height={yLow - yHigh}
           rx={8}
-          fill={signal.dot}
+          style={{ fill: signal.ink }}
           opacity={0.16}
         />
         <line
@@ -146,7 +146,7 @@ export default function PriceHistoryChart({
           y1={yHigh}
           x2={XH + 11}
           y2={yHigh}
-          stroke={signal.dot}
+          style={{ stroke: signal.ink }}
           strokeWidth={2.5}
           strokeLinecap="round"
         />
@@ -155,17 +155,17 @@ export default function PriceHistoryChart({
           y1={yLow}
           x2={XH + 11}
           y2={yLow}
-          stroke={signal.dot}
+          style={{ stroke: signal.ink }}
           strokeWidth={2.5}
           strokeLinecap="round"
         />
-        <line x1={XH} y1={yHigh + 3} x2={XH} y2={yLow - 3} stroke={signal.dot} strokeWidth={1.5} />
+        <line x1={XH} y1={yHigh + 3} x2={XH} y2={yLow - 3} style={{ stroke: signal.ink }} strokeWidth={1.5} />
         <text
           x={XH}
           y={yHigh - 9}
           fontSize={12}
-          fontWeight={700}
-          fill={signal.text}
+          fontWeight={600}
+          style={{ fill: signal.ink }}
           textAnchor="middle"
         >
           {formatSigned(band.high)}
@@ -174,13 +174,13 @@ export default function PriceHistoryChart({
           x={XH}
           y={yLow + 17}
           fontSize={12}
-          fontWeight={700}
-          fill={signal.text}
+          fontWeight={600}
+          style={{ fill: signal.ink }}
           textAnchor="middle"
         >
           {formatSigned(band.low)}
         </text>
-        <text x={XH} y={baseline + 17} fontSize={11} fill="#98a2b3" textAnchor="middle">
+        <text x={XH} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-faint)" }} textAnchor="middle">
           H10 · 10거래일 후
         </text>
 
@@ -192,14 +192,14 @@ export default function PriceHistoryChart({
               y1={PAD.top}
               x2={xAt(hovered)}
               y2={baseline}
-              stroke="#c2cad6"
+              style={{ stroke: "var(--color-edge)" }}
               strokeWidth={1}
             />
             <circle
               cx={xAt(hovered)}
               cy={y(prices[hovered])}
               r={4.5}
-              fill="#2f5fd0"
+              style={{ fill: "var(--color-brand)" }}
               stroke="#ffffff"
               strokeWidth={2}
             />
@@ -209,7 +209,7 @@ export default function PriceHistoryChart({
 
       {hovered !== null && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-line bg-white px-2.5 py-1.5 shadow-[0_2px_10px_rgba(16,24,40,0.1)]"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-line bg-white px-2.5 py-1.5 shadow-lift"
           style={{
             left: `${(xAt(hovered) / VB_W) * 100}%`,
             top: `${((y(prices[hovered]) - 10) / VB_H) * 100}%`,
@@ -218,7 +218,7 @@ export default function PriceHistoryChart({
           <span className="text-xs text-muted">
             {hovered === prices.length - 1 ? "오늘" : `${prices.length - 1 - hovered}거래일 전`}
           </span>
-          <span className="ml-1.5 text-xs font-bold tabular-nums">
+          <span className="ml-1.5 text-xs font-medium tabular-nums">
             {prices[hovered].toLocaleString("ko-KR")}원
           </span>
         </div>

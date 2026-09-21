@@ -34,7 +34,7 @@ export default function SignOutButton() {
         onClick={() => void handleSignOut()}
         disabled={submitting}
         title={error || undefined}
-        className="inline-flex h-[34px] items-center whitespace-nowrap rounded-[8px] border border-edge bg-white px-2.5 text-[12px] font-semibold text-muted hover:border-ghost hover:bg-field hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
+        className="inline-flex h-[34px] items-center whitespace-nowrap rounded-md border border-edge bg-white px-2.5 text-xs font-semibold text-muted hover:border-ghost hover:bg-field hover:text-ink disabled:cursor-not-allowed disabled:opacity-50 sm:px-3"
       >
         {submitting ? (
           "처리 중"

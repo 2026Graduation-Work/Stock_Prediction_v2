@@ -2,14 +2,6 @@ import { SIGNAL_META } from "@/lib/display";
 import type { DataProvenance, PortfolioHolding, SignalLight } from "@/lib/types";
 import SourceChip from "./source-chip";
 
-const HEATMAP_STYLE: Record<SignalLight, { fill: string; border: string }> = {
-  strong_positive: { fill: "#1f6d49", border: "#174f38" },
-  positive: { fill: "#438c60", border: "#34734d" },
-  neutral: { fill: "#b58a18", border: "#96700f" },
-  negative: { fill: "#c96b35", border: "#a95429" },
-  strong_negative: { fill: "#a8403d", border: "#87302e" },
-};
-
 const LEGEND_SIGNALS: SignalLight[] = [
   "strong_negative",
   "negative",
@@ -63,16 +55,14 @@ export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHold
         : { kind: "mock", source: "" };
 
   return (
-    <section className="flex flex-col gap-3 rounded-[8px] border border-line bg-white px-4 py-4">
+    <section className="flex flex-col gap-3 rounded-md border border-line bg-white px-4 py-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-sm font-extrabold">내 포트폴리오 맵</h2>
-          <p className="mt-0.5 text-[11px] text-faint">면적은 등록 매입금액 기준</p>
+          <h2 className="text-sm font-semibold">내 포트폴리오 맵</h2>
+          <p className="mt-0.5 text-2xs text-faint">면적은 등록 매입금액 기준</p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <span className="rounded-[4px] border border-edge bg-field px-2 py-1 text-[10.5px] font-bold text-body">
-            오늘 모델 신호
-          </span>
+          <span className="text-2xs text-muted">오늘 모델 신호</span>
           {provenance && <SourceChip provenance={provenance} />}
         </div>
       </div>
@@ -95,27 +85,21 @@ export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHold
             >
               {column.map(({ holding, amount }) => {
                 const signal = SIGNAL_META[holding.signalLight];
-                const colors = HEATMAP_STYLE[holding.signalLight];
                 return (
                   <div
                     key={holding.code}
                     role="listitem"
                     title={`${holding.name} ${holding.code}, ${holding.quantity}주, 등록 매입금액 ${formatAmount(amount)}, ${signal.label} 신호`}
-                    className="flex min-h-0 min-w-0 flex-col justify-between overflow-hidden border p-3 text-white"
-                    style={{
-                      flexGrow: amount,
-                      flexBasis: 0,
-                      backgroundColor: colors.fill,
-                      borderColor: colors.border,
-                    }}
+                    className="flex min-h-0 min-w-0 flex-col justify-between overflow-hidden p-3 text-white"
+                    style={{ flexGrow: amount, flexBasis: 0, backgroundColor: signal.solid }}
                   >
                     <div className="min-w-0">
-                      <div className="truncate text-[15px] font-extrabold">{holding.name}</div>
-                      <div className="mt-0.5 text-[10.5px] text-white/75">{holding.code}</div>
+                      <div className="truncate text-base font-semibold">{holding.name}</div>
+                      <div className="mt-0.5 text-2xs text-white/85">{holding.code}</div>
                     </div>
                     <div className="min-w-0">
-                      <div className="truncate text-[12px] font-bold">{signal.label}</div>
-                      <div className="mt-0.5 truncate text-[10.5px] text-white/80">
+                      <div className="truncate text-xs font-medium">{signal.label}</div>
+                      <div className="mt-0.5 truncate text-2xs text-white/85">
                         {holding.quantity}주 · {formatAmount(amount)}
                       </div>
                     </div>
@@ -133,17 +117,17 @@ export default function PortfolioHeatmap({ holdings }: { holdings: PortfolioHold
             <div
               key={signal}
               className="h-1.5"
-              style={{ backgroundColor: HEATMAP_STYLE[signal].fill }}
+              style={{ backgroundColor: SIGNAL_META[signal].solid }}
             />
           ))}
         </div>
-        <div className="mt-1 flex justify-between text-[10px] text-faint">
+        <div className="mt-1 flex justify-between text-2xs text-faint">
           <span>강한 부정</span>
           <span>중립</span>
           <span>강한 긍정</span>
         </div>
       </div>
-      <p className="text-[10.5px] leading-4 text-faint">
+      <p className="text-2xs leading-4 text-faint">
         색상은 수익률이 아닌 오늘의 5단계 모델 신호입니다. 보유 수량과 평균 매입가는 수동
         등록값입니다.
       </p>

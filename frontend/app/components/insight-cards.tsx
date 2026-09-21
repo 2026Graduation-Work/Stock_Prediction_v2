@@ -53,6 +53,7 @@ import {
   type StockInsights,
   type SupplyDemandDay,
 } from "@/lib/providers";
+import { CHART } from "@/lib/chart-colors";
 import type { DataProvenance, StockDetail, StyleAxes, StyleAxisId } from "@/lib/types";
 import SourceChip from "./source-chip";
 
@@ -111,20 +112,20 @@ const CATEGORY_META: Record<
   ContributionCategory,
   { label: string; bar: string; bg: string; text: string }
 > = {
-  technical: { label: "기술적", bar: "#2f5fd0", bg: "#e8eefb", text: "#2f5fd0" },
-  financial: { label: "재무", bar: "#14735a", bg: "#e2f1ec", text: "#14735a" },
-  sentiment: { label: "감성", bar: "#6b4fc9", bg: "#eee8fb", text: "#6b4fc9" },
-  supply: { label: "수급", bar: "#c9731f", bg: "#fdf1e3", text: "#b45814" },
+  technical: { label: "기술적", bar: CHART.brand, bg: CHART.brandSoft, text: CHART.brand },
+  financial: { label: "재무", bar: CHART.cat2, bg: CHART.cat2Tint, text: CHART.cat2 },
+  sentiment: { label: "감성", bar: CHART.cat3, bg: CHART.cat3Tint, text: CHART.cat3 },
+  supply: { label: "수급", bar: CHART.cat4, bg: CHART.sigNgTint, text: CHART.sigNg },
 };
 
 const SUPPLY_SERIES = [
-  { key: "retail", label: "개인", color: "#dd7b2e" },
-  { key: "foreign", label: "외국인", color: "#2f5fd0" },
-  { key: "institution", label: "기관", color: "#14735a" },
-  { key: "otherCorp", label: "기타법인", color: "#7a5af8" },
+  { key: "retail", label: "개인", color: CHART.sigNg },
+  { key: "foreign", label: "외국인", color: CHART.brand },
+  { key: "institution", label: "기관", color: CHART.cat2 },
+  { key: "otherCorp", label: "기타법인", color: CHART.cat3 },
 ] as const;
 
-const TOOLTIP_STYLE = { border: "1px solid #e4e7ec", borderRadius: 6, fontSize: 11 };
+const TOOLTIP_STYLE = { border: `1px solid ${CHART.line}`, borderRadius: 6, fontSize: 11 };
 
 const signed = (value: number, digits = 2) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
 const signedPercent = (ratio: number) => `${ratio > 0 ? "+" : ""}${(ratio * 100).toFixed(1)}%`;
@@ -162,7 +163,7 @@ function WhyTooltip({ id, text }: { id: string; text: string }) {
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         onKeyDown={(event) => event.key === "Escape" && setOpen(false)}
-        className="grid size-[18px] place-items-center rounded-full border border-edge bg-white text-[11px] font-bold text-muted hover:border-brand hover:text-brand"
+        className="grid size-[18px] place-items-center rounded-full border border-edge bg-white text-2xs font-medium text-muted hover:border-brand hover:text-brand"
       >
         ?
       </button>
@@ -170,7 +171,7 @@ function WhyTooltip({ id, text }: { id: string; text: string }) {
         <span
           role="tooltip"
           id={id}
-          className="absolute left-0 top-6 z-20 w-[min(300px,80vw)] rounded-lg border border-line bg-white px-3 py-2.5 text-xs font-normal leading-5 text-body shadow-[0_8px_24px_rgba(27,36,52,0.12)]"
+          className="absolute left-0 top-6 z-20 w-[min(300px,80vw)] rounded-lg border border-line bg-white px-3 py-2.5 text-xs font-normal leading-5 text-body shadow-modal"
         >
           <strong className="mb-0.5 block text-ink">이 지표를 왜 봐야 하나</strong>
           {text}
@@ -195,15 +196,15 @@ function InsightCard({
   emphasized?: boolean;
   children: ReactNode;
 }) {
-  const border = emphasized ? "border-2 border-[#dbe4f6]" : "border border-line";
+  const border = emphasized ? "border border-edge shadow-hairline" : "border border-line";
   return (
     <section
       data-card={id}
       aria-labelledby={`insight-${id}`}
-      className={`flex flex-col gap-3.5 rounded-[14px] bg-white px-7 py-[22px] ${border}`}
+      className={`flex flex-col gap-3.5 rounded-lg bg-white px-7 py-[22px] ${border}`}
     >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <h2 id={`insight-${id}`} className="text-[15px] font-extrabold">
+        <h2 id={`insight-${id}`} className="text-base font-semibold">
           {title}
         </h2>
         <WhyTooltip id={`why-${id}`} text={WHY[id]} />
@@ -251,11 +252,11 @@ function NudgeContent({
           <li
             key={nudge.id}
             data-nudge={nudge.id}
-            className="rounded-[10px] border border-[#dbe4f6] bg-[#f6f9fe] px-4 py-3.5"
+            className="rounded-md bg-field px-4 py-3.5"
           >
-            <p className="m-0 text-[14.5px] leading-relaxed text-ink">{nudge.text}</p>
+            <p className="m-0 text-base leading-relaxed text-ink">{nudge.text}</p>
             <p className="m-0 mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-muted">
-              <span className="rounded-md bg-white px-2 py-0.5 font-bold text-brand">{nudge.id}</span>
+              <span className="rounded-md bg-white px-2 py-0.5 font-medium text-brand">{nudge.id}</span>
               <span>
                 근거 축 <strong className="text-body">{meta.name}</strong> ({nudge.axis})
               </span>
@@ -267,7 +268,7 @@ function NudgeContent({
                 -1 {meta.negative} ↔ +1 {meta.positive}
               </span>
               {nudge.id === "N08" && (
-                <span className="font-bold text-body">보유 비중: 매입금액(수량 × 평단) 기준</span>
+                <span className="font-medium text-body">보유 비중: 매입금액(수량 × 평단) 기준</span>
               )}
             </p>
           </li>
@@ -284,15 +285,15 @@ function ContributionContent({ contributions }: { contributions: ContributionSig
         const meta = CATEGORY_META[signal.category];
         return (
           <div key={signal.signal} className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2 text-[13.5px]">
+            <div className="flex flex-wrap items-center gap-2 text-sm">
               <span
-                className="inline-flex h-[22px] items-center rounded-md px-2 text-[11.5px] font-bold"
+                className="inline-flex h-[22px] items-center rounded-md px-2 text-xs font-medium"
                 style={{ backgroundColor: meta.bg, color: meta.text }}
               >
                 {meta.label}
               </span>
-              <span className="font-bold text-ink">{signal.label}</span>
-              <span className="ml-auto font-extrabold tabular-nums">
+              <span className="font-medium text-ink">{signal.label}</span>
+              <span className="ml-auto font-semibold tabular-nums">
                 {Math.round(signal.share)}%
               </span>
             </div>
@@ -317,13 +318,13 @@ function SupplyContent({ supply }: { supply: SupplyDemandDay[] }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {SUPPLY_SERIES.map((series) => (
           <div key={series.key} className="rounded-lg bg-field px-4 py-3">
-            <span className="text-xs font-bold" style={{ color: series.color }}>
+            <span className="text-xs font-medium" style={{ color: series.color }}>
               {series.label}
             </span>
-            <div className="mt-1 text-[17px] font-extrabold tabular-nums">
+            <div className="mt-1 text-lg font-semibold tabular-nums">
               {eok(supply.reduce((sum, day) => sum + day[series.key], 0))}
             </div>
-            <span className="text-[11.5px] text-faint tabular-nums">
+            <span className="text-xs text-faint tabular-nums">
               20일 합계 · 최근일 {eok(latest[series.key])}
             </span>
           </div>
@@ -341,22 +342,22 @@ function SupplyContent({ supply }: { supply: SupplyDemandDay[] }) {
             data={supply.map((day) => ({ ...day, label: shortDate(day.date) }))}
             margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
           >
-            <CartesianGrid stroke="#eef1f5" vertical={false} />
+            <CartesianGrid stroke={CHART.track} vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fill: "#667085", fontSize: 10 }}
-              axisLine={{ stroke: "#d5dae3" }}
+              tick={{ fill: CHART.muted, fontSize: 10 }}
+              axisLine={{ stroke: CHART.edge }}
               tickLine={false}
               interval={3}
             />
             <YAxis
-              tick={{ fill: "#98a2b3", fontSize: 10 }}
+              tick={{ fill: CHART.faint, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               width={56}
               tickFormatter={(value) => `${Number(value).toLocaleString("ko-KR")}억`}
             />
-            <ReferenceLine y={0} stroke="#c2cad6" />
+            <ReferenceLine y={0} stroke={CHART.edge} />
             <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => eok(Number(value))} />
             <Legend iconType="plainline" wrapperStyle={{ fontSize: 11 }} />
             {SUPPLY_SERIES.map((series) => (
@@ -373,7 +374,7 @@ function SupplyContent({ supply }: { supply: SupplyDemandDay[] }) {
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="m-0 text-[11.5px] text-faint">
+      <p className="m-0 text-xs text-faint">
         순매수(+)·순매도(-) 금액의 일별 기록입니다. 거래 주체가 왜 거래했는지는 담겨 있지 않습니다.
       </p>
     </>
@@ -395,7 +396,7 @@ function SentimentContent({
       {periodMismatch && (
         <p
           data-period-mismatch
-          className="m-0 rounded-lg border border-[#e8c76a] bg-[#fff9e8] px-3.5 py-2 text-xs font-semibold text-[#795b08]"
+          className="m-0 rounded-lg border border-warn-line bg-warn-tint px-3.5 py-2 text-xs font-semibold text-warn"
         >
           현재 시세 데이터와 기간이 다릅니다. 실데이터 연동 시 정합됩니다.
         </p>
@@ -419,28 +420,28 @@ function SentimentContent({
             data={days.map((day) => ({ ...day, label: shortDate(day.date) }))}
             margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
           >
-            <CartesianGrid stroke="#eef1f5" vertical={false} />
+            <CartesianGrid stroke={CHART.track} vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fill: "#667085", fontSize: 10 }}
-              axisLine={{ stroke: "#d5dae3" }}
+              tick={{ fill: CHART.muted, fontSize: 10 }}
+              axisLine={{ stroke: CHART.edge }}
               tickLine={false}
               interval={3}
             />
             <YAxis
               domain={[-1, 1]}
               ticks={[-1, -0.5, 0, 0.5, 1]}
-              tick={{ fill: "#98a2b3", fontSize: 10 }}
+              tick={{ fill: CHART.faint, fontSize: 10 }}
               axisLine={false}
               tickLine={false}
               width={34}
             />
-            <ReferenceLine y={0} stroke="#c2cad6" />
+            <ReferenceLine y={0} stroke={CHART.edge} />
             <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(value) => signed(Number(value))} />
             <Line
               dataKey="score"
               name="감성 점수"
-              stroke="#6b4fc9"
+              stroke={CHART.cat3}
               strokeWidth={2}
               dot={{ r: 2 }}
               isAnimationActive={false}
@@ -449,12 +450,12 @@ function SentimentContent({
         </ResponsiveContainer>
       </div>
       <div className="flex flex-col gap-2">
-        <span className="text-xs font-bold text-muted">대표 기사 3건 · 최근일 감성 강도 순</span>
+        <span className="text-xs font-medium text-muted">대표 기사 3건 · 최근일 감성 강도 순</span>
         <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
           {headlines.map((headline) => (
             <li
               key={`${headline.date}:${headline.title}`}
-              className="flex flex-wrap gap-x-2 rounded-lg bg-field px-3.5 py-2.5 text-[13.5px]"
+              className="flex flex-wrap gap-x-2 rounded-lg bg-field px-3.5 py-2.5 text-sm"
             >
               <span className="text-xs text-faint tabular-nums">
                 {shortDate(headline.date)} · {headline.press}
@@ -464,7 +465,7 @@ function SentimentContent({
           ))}
         </ul>
       </div>
-      <p className="m-0 text-[11.5px] text-faint">점수 -1(부정) ~ +1(긍정)</p>
+      <p className="m-0 text-xs text-faint">점수 -1(부정) ~ +1(긍정)</p>
     </>
   );
 }
@@ -478,7 +479,7 @@ function RiskContent({ detail }: { detail: StockDetail }) {
     <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
       <div className="flex flex-col gap-1 rounded-lg bg-field px-4 py-3.5">
         <span className="text-xs text-muted">변동성 (연환산)</span>
-        <span className="text-[19px] font-extrabold tabular-nums">
+        <span className="text-xl font-semibold tabular-nums">
           {(risk.volatilityAnnual * 100).toFixed(1)}%
         </span>
         <span className="text-xs text-faint">최근 60거래일 · 시장 상위 {volatilityTop}%</span>
@@ -486,8 +487,9 @@ function RiskContent({ detail }: { detail: StockDetail }) {
       <div className="flex flex-col gap-1.5 rounded-lg bg-field px-4 py-3.5">
         <span className="text-xs text-muted">위험등급</span>
         <span
-          className="inline-flex h-[26px] items-center self-start rounded-md px-2.5 text-[14px] font-extrabold"
-          style={{ backgroundColor: grade.bg, color: grade.text }}
+          className={`text-xl font-semibold tabular-nums ${
+            grade.tone === "warn" ? "text-warn" : ""
+          }`}
         >
           {risk.riskGrade}등급 · {grade.label}
         </span>
@@ -495,7 +497,7 @@ function RiskContent({ detail }: { detail: StockDetail }) {
       </div>
       <div className="flex flex-col gap-1 rounded-lg bg-field px-4 py-3.5">
         <span className="text-xs text-muted">3개월 고점 대비</span>
-        <span className="text-[19px] font-extrabold tabular-nums">
+        <span className="text-xl font-semibold tabular-nums">
           {signedPercent(risk.drawdownFrom3mHigh)}
         </span>
         <span className="text-xs text-faint tabular-nums">
@@ -512,11 +514,11 @@ function FinancialContent({ financial }: { financial: FinancialSnapshot }) {
       {financial.metrics.map((metric) => (
         <div key={metric.key} className="flex flex-col gap-1 rounded-lg bg-field px-4 py-3">
           <span className="text-xs text-muted">{metric.label}</span>
-          <span className="text-[17px] font-extrabold tabular-nums">
+          <span className="text-lg font-semibold tabular-nums">
             {metric.value.toLocaleString("ko-KR")}
             {metric.unit}
           </span>
-          <span className="text-[11.5px] leading-4 text-faint">{metric.description}</span>
+          <span className="text-xs leading-4 text-faint">{metric.description}</span>
         </div>
       ))}
     </div>
@@ -529,14 +531,14 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
   return (
     <section
       aria-labelledby="style-profile-title"
-      className="flex flex-col gap-4 rounded-[14px] border border-line bg-white px-7 py-[22px]"
+      className="flex flex-col gap-4 rounded-lg border border-line bg-white px-7 py-[22px]"
     >
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
-        <h2 id="style-profile-title" className="text-[15px] font-extrabold">
+        <h2 id="style-profile-title" className="text-base font-semibold">
           투자 성향 요약
         </h2>
         {demo.viewAs && (
-          <span className="inline-flex h-[22px] items-center rounded-md border border-[#e6c96b] bg-[#fff8df] px-2 text-[11.5px] font-bold text-[#8a6500]">
+          <span className="inline-flex h-[22px] items-center rounded-md border border-warn-line bg-warn-tint px-2 text-xs font-medium text-warn">
             {BIT_LABEL[demo.viewAs]}의 시선으로 보는 중 · 내 결과 아님
           </span>
         )}
@@ -547,12 +549,12 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
       ) : (
         <div className="flex flex-col gap-4 md:flex-row md:items-center">
           <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <span data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="text-lg font-extrabold text-ink">
+            <span data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="text-lg font-semibold text-ink">
               {bit.lowConfidence
                 ? "아직 판단하기에 응답이 부족합니다"
                 : `${BIT_LABEL[bit.type]} · ${BIAS_MODE_LABEL[bit.biasMode]}`}
             </span>
-            <span className="text-[12.5px] text-body tabular-nums">
+            <span className="text-xs text-body tabular-nums">
               종합 {signed(bit.composite)} = (능동성 {signed(bit.activeness)} + 위험감수{" "}
               {signed(bit.riskTaking)}) ÷ 2 · 분류 신뢰도 {Math.round(bit.confidence * 100)}%
             </span>
@@ -574,18 +576,18 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
               }))}
               outerRadius={78}
             >
-              <PolarGrid stroke="#e4e7ec" />
-              <PolarAngleAxis dataKey="axis" tick={{ fill: "#667085", fontSize: 10 }} />
+              <PolarGrid stroke={CHART.line} />
+              <PolarAngleAxis dataKey="axis" tick={{ fill: CHART.muted, fontSize: 10 }} />
               <PolarRadiusAxis domain={[-1, 1]} tick={false} axisLine={false} />
               <Radar
                 dataKey="ratio"
-                stroke="#2f5fd0"
-                fill="#2f5fd0"
+                stroke={CHART.brand}
+                fill={CHART.brand}
                 fillOpacity={0.18}
                 isAnimationActive={false}
               />
             </RadarChart>
-            <span className="block text-center text-[11px] text-faint">
+            <span className="block text-center text-2xs text-faint">
               바깥쪽 = 축의 +1 방향 · 중심 = -1
             </span>
           </div>
@@ -594,7 +596,7 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
 
       {styleAxes && (
         <div className="flex flex-col gap-2.5 border-t border-line-soft pt-3">
-          <span className="text-[13px] font-bold text-ink">다른 성향으로 보기</span>
+          <span className="text-sm font-medium text-ink">다른 성향으로 보기</span>
           <p className="m-0 text-xs text-muted">
             같은 종목을 다른 유형은 어떤 순서와 주의 안내로 보게 되는지 바꿔 볼 수 있어요. 이 화면에서만
             바뀌고 내 설문 결과는 그대로예요.
@@ -608,7 +610,7 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
                   type="button"
                   aria-pressed={active}
                   onClick={() => demo.setViewAs(type)}
-                  className={`h-9 rounded-lg border px-3.5 text-xs font-bold ${
+                  className={`h-9 rounded-lg border px-3.5 text-xs font-medium ${
                     active
                       ? "border-brand bg-brand-soft text-brand-deep"
                       : "border-edge bg-white text-body hover:border-brand"
@@ -729,9 +731,9 @@ export function ScreenGuideBanner({ bit }: { bit: BitResult | null }) {
   return (
     <aside
       role="note"
-      className="flex items-center gap-3 rounded-lg border border-[#b9c9e8] bg-brand-soft px-4 py-3 text-sm text-[#31558f]"
+      className="flex items-center gap-3 rounded-md bg-field px-4 py-3 text-sm text-body"
     >
-      <span className="grid size-[18px] flex-none place-items-center rounded-full border border-[#8aa5e6] bg-white text-[11px] font-bold">
+      <span className="grid size-[18px] flex-none place-items-center rounded-full border border-edge bg-white text-2xs text-muted">
         ?
       </span>
       {SCREEN_GUIDE_NOTICE.text}

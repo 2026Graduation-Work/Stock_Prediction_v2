@@ -9,10 +9,10 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
     <div className="flex flex-col gap-[5px]">
       <div className="flex text-xs">
         <span className="text-muted">{label}</span>
-        <span className="ml-auto font-bold tabular-nums">{value}</span>
+        <span className="ml-auto font-medium tabular-nums">{value}</span>
       </div>
-      <div className="h-[5px] rounded-[3px] bg-track">
-        <div className="h-full rounded-[3px] bg-brand" style={{ width: `${value}%` }} />
+      <div className="h-[5px] rounded-full bg-track">
+        <div className="h-full rounded-full bg-brand" style={{ width: `${value}%` }} />
       </div>
     </div>
   );
@@ -26,18 +26,18 @@ export default function InvestorProfileCard({
   avoidedLabels: string[];
 }) {
   return (
-    <section className="flex flex-col gap-3.5 rounded-[14px] border border-line bg-white px-5 py-[18px]">
+    <section className="flex flex-col gap-3.5 rounded-lg border border-line bg-white px-5 py-[18px]">
       <div className="flex items-center">
-        <span className="text-sm font-extrabold">나의 투자 성향</span>
+        <span className="text-sm font-semibold">나의 투자 성향</span>
         <Link
           href="/survey"
-          className="ml-auto inline-flex h-[26px] items-center whitespace-nowrap rounded-lg border border-edge bg-white px-2.5 text-[11.5px] font-semibold text-body hover:border-ghost hover:bg-field hover:no-underline"
+          className="ml-auto inline-flex h-[26px] items-center whitespace-nowrap rounded-lg border border-edge bg-white px-2.5 text-xs font-medium text-body hover:border-ghost hover:bg-field hover:no-underline"
         >
           다시 진단
         </Link>
       </div>
       <div className="flex flex-col gap-1">
-        <span className="inline-flex h-6 items-center self-start rounded-full bg-brand-soft px-3 text-xs font-bold text-brand">
+        <span className="inline-flex h-6 items-center self-start rounded-full bg-brand-soft px-3 text-xs font-medium text-brand">
           {profile.profileTypeLabel}
         </span>
         <span className="text-xs leading-5 text-body">{profile.personaLabel}</span>
@@ -48,7 +48,7 @@ export default function InvestorProfileCard({
         <div className="flex flex-col gap-[5px]">
           <div className="flex text-xs">
             <span className="text-muted">투자 기간</span>
-            <span className="ml-auto font-bold">
+            <span className="ml-auto font-medium">
               {INVESTMENT_HORIZON_LABEL[profile.horizon]}
             </span>
           </div>
@@ -56,7 +56,7 @@ export default function InvestorProfileCard({
             {HORIZON_SEGMENTS.map((segment) => (
               <span
                 key={segment}
-                className={`h-[5px] rounded-[3px] ${
+                className={`h-[5px] rounded-full ${
                   segment === profile.horizon ? "bg-brand" : "bg-track"
                 }`}
               />
@@ -66,22 +66,22 @@ export default function InvestorProfileCard({
       </div>
       <div className="border-t border-line-soft pt-3">
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[11.5px] text-muted">회피 설정</span>
+          <span className="mr-1 text-xs text-muted">회피 설정</span>
           {avoidedLabels.length > 0 ? (
             avoidedLabels.map((label) => (
               <span
                 key={label}
-                className="rounded-full bg-[#fff5f3] px-2 py-1 text-[10.5px] font-bold text-[#a83a31]"
+                className="rounded-full bg-field px-2 py-1 text-2xs text-body"
               >
                 {label}
               </span>
             ))
           ) : (
-            <span className="text-[11.5px] text-faint">없음</span>
+            <span className="text-xs text-faint">없음</span>
           )}
         </div>
       </div>
-      <span className="text-[11.5px] text-faint">
+      <span className="text-xs text-faint">
         {profile.surveyedAt} 설문 기준 · 3축은 8축 설문을 묶어 요약한 값
       </span>
     </section>

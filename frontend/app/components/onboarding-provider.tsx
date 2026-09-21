@@ -108,7 +108,7 @@ function DemoAccountBanner() {
   return (
     <div
       role="note"
-      className="bg-[#fff4d6] px-4 py-1.5 text-center text-xs font-bold text-[#8a6100]"
+      className="bg-warn-tint px-4 py-1.5 text-center text-xs font-medium text-warn"
     >
       데모 계정 · 예시 데이터
       <span className="font-normal"> — 가입 없이 둘러보는 중이에요. 설문 결과는 이 브라우저에만 저장돼요.</span>
@@ -140,10 +140,10 @@ function onboardingDestination(
 function BrandMark() {
   return (
     <div className="flex items-center gap-2.5 text-ink">
-      <span className="grid size-8 place-items-center rounded-lg bg-brand text-sm font-extrabold text-white">
+      <span className="grid size-8 place-items-center rounded-lg bg-brand text-sm font-semibold text-white">
         S
       </span>
-      <span className="text-[17px] font-extrabold">시그널랩</span>
+      <span className="text-lg font-semibold">시그널랩</span>
     </div>
   );
 }
@@ -169,16 +169,16 @@ function OnboardingError({
 }) {
   return (
     <main className="grid min-h-screen place-items-center bg-page px-5">
-      <section className="w-full max-w-[460px] rounded-lg border border-line bg-white p-7 shadow-[0_12px_34px_rgba(27,36,52,0.07)]">
+      <section className="w-full max-w-[460px] rounded-lg border border-line bg-white p-7 shadow-lift">
         <BrandMark />
-        <h1 className="mt-8 text-xl font-extrabold text-ink">연결을 확인해 주세요</h1>
+        <h1 className="mt-8 text-xl font-semibold text-ink">연결을 확인해 주세요</h1>
         <p role="alert" className="mt-2 text-sm leading-6 text-muted">
           {message}
         </p>
         <button
           type="button"
           onClick={onRetry}
-          className="mt-6 h-11 w-full rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep"
+          className="mt-6 h-11 w-full rounded-lg bg-brand px-5 text-sm font-medium text-white hover:bg-brand-deep"
         >
           다시 시도
         </button>

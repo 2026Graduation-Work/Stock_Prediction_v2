@@ -12,6 +12,7 @@
 - `backend/analysis/chart/` — 단기 예측 LightGBM. 담당: 진세(🟢)
 - `backend/analysis/text/` — 뉴스 감성·재무. 담당: 서환(🟢)
 - `frontend/` — Next.js 대시보드. 담당: 성우(🔵)
+  화면 규칙은 `frontend/DESIGN.md`, 값(색·타이포·간격)은 `frontend/app/globals.css`의 `@theme`가 SSOT
 - `schema/` — 블록 간 JSON 계약 (SSOT, freeze됨). 변경 시 전원 합의 필수.
 - `.github/` — CI(블록별 3-job), Dependabot, CodeQL
 
