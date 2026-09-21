@@ -554,17 +554,27 @@ function StyleProfilePanel({ demo, order }: { demo: DemoStyleAxes; order: readon
                 ? "아직 판단하기에 응답이 부족합니다"
                 : `${BIT_LABEL[bit.type]} · ${BIAS_MODE_LABEL[bit.biasMode]}`}
             </span>
-            <span className="text-xs text-body tabular-nums">
-              종합 {signed(bit.composite)} = (능동성 {signed(bit.activeness)} + 위험감수{" "}
-              {signed(bit.riskTaking)}) ÷ 2 · 분류 신뢰도 {Math.round(bit.confidence * 100)}%
+            <span className="text-xs leading-5 text-body">
+              카드 순서와 주의 안내를 이 유형에 맞춰 정렬합니다. 종목을 거르지는 않습니다.
             </span>
-            <span className="text-xs leading-5 text-faint">
-              Pompian 행동투자자 유형(BIT)에서 착안한 근사 분류입니다. 카드 순서와 넛지에만 쓰고
-              종목을 거르지 않습니다.
-            </span>
-            <span data-card-order={order.join(",")} className="text-xs text-muted">
-              카드 순서: {order.map((id) => CARD_LABEL[id]).join(" → ")}
-            </span>
+            {/* 산출식·축값은 근거이지 첫 화면에서 읽을 정보가 아니다. 필요한 사람만 편다. */}
+            <details className="group">
+              <summary className="cursor-pointer list-none text-xs text-muted hover:text-ink">
+                <span className="underline underline-offset-2">계산 근거 보기</span>
+              </summary>
+              <div className="mt-2 flex flex-col gap-1.5 border-l-2 border-line pl-3">
+                <span className="text-xs text-body tabular-nums">
+                  종합 {signed(bit.composite)} = (능동성 {signed(bit.activeness)} + 위험감수{" "}
+                  {signed(bit.riskTaking)}) ÷ 2 · 분류 신뢰도 {Math.round(bit.confidence * 100)}%
+                </span>
+                <span data-card-order={order.join(",")} className="text-xs text-muted">
+                  카드 순서: {order.map((id) => CARD_LABEL[id]).join(" → ")}
+                </span>
+                <span className="text-xs leading-5 text-faint">
+                  Pompian 행동투자자 유형(BIT)에서 착안한 근사 분류입니다.
+                </span>
+              </div>
+            </details>
           </div>
           <div className="flex-none self-center">
             <RadarChart

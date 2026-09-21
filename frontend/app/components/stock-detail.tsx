@@ -246,33 +246,6 @@ export default function StockDetailView({
           </div>
 
           <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
-            <span className="text-xs text-muted">위험 계층</span>
-            <span
-              className={`text-lg font-semibold ${grade.tone === "warn" ? "text-warn" : ""}`}
-            >
-              {detail.riskGrade}등급 · {grade.label}
-            </span>
-            <div className="grid w-[110px] grid-cols-5 gap-[3px]">
-              {([1, 2, 3, 4, 5] as const).map((tier) => (
-                <span
-                  key={tier}
-                  className="h-[5px] rounded-full"
-                  style={{
-                    backgroundColor:
-                      tier <= detail.riskGrade
-                        ? grade.tone === "warn"
-                          ? "var(--color-warn)"
-                          : "var(--color-ink)"
-                        : "var(--color-track)",
-                    opacity: tier === detail.riskGrade ? 1 : tier < detail.riskGrade ? 0.3 : 1,
-                  }}
-                />
-              ))}
-            </div>
-            <span className="text-xs text-faint">1=매우 위험 ~ 5=매우 안전</span>
-          </div>
-
-          <div className="flex flex-col gap-2.5 xl:border-l xl:border-line-soft xl:pl-7">
             <span className="text-xs text-muted">
               예상 수익률 밴드 <span className="text-ghost">· {ciPercent}% 신뢰구간</span>
             </span>
@@ -295,13 +268,31 @@ export default function StockDetailView({
             </span>
           </div>
 
-          <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
+          <div className="flex flex-col gap-2.5 xl:border-l xl:border-line-soft xl:pl-7">
             <span className="text-xs text-muted">신뢰도</span>
             <span className="text-xl font-semibold">
               상승 비율 {Math.round(detail.hitRate * 100)}%
             </span>
             <span className="text-xs text-body">이 확률 구간에서 과거에 실제로 오른 비율</span>
             <span className="text-xs text-faint">과거 유사 사례 {detail.similarCaseCount}건</span>
+          </div>
+
+          <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
+            <span className="text-xs text-muted">기간별 신호 일치</span>
+            <div className="flex flex-wrap items-center gap-3">
+              {horizons.map(([label, direction]) => (
+                <span
+                  key={label}
+                  className="text-base font-semibold tabular-nums"
+                  style={{ color: HORIZON_META[direction].ink }}
+                >
+                  {label} {HORIZON_META[direction].arrow}
+                </span>
+              ))}
+            </div>
+            <span className="text-xs text-body">
+              {AGREEMENT_LABEL[detail.horizonAgreement.agreement]}
+            </span>
           </div>
         </Card>
 
@@ -328,9 +319,8 @@ export default function StockDetailView({
                 signal={signal}
               />
               <span className="text-xs text-faint">
-                예상 수익률 밴드 {formatPercent(detail.returnBand.low)} ~{" "}
-                {formatPercent(detail.returnBand.high)}는 이 분포의 {ciPercent}% 구간입니다 · 미래
-                가격 경로가 아닌 {returnHorizon.toUpperCase()} 시점의 분포 범위입니다
+                위 예상 수익률 밴드는 이 분포의 {ciPercent}% 구간입니다 · 미래 가격 경로가 아닌{" "}
+                {returnHorizon.toUpperCase()} 시점의 분포 범위입니다
               </span>
             </>
           ) : (
@@ -386,29 +376,6 @@ export default function StockDetailView({
               최근 60거래일 종가가 DB에 저장되어 있지 않아 주가 흐름을 표시하지 않습니다.
             </EvidenceUnavailable>
           )}
-        </Card>
-
-        {/* 기간별 신호 일치 */}
-        <Card className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <span className="min-w-[150px] text-base font-semibold">기간별 신호 일치</span>
-          <div className="flex flex-wrap items-center gap-2">
-            {horizons.map(([label, direction]) => {
-              const meta = HORIZON_META[direction];
-              return (
-                <span
-                  key={label}
-                  className="text-base font-semibold tabular-nums"
-                  style={{ color: meta.ink }}
-                >
-                  {label} {meta.arrow}
-                </span>
-              );
-            })}
-          </div>
-          <div className="hidden w-px self-stretch bg-line-soft sm:block" />
-          <span className="text-sm text-body">
-            <strong className="text-ink">{AGREEMENT_LABEL[detail.horizonAgreement.agreement]}</strong>
-          </span>
         </Card>
 
         {/* 예측 근거 Top 3 */}
