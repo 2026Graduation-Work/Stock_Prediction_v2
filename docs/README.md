@@ -1,9 +1,30 @@
-# 회의록 및 설계 문서
+# 문서 색인
+
+> 현재 상태 기준일: 2026-09-22. ⚠️ 표시는 작성 이후 구현이 바뀌어 **일부 내용이 현재와 다른 문서**다(기록으로 남겨 둔다).
+
+## 지금 보는 문서
+
+| 문서 | 내용 |
+|---|---|
+| [../README.md](../README.md) | 서비스 소개·라이브 데모·구조·데이터 경계·로컬 실행 |
+| [../AGENTS.md](../AGENTS.md) | 아키텍처 원칙·표현 규칙·금지사항·디자인 스킬 허용 목록 |
+| [data-inventory.md](data-inventory.md) | 화면 수치 43행의 출처·실데이터 여부, 시장 분위기 산식 |
+| [auth-setup.md](auth-setup.md) | 계정 로그인 설정(Supabase·Vercel), 사람이 할 일 |
+| [erd.md](erd.md) | Supabase 테이블(마이그레이션 0001~0004) |
+| [../frontend/DESIGN.md](../frontend/DESIGN.md) | 화면 규칙(성균관대 색·애플 톤). 값은 `frontend/app/globals.css` `@theme` |
+| [../.claude/skills/README.md](../.claude/skills/README.md) | 검토한 디자인 스킬 4종·충돌 판정표 |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | 협업 규칙 |
+| [../backend/analysis/text/VALUE_PIPELINE_VALIDATION.md](../backend/analysis/text/VALUE_PIPELINE_VALIDATION.md) | 가치투자 파이프라인 출력 검증 절차 |
+| [../backend/analysis/chart/experiments/features/PSYCHOLOGY_FEATURES.md](../backend/analysis/chart/experiments/features/PSYCHOLOGY_FEATURES.md) | 가격·거래량 심리 피처 정의(psychology_market_v1) |
 
 ## 의사결정
 
-- [BigKinds 뉴스 수집 방식](decisions/bigkinds-acquisition.md)
+- [decisions/bigkinds-acquisition.md](decisions/bigkinds-acquisition.md) — BigKinds 뉴스 수집 방식
 
-## 실행 계획
+## 기록 (현재와 다른 부분 있음)
 
-- [구현 및 통합 로드맵](implementation-roadmap.md)
+| 문서 | 기준일 | 무엇이 바뀌었나 |
+|---|---|---|
+| ⚠️ [implementation-roadmap.md](implementation-roadmap.md) | 2026-07-21 | PR 상태 표가 그 시점 기준. 온보딩·디자인 시스템 v2·실데이터 스냅샷(2026-09-22)은 없다 |
+| ⚠️ [style-assessment-adoption-plan.md](style-assessment-adoption-plan.md) | 2026-07-28 | 계획 문서. 실제 진단은 16문항(온보딩)·24문항·40문항 3모드, 채점은 TS 한 벌 |
+| ⚠️ [../frontend/README.md](../frontend/README.md) | 2026-06 | 초기 기획(토스 스타일·RAG·토네이도 차트)이 남아 있다 |

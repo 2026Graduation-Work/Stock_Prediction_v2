@@ -8,7 +8,8 @@
 연구 질문: ① 가격·거래량 기반 시장 심리 피처가 예측 신호에 보탬이 되는가(A/B) ② 성향 기반 표시가 초보자의 이해를 돕는가(사용성 평가)
 
 ## 저장소 구조
-- `backend/profiling/` — 설문·심리 프로파일링 (Python). 담당: 중현(🟡)
+- `backend/profiling/` — 설문·심리 프로파일링. 담당: 중현(🟡)
+  문항 정본은 `frontend/lib/profiling/style-questions.json`, 채점은 TS(`frontend/lib/profiling/style-scoring.ts`) 한 벌이다. Python은 문항↔스키마 계약 검사(`backend/profiling/survey/test_question_bank.py`)만 한다.
 - `backend/analysis/chart/` — 단기 예측 LightGBM. 담당: 진세(🟢)
 - `backend/analysis/text/` — 뉴스 감성·재무. 담당: 서환(🟢)
 - `frontend/` — Next.js 대시보드. 담당: 성우(🔵)
@@ -98,10 +99,13 @@
 
 - 우선순위: **AGENTS.md > `frontend/DESIGN.md` > 스킬.** 스킬이 표현 규칙·색의 의미·화이트박스·결정론과 부딪히면 우리 규칙을 따른다.
 - 미러·포크본은 설치하지 않는다(내용이 빈 복제본이 있다). 새 스킬·새 버전은 SKILL.md를 읽고 PR에 요약과 SHA를 남긴 뒤 이 표에 추가한다.
-- `frontend/lib/types.ts` 및 프론트 계산 상수는 `schema/` 및 `backend/profiling/` 상수 테이블의 파생물이다. 스키마·규칙 변경 시 반드시 동기화한다.
+- `frontend/lib/types.ts`는 `schema/`의 파생물이다. 스키마가 바뀌면 반드시 동기화한다.
+- 설문 문항·채점 규칙은 `frontend/lib/profiling/`이 정본이다(골든 케이스 `style-golden-cases.json`이 결과를 고정). 문항을 바꾸면 골든·속성 테스트와 `backend/profiling/survey/test_question_bank.py`를 함께 통과시킨다.
+- 화면 문구는 `frontend/lib/copy-glossary.ts`(쉬운 말 사전)를 쓰고, 금지 표현은 `frontend/lib/copy-rules.ts`가 검사한다.
 
 ## 하지 말 것
 - 다른 팀/조직 레포를 참고할 때 커밋·푸시 금지 (읽기 전용, 분석 후 클론 삭제)
-- 팀 산출물에 특정 외부 프로젝트명 명시 금지 → "참고 자료"로 표현
+- 팀 산출물에 **참고한 다른 팀·조직의 프로젝트명**을 쓰지 않는다 → "참고 자료"로 표현
+  - 사용한 도구·라이브러리·데이터 원천의 이름(예: FinanceDataReader, BigKinds, 허용 목록의 디자인 스킬)은 출처 표기로 쓴다
 - 유료 기능 활성화 금지 (GitHub Advanced Security 등)
 - schema/ 파일을 단독 판단으로 수정 금지 (freeze 상태, 전원 합의 필요)
