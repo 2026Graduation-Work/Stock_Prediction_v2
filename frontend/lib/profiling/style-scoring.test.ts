@@ -131,3 +131,46 @@ test("모순 규칙마다 조건을 만족하면 검출되고, 신뢰도가 낮�
     assert.deepEqual(detectContradictions(axesWith(ratios, 0.29)), [], `${id} 저신뢰`);
   }
 });
+
+test("짧은 진단은 16문항, 축당 정방향 1 + 역방향 1이고 모두 빠른 진단 문항이다", () => {
+  const short = questionsForMode("short");
+  assert.equal(short.length, 16);
+  const quickIds = new Set(questionsForMode("quick").map(({ id }) => id));
+  assert.ok(short.every(({ id }) => quickIds.has(id)));
+  for (const [axis, questions] of Map.groupBy(short, (q) => (q.type === "likert" ? q.axis : ""))) {
+    assert.deepEqual(
+      questions.map((q) => (q.type === "likert" ? q.direction : 0)).sort(),
+      [-1, 1],
+      axis,
+    );
+  }
+});
+
+// 속성 테스트: 한결같이 답한 페르소나(모든 문항을 축 방향 강도대로 답함)는 16문항과 24문항에서
+// 같은 유형으로 분류된다. 분류 3축의 강도 조합 전부와 나머지 축의 여러 값으로 확인한다.
+test("짧은 진단: 일관되게 답한 페르소나는 빠른 진단과 같은 유형이 나온다", () => {
+  const levels = [-2, -1, 0, 1, 2];
+  let checked = 0;
+  for (const turnover of levels)
+    for (const loss of levels)
+      for (const concentration of levels)
+        for (const rest of [-2, 0, 1]) {
+          const pattern = {
+            market_participation: rest,
+            loss_tolerance: loss,
+            turnover,
+            concentration,
+            rule_adherence: -rest,
+            information_reliance: rest,
+            urgency: rest,
+            drawdown_reaction: -rest,
+          };
+          const short = scoreStyleAxes(answersFromPattern(pattern, "short"), "short");
+          const quick = scoreStyleAxes(answersFromPattern(pattern, "quick"), "quick");
+          assert.equal(short.assessment_mode, "quick"); // 스키마 enum(freeze)을 지킨다
+          assert.equal(classifyBit(short).type, classifyBit(quick).type, JSON.stringify(pattern));
+          assert.ok(short.axes.every(({ question_count }) => question_count === 2));
+          checked += 1;
+        }
+  assert.equal(checked, 375);
+});

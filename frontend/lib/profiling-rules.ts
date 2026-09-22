@@ -67,7 +67,8 @@ export interface SurveyAnswers {
   user_id: string;
   session_id: string;
   timestamp: string;
-  style: StyleAnswers; // 빠른 진단 24문항 리커트 응답
+  style: StyleAnswers; // 리커트 응답(mode의 문항)
+  mode?: "short" | "quick"; // 기본 quick. short = 온보딩 16문항
   experience: ExperienceChoice;
   avoided_assets: RiskFlag[];
   free_text?: string;
@@ -164,7 +165,10 @@ export function applyAdjustments(
 
 export function convertSurveyAnswers(input: unknown): ProfilingOutput {
   const answers = parseSurveyAnswers(input);
-  const styleAxes = applyAdjustments(scoreStyleAxes(answers.style, "quick"), answers.adjusted_axes);
+  const styleAxes = applyAdjustments(
+    scoreStyleAxes(answers.style, answers.mode === "short" ? "short" : "quick"),
+    answers.adjusted_axes,
+  );
   const legacy = reduceToLegacyFields(styleAxes);
   const axis = (id: StyleAxisId) => styleAxes.axes.find(({ axis_id }) => axis_id === id)!;
   const experience = EXPERIENCE_CHOICES.find(({ id }) => id === answers.experience)!;
@@ -252,11 +256,16 @@ function parseSurveyAnswers(input: unknown): SurveyAnswers {
     throw new Error("제외할 종목 유형 응답이 올바르지 않습니다.");
   }
 
+  if (input.mode !== undefined && input.mode !== "short" && input.mode !== "quick") {
+    throw new Error("진단 모드(mode)는 short 또는 quick이어야 합니다.");
+  }
+
   return {
     user_id: requireText(input.user_id, "user_id"),
     session_id: requireText(input.session_id, "session_id"),
     timestamp,
     style: input.style as StyleAnswers,
+    mode: input.mode as SurveyAnswers["mode"],
     experience: input.experience as ExperienceChoice,
     avoided_assets: avoided as RiskFlag[],
     free_text: optionalText(input.free_text, "free_text"),

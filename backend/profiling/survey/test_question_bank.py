@@ -40,16 +40,24 @@ def test_every_question_targets_a_known_axis() -> None:
         assert question["weight"] > 0, question["id"]
 
 
-def test_each_axis_has_reverse_keyed_question_in_both_modes() -> None:
-    for quick_only in (True, False):
+def test_each_axis_has_reverse_keyed_question_in_every_mode() -> None:
+    for mode in ("short", "quick", "detailed"):
         questions = [
             q
             for q in BANK["questions"]
-            if q["type"] == "likert" and (q["quick"] or not quick_only)
+            if q["type"] == "likert" and (mode == "detailed" or q[mode])
         ]
         for axis_id in _schema_axis_ids():
             directions = {q["direction"] for q in questions if q["axis"] == axis_id}
-            assert directions == {1, -1}, (axis_id, quick_only)
+            assert directions == {1, -1}, (axis_id, mode)
+
+
+def test_short_mode_is_two_per_axis_inside_quick() -> None:
+    short = [q for q in BANK["questions"] if q.get("short")]
+    assert len(short) == 16
+    assert all(q["quick"] for q in short)
+    for axis_id in _schema_axis_ids():
+        assert sum(q["axis"] == axis_id for q in short) == 2, axis_id
 
 
 def test_question_ids_are_unique() -> None:

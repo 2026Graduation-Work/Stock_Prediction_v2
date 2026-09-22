@@ -1,8 +1,8 @@
 # Supabase ERD
 
-`supabase/migrations/` 0001~0003 기준. 스키마가 바뀌면 이 문서와 `frontend/lib/types.ts`를 함께 고친다.
+`supabase/migrations/` 0001~0004 기준(모두 프로덕션 적용 완료, 2026-09-22 확인). 스키마가 바뀌면 이 문서와 `frontend/lib/types.ts`를 함께 고친다.
 
-> 0003(schema_version `1.1.0` 허용)은 아직 미적용이다. 적용 전 담당자 확인이 필요하다.
+> 0004(2026-09-22): `portfolio_holdings.avg_buy_price` nullable. 비어 있으면 화면은 기준일 종가 × 수량으로 비중을 세고 "현재가 기준"으로 표시한다. RLS 정책은 그대로(3개).
 > 8축은 별도 컬럼 없이 `profile_payload.style_axes`에 저장하므로 0003 없이도 앱은 동작한다(8축만 null).
 
 ```mermaid
@@ -87,7 +87,7 @@ erDiagram
     text user_id PK,FK
     text stock_code PK,FK
     integer quantity
-    integer avg_buy_price
+    integer avg_buy_price "nullable (0004) — 모름"
     smallint display_order
     boolean is_active
     timestamptz created_at

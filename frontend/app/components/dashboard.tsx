@@ -15,7 +15,9 @@ import {
 } from "@/lib/queries";
 import type { RecommendedStock } from "@/lib/types";
 import { AVOIDED_ASSET_LABELS, summaryFromProfilingOutput } from "@/lib/profiling-rules";
+import { CLOSING_PRICE } from "@/lib/closing-prices";
 import { dashboardSummary } from "@/lib/dashboard-summary";
+import { costBasis } from "@/lib/holdings-rules";
 import { holdingAlertsOutside } from "@/lib/recommendation-filter";
 import {
   getSavedHoldingsSnapshot,
@@ -127,7 +129,10 @@ export default function Dashboard(initialData: DashboardData) {
                 name: saved.name,
                 signalLight: source.signalLight,
                 quantity: saved.quantity,
-                avgBuyPrice: saved.avgBuyPrice,
+                ...(() => {
+                  const { price, basis } = costBasis(saved.avgBuyPrice, CLOSING_PRICE[saved.code]);
+                  return { avgBuyPrice: price, priceBasis: basis };
+                })(),
                 provenance: source.provenance,
               },
             ]

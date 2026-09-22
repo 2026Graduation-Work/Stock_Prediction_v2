@@ -63,7 +63,10 @@ export default function PortfolioHeatmap({
   if (holdings.length === 0) {
     return (
       <div className="surface flex min-h-[280px] flex-col items-center justify-center gap-4 px-6 text-center">
-        <p className="text-sm text-body">아직 등록한 보유 종목이 없어요.</p>
+        <p className="m-0 flex flex-col gap-1">
+          <span className="text-base font-medium text-ink">관심 가는 종목을 검색해 보세요</span>
+          <span className="text-xs text-muted">위 검색창에 종목명을 넣거나, 가진 종목을 넣으면 여기에 오늘 신호가 보여요.</span>
+        </p>
         {emptyAction ?? (
           <Link href="/portfolio" className="btn-primary">
             보유 종목 추가
@@ -106,7 +109,10 @@ export default function PortfolioHeatmap({
         ))}
       </div>
       <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted">
-        <span>색은 오늘 모델 신호(적 긍정 · 회색 중립 · 청 부정), 넓이는 {amountLabel(holdings[0])} 기준</span>
+        <span>
+          색은 오늘 모델 신호(적 긍정 · 회색 중립 · 청 부정), 넓이는 매입금액 기준
+          {holdings.some(({ priceBasis }) => priceBasis === "close") && " · 평균 매입가를 비운 종목은 현재가 기준"}
+        </span>
         {provenance && <SourceChip provenance={provenance} />}
       </p>
       {withoutSignalCount > 0 && (
