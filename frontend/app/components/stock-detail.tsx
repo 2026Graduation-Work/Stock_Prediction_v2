@@ -161,7 +161,7 @@ export default function StockDetailView({
                 <span className="text-base font-medium tabular-nums" style={{ color: changeColor }}>
                   {changeArrow} {formatPercent(changePercent)}
                   <span className="ml-1.5 text-xs font-normal text-muted">
-                    전일 대비 · {formatDate(detail.asOf)} 종가
+                    전일 대비 · {formatDate(detail.asOf)} 기준
                   </span>
                 </span>
               </>

@@ -714,6 +714,12 @@ export function SourceList({ detail, insights }: { detail: StockDetail; insights
           </dd>
         </div>
       ))}
+      {detail.priceProvenance?.source.includes("수정주가") && (
+        <p className="col-span-2 m-0 mt-1 text-xs text-muted">
+          주가는 수정주가예요. 그 뒤에 있었던 배당·주식 나눔을 반영해 과거 가격을 다시 계산한 값이라, 그날 실제로 거래된
+          가격과 조금 다를 수 있어요. 가격 흐름과 등락률을 비교하기에는 이 방식이 정확해요.
+        </p>
+      )}
     </dl>
   );
 }
