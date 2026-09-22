@@ -36,6 +36,7 @@ interface ReturnHistogramProps {
   band: ReturnBand;
   caseCount: number;
   signal: SignalMeta;
+  horizonLabel: string;
 }
 
 export default function ReturnHistogram({
@@ -43,6 +44,7 @@ export default function ReturnHistogram({
   band,
   caseCount,
   signal,
+  horizonLabel,
 }: ReturnHistogramProps) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -129,7 +131,7 @@ export default function ReturnHistogram({
           fontWeight={600}
           style={{ fill: signal.ink }}
         >
-          {ciPercent}% 구간 {formatSigned(band.low)} ~ {formatSigned(band.high)}
+          10번 중 {Math.round(ciPercent / 10)}번 {formatSigned(band.low)} ~ {formatSigned(band.high)}
         </text>
 
         {/* 수평 그리드 + 건수 라벨 */}
@@ -204,7 +206,7 @@ export default function ReturnHistogram({
           </text>
         ))}
         <text x={VB_W - PAD.right} y={baseline + 30} textAnchor="end" fontSize={11} style={{ fill: "var(--color-muted)" }}>
-          실현 수익률 (향후 10거래일)
+          실제 수익률 ({horizonLabel})
         </text>
 
         {/* 호버 히트 영역 (막대보다 넓게, 플롯 전체 높이) */}

@@ -141,7 +141,7 @@ export function startDemoSession(): void {
 
 export async function requestMagicLink(email: string): Promise<void> {
   const client = getSupabaseClient();
-  if (!client) throw new Error("Supabase 환경변수가 설정되지 않았습니다.");
+  if (!client) throw new Error("계정 기능이 아직 연결되지 않았어요.");
 
   const { error } = await client.auth.signInWithOtp({
     email,

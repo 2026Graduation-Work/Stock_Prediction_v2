@@ -100,7 +100,15 @@ export const financialProvider: FinancialProvider = async (code) =>
 
 export type HoldingWeight = Pick<PortfolioHolding, "code" | "quantity" | "avgBuyPrice">;
 
+// 가격·거래량으로 본 분위기 한 줄(psychology_market_v1). 구간 말 + 풀이.
+export interface PsychologyLine {
+  word: string;
+  explain: string;
+  provenance: DataProvenance;
+}
+
 export interface StockInsights {
+  psychology: PsychologyLine | null;
   supply: SupplyDemandDay[] | null;
   sentiment: SentimentData | null;
   contributions: ContributionSignal[] | null;
@@ -118,6 +126,7 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
     financialProvider(code),
   ]);
   return {
+    psychology: null,
     supply,
     sentiment,
     contributions,

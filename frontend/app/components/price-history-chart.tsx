@@ -42,6 +42,7 @@ interface PriceHistoryChartProps {
   band: ReturnBand;
   signal: SignalMeta;
   asOfLabel: string; // 예: 07.07
+  horizonLabel: string; // 예: 2주 뒤
 }
 
 export default function PriceHistoryChart({
@@ -49,6 +50,7 @@ export default function PriceHistoryChart({
   band,
   signal,
   asOfLabel,
+  horizonLabel,
 }: PriceHistoryChartProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [hovered, setHovered] = useState<number | null>(null);
@@ -105,7 +107,7 @@ export default function PriceHistoryChart({
         viewBox={`0 0 ${VB_W} ${VB_H}`}
         className="block w-full"
         role="img"
-        aria-label={`최근 60거래일 주가 흐름. 10거래일 후 예상 수익률 범위 ${formatSigned(band.low)}부터 ${formatSigned(band.high)}까지`}
+        aria-label={`최근 60거래일 주가 흐름. ${horizonLabel} 수익률 범위 ${formatSigned(band.low)}부터 ${formatSigned(band.high)}까지`}
         onMouseMove={handleMove}
         onMouseLeave={() => setHovered(null)}
       >
@@ -122,7 +124,7 @@ export default function PriceHistoryChart({
         {/* 오늘 경계선 — 오른쪽 미래 영역에는 H10 세로 구간 외에 아무것도 그리지 않는다 */}
         <line x1={X1} y1={PAD.top} x2={X1} y2={baseline} style={{ stroke: "var(--color-line)" }} />
         <text x={X0} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-muted)" }}>
-          60거래일 전
+          3개월 전
         </text>
         <text x={X1} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-muted)" }} textAnchor="end">
           오늘 ({asOfLabel})
@@ -195,7 +197,7 @@ export default function PriceHistoryChart({
           {formatSigned(band.low)}
         </text>
         <text x={XH} y={baseline + 17} fontSize={11} style={{ fill: "var(--color-muted)" }} textAnchor="middle">
-          H10 · 10거래일 후
+          {horizonLabel}
         </text>
 
         {/* 호버 크로스헤어 */}

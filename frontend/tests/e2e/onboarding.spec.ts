@@ -42,10 +42,10 @@ test("new user: 8축 설문 -> 결과 확인 -> 대시보드 -> 종목 상세까
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole("heading", { name: "시그널랩 로그인" })).toBeVisible();
   // 계정 로그인과 데모 계정이 항상 함께 보인다(환경변수가 없으면 계정 쪽은 안내만)
-  await expect(page.getByRole("heading", { name: "이메일로 시작" })).toBeVisible();
+  await expect(page.getByText(/이메일로 시작|계정 기능이 아직 연결되지 않았어요/).first()).toBeVisible();
   await expect(page.getByText("데모 계정 · 예시 데이터")).toHaveCount(0);
 
-  await page.getByRole("button", { name: "데모 계정으로 둘러보기" }).click();
+  await page.getByRole("button", { name: "데모로 둘러보기" }).click();
   await expect(page).toHaveURL(/\/survey$/);
   await expect(page.getByText("데모 계정 · 예시 데이터")).toBeVisible();
   await expect(page.getByText("성향 문항 1/8", { exact: false })).toBeVisible();
@@ -102,7 +102,9 @@ test("new user: 8축 설문 -> 결과 확인 -> 대시보드 -> 종목 상세까
 
   await page.getByRole("button", { name: "대시보드로 이동" }).click();
   await expect(page).toHaveURL("/");
-  await expect(page.getByText("오늘의 추천 종목", { exact: false }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "오늘 신호가 강한 종목" })).toBeVisible();
+  // 맨 위 한 줄 요약은 결정론 문장(보유 4종목 중 1종목에 부정 신호)
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("보유 4종목 중 1종목에 부정 신호가 있어요.");
   await expect(page.getByText("데모 계정 · 예시 데이터")).toBeVisible();
   await expect(page.getByText("적극 축적형", { exact: true })).toBeVisible();
   await expect(page.getByText("추종형", { exact: true })).toHaveCount(0);
@@ -111,22 +113,31 @@ test("new user: 8축 설문 -> 결과 확인 -> 대시보드 -> 종목 상세까
   await assertNoHorizontalOverflow(page, 390, 844);
 
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.getByRole("link", { name: /자세히 보기/ }).first().click();
+  await page.locator("[data-stock-row]").first().click();
   await expect(page).toHaveURL(/\/stocks\/(005930|005380|068270)$/);
-  await expect(page.getByText(/과거 유사 신호 .*실현 수익률 분포/).first()).toBeVisible();
+  await expect(page.getByText(/과거 비슷한 경우, 2주 뒤 수익률은 10번 중 \d번 이 범위였어요/)).toBeVisible();
   await expect(page.locator('[data-bit-type="ACCUMULATOR"]')).toBeVisible();
+  // 판단 근거 탭 순서 = 유형의 카드 순서(연구 문항 ②). 적극 축적형: 모델이 본 이유가 첫 탭
+  await expect(page.getByRole("tablist", { name: "판단 근거" })).toHaveAttribute(
+    "data-card-order",
+    "nudge,contribution,sentiment,supply,risk,financial",
+  );
+  await expect(page.getByRole("tab", { selected: true })).toHaveText("모델이 본 이유");
   await expect(page.getByText("데모 계정 · 예시 데이터")).toBeVisible();
 
-  // 다른 성향으로 보기: 이 화면만 바뀌고 저장된 결과는 그대로
+  // 다른 유형이라면?: 이 화면만 바뀌고 저장된 결과는 그대로
+  await page.getByText("다른 유형이라면?").click();
   await page.getByRole("button", { name: "자산 보존형" }).click();
   await expect(page.locator('[data-bit-type="PRESERVER"]')).toBeVisible();
   await expect(page.getByText("시선으로 보는 중", { exact: false })).toBeVisible();
+  await expect(page.getByRole("tab", { selected: true })).toHaveText("시장 분위기");
   await page.getByRole("button", { name: "내 성향" }).click();
   await expect(page.locator('[data-bit-type="ACCUMULATOR"]')).toBeVisible();
 
   await page.getByRole("link", { name: "모델 성적표" }).click();
   await expect(page).toHaveURL(/\/performance$/);
-  await expect(page.getByRole("heading", { name: "4런 전체 구간 비교" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /판별력\(AUC\)/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "심리 지표를 더하면 나아지나요?" })).toBeVisible();
 
   await page.getByRole("button", { name: /로그아웃|나가기/ }).click();
   await expect(page).toHaveURL(/\/login$/);
