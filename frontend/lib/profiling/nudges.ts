@@ -151,7 +151,7 @@ export const NUDGES: readonly NudgeRule[] = [
 // 넛지가 아니라 화면 하단 안내 배너(기존 N12). BIT 스펙트럼 수동 쪽 두 유형에만 보인다.
 export const SCREEN_GUIDE_NOTICE: { appliesTo: readonly BitType[]; text: string } = {
   appliesTo: ["PRESERVER", "FOLLOWER"],
-  text: "이 화면의 지표 중 처음 보시는 것이 있을 수 있습니다. 각 지표 옆 물음표를 누르면 왜 보는지 설명이 나옵니다.",
+  text: "이 화면의 지표 중 처음 보시는 것이 있을 수 있어요. 각 근거 아래 '왜 봐야 하나요?'에 보는 이유를 적어 두었어요.",
 };
 
 function rank(id: NudgeId) {

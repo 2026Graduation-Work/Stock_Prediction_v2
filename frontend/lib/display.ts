@@ -101,17 +101,17 @@ export const MARKET_CONDITION_META: Record<
   stable: {
     label: "안정",
     ink: "var(--color-sig-p)",
-    comment: "시장이 평소 범위 안에서 움직이고 있습니다",
+    comment: "시장이 평소 범위 안에서 움직이고 있어요",
   },
   caution: {
     label: "주의",
     ink: "var(--color-sig-n)",
-    comment: "변동성이 평소보다 높은 구간입니다",
+    comment: "시장 흔들림이 평소보다 큰 편이에요",
   },
   high_volatility: {
     label: "경계",
     ink: "var(--color-sig-ng)",
-    comment: "단기 변동성이 평소 범위를 크게 벗어난 구간입니다",
+    comment: "시장 흔들림이 평소보다 크게 커진 구간이에요",
   },
 };
 

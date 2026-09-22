@@ -134,7 +134,7 @@ const FINANCIAL_FEATURE_TOKENS = [
 
 // Supabase 테이블은 지금 supabase/seed.sql 데모 시드로만 채워진다(백엔드 적재 경로 없음).
 // 실데이터 적재가 생기면 행에 출처 컬럼을 두고 여기서 읽는다. 그 전까지는 예시로 표시한다.
-const SUPABASE_DEMO: DataProvenance = { kind: "mock", source: "Supabase 데모 시드" };
+const SUPABASE_DEMO: DataProvenance = { kind: "mock", source: "데모 시드" };
 
 export function mapMarketStatus(row: MarketStatusRow): MarketStatus {
   return {

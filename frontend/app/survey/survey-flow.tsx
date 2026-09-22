@@ -468,10 +468,10 @@ function QuestionPage({
           <>
             <span className="mb-3 text-xs font-semibold text-brand">제외할 종목 유형 (선택)</span>
             <h1 className="text-2xl font-semibold leading-[1.4] text-ink sm:text-3xl">
-              추천에서 빼고 싶은 종목 유형이 있나요?
+              목록에서 빼고 싶은 종목 유형이 있나요?
             </h1>
             <p className="mt-2 text-sm leading-6 text-muted">
-              직접 고른 항목만 추천 후보에서 빠집니다. 성향 점수로는 종목을 빼지 않아요. 없으면 그냥
+              직접 고른 항목만 목록에서 빠져요. 성향 점수로는 종목을 빼지 않아요. 없으면 그냥
               넘어가도 됩니다.
             </p>
             <div className="mt-8 flex flex-col gap-2.5">

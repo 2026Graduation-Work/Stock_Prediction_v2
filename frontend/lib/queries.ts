@@ -112,7 +112,7 @@ export function getDashboardData(): DashboardData {
 
 export async function getAuthenticatedDashboardData(): Promise<DashboardData> {
   const client = getSupabaseClient();
-  if (!client) throw new Error("Supabase 환경변수가 설정되지 않았습니다.");
+  if (!client) throw new Error("계정 기능이 아직 연결되지 않았어요.");
 
   const { data: authData, error: authError } = await client.auth.getUser();
   assertQuery(authError, "로그인 사용자 확인");
@@ -167,7 +167,7 @@ export async function getAuthenticatedStockDetailData(
   code: string,
 ): Promise<StockDetailData> {
   const client = getSupabaseClient();
-  if (!client) throw new Error("Supabase 환경변수가 설정되지 않았습니다.");
+  if (!client) throw new Error("계정 기능이 아직 연결되지 않았어요.");
 
   const { data: authData, error: authError } = await client.auth.getUser();
   assertQuery(authError, "로그인 사용자 확인");
@@ -190,7 +190,7 @@ async function marketStatusOrExample(client: SupabaseClient): Promise<MarketStat
   try {
     return await queryMarketStatus(client);
   } catch (error) {
-    console.warn("[Supabase fallback] market status:", error);
+    console.warn("[DB fallback] market status:", error);
     return marketStatus;
   }
 }
@@ -220,7 +220,7 @@ async function queryRecommendedStocks(
     .eq("is_recommended", true)
     .order("prediction_date", { ascending: false })
     .order("display_order", { ascending: true });
-  assertQuery(error, "추천 예측 조회");
+  assertQuery(error, "오늘 신호 조회");
 
   const predictions = latestDateRows((data ?? []) as PredictionRow[]);
   const stocks = await loadStocks(
@@ -460,9 +460,9 @@ async function loadProfileSettings(
       .eq("user_id", userId)
       .eq("is_active", true),
   ]);
-  assertQuery(profileResult.error, "추천 설정 조회");
-  assertQuery(avoidedResult.error, "추천 회피 설정 조회");
-  if (!profileResult.data) throw new Error("추천에 사용할 IPS 프로필이 없습니다.");
+  assertQuery(profileResult.error, "성향 설정 조회");
+  assertQuery(avoidedResult.error, "제외 항목 조회");
+  if (!profileResult.data) throw new Error("투자 성향 프로필이 없습니다.");
 
   return toProfileSettings(
     profileResult.data as ProfileSettingsRow,

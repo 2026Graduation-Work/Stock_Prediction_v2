@@ -59,7 +59,8 @@ export interface RecommendedStock {
   similarCaseCount: number;
   horizonAgreement: HorizonAgreementSet;
   riskFlags: RiskFlag[];
-  caution?: string; // 성향 대비 주의 문구. 있을 때만 카드 하단에 표시
+  caution?: string; // 성향 대비 주의 문구. 있을 때만 "위험도 높음" 점과 상세 체크포인트에 표시
+  reason?: string; // 목록의 한 줄 이유(모델 근거 1순위 문장). 없으면 기간별 방향 문장으로 대신한다
   provenance: DataProvenance;
 }
 
@@ -129,6 +130,7 @@ export interface PortfolioHolding {
   signalLight: SignalLight;
   quantity: number;
   avgBuyPrice: number;
+  priceBasis?: "avg_buy" | "close"; // close = 평균 매입가가 없어 기준일 종가로 비중을 셈("현재가 기준")
   provenance: DataProvenance;
 }
 

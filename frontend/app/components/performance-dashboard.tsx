@@ -47,14 +47,17 @@ const CONTROL_CONDITIONS = [
   "공용 평가함수",
 ];
 
-// 개선·저하는 색이 아니라 ▲▼와 단어로 읽힌다. 가격 방향색(적·청)과 섞이지 않게 무채색으로 둔다.
-const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; mark: string; label: string }> = {
-  improved: { text: "text-ink", mark: "▲", label: "개선" },
-  worsened: { text: "text-ink", mark: "▼", label: "저하" },
-  unchanged: { text: "text-muted", mark: "", label: "동일" },
-  neutral: { text: "text-muted", mark: "", label: "증감" },
-  unavailable: { text: "text-muted", mark: "", label: "미산출" },
+// 개선·저하는 색이 아니라 ▲▼(값이 커졌나 작아졌나)와 단어로 읽힌다.
+// 가격 방향색(적·청)과 섞이지 않게 무채색으로 두고, 좋아졌는지는 단어가 말한다(Brier는 ▼ 개선).
+const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; label: string }> = {
+  improved: { text: "text-ink", label: "개선" },
+  worsened: { text: "text-ink", label: "저하" },
+  unchanged: { text: "text-muted", label: "동일" },
+  neutral: { text: "text-muted", label: "증감" },
+  unavailable: { text: "text-muted", label: "미산출" },
 };
+
+const deltaMark = (value: number | null) => (value === null || value === 0 ? "" : value > 0 ? "▲" : "▼");
 
 // A/B 두 막대만 명암으로 나누고, 안정형·공격형은 차트를 따로 그려 위치로 구분한다.
 const VARIANT_FILL = { A: CHART.line, B: CHART.priceLine } as const;
@@ -66,104 +69,118 @@ export default function PerformanceDashboard({
   profile,
   marketStatus,
 }: PerformanceDashboardProps) {
+  const headline = findMetricRow(data.four_run_metrics, "stable", "B");
+  const auc = headline?.auc ?? null;
+  const allDeltas = data.comparison_deltas.filter(({ sample }) => sample === "all");
+
   return (
     <div className="min-h-screen w-full">
-      <SiteHeader
-        profile={profile}
-        marketStatus={marketStatus}
-        activePage="performance"
-        sectionLabel="모델 성능 비교"
-      />
+      <SiteHeader profile={profile} marketStatus={marketStatus} activePage="performance" />
 
-      <section className="border-b border-line bg-white">
-        <div className="mx-auto box-border w-full max-w-[1200px] px-6 py-6 lg:px-8">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {isSample && (
-              <span className="rounded-md bg-field px-2.5 py-1 text-2xs font-semibold text-body">
-                샘플 데이터
-              </span>
-            )}
-            <span className="text-xs font-semibold text-muted">연구 질문</span>
-          </div>
-          <h1 className="mt-2 text-3xl font-semibold leading-tight">
-            심리 지수를 반영하면 예측이 나아지는가?
+      <main className="mx-auto box-border flex w-full max-w-[960px] flex-col gap-8 px-4 pb-12 pt-8 sm:px-8">
+        <section aria-labelledby="scorecard-title" className="flex flex-col gap-1.5 px-1">
+          <span className="eyebrow">모델 성적표 · 안정형 모델 B(심리 지표 포함) 기준</span>
+          <h1 id="scorecard-title" className="text-3xl font-semibold tabular-nums">
+            판별력(AUC) {auc === null ? "미산출" : auc.toFixed(2)} · 0.5는 동전 던지기 수준
           </h1>
-          <p className="mt-2 max-w-[920px] text-sm leading-6 text-body">
-            Baseline(A)은 차트 피처만, Treatment(B)는 같은 피처에 합성 심리지수와 뉴스
-            감성을 추가합니다. 두 모델 사이에서 바뀌는 조건은 피처 세트뿐입니다.
+          <p className="m-0 text-sm text-body">
+            A는 가격 지표만, B는 같은 지표에 가격·거래량 심리 지표와 뉴스 분위기를 더한 모델이에요. 바뀌는 조건은 지표 묶음뿐이에요.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {CONTROL_CONDITIONS.map((condition) => (
-              <span
-                key={condition}
-                className="rounded-md border border-edge bg-field px-2.5 py-1.5 text-xs font-medium text-body"
-              >
-                {condition}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <main className="mx-auto box-border flex w-full max-w-[1200px] flex-col gap-8 px-6 py-7 lg:px-8">
-        <section aria-labelledby="four-run-title">
-          <SectionHeading
-            id="four-run-title"
-            title="4런 전체 구간 비교"
-            description="안정형·공격형 각각 A/B를 같은 표본에서 평가"
-          />
-          <div className="mt-3 overflow-x-auto surface">
-            <FourRunTable
-              rows={data.four_run_metrics}
-              deltas={data.comparison_deltas.filter(({ sample }) => sample === "all")}
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 px-1 text-2xs text-muted">
-            <span>AUC·방향 일치율·Sharpe·MDD·누적수익률: 값이 클수록 우수</span>
-            <span>Brier·ECE: 값이 작을수록 우수</span>
-            <span>거래 수: 우열 없이 규모만 비교</span>
-          </div>
+          {isSample && <p className="m-0 text-xs text-muted">예시 데이터 · 실제 실험 결과가 들어오면 바뀌어요</p>}
         </section>
 
-        <section aria-labelledby="subsample-title">
-          <SectionHeading
-            id="subsample-title"
-            title="급변 구간 서브샘플"
-            description="변동성 상위 20% 날짜를 분리해 심리 피처 효과를 재평가"
-            marker="핵심 분석"
-          />
-          <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <SamplePanel
-              title="전체 구간에서의 A vs B"
-              subtitle="테스트 기간의 모든 관측치"
-              sample="all"
-              rows={data.four_run_metrics}
-              deltas={data.comparison_deltas}
-            />
-            <SamplePanel
-              title="급변 구간에서의 A vs B"
-              subtitle="일별 시장 변동성 상위 20%"
-              sample="volatile_top_20pct"
-              rows={data.volatile_subsample_metrics}
-              deltas={data.comparison_deltas}
-            />
+        <section aria-labelledby="ab-summary-title" className="flex flex-col gap-3">
+          <h2 id="ab-summary-title" className="px-1 text-xl font-semibold">
+            심리 지표를 더하면 나아지나요?
+          </h2>
+          <div className="surface overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-left">
+              <thead>
+                <tr className="text-xs text-muted">
+                  <th className="px-5 py-3 font-medium">지표</th>
+                  <th className="px-3 py-3 font-medium">안정형 A → B</th>
+                  <th className="px-3 py-3 font-medium">공격형 A → B</th>
+                </tr>
+              </thead>
+              <tbody>
+                {METRICS.filter(({ direction }) => direction !== "neutral").map((metric) => (
+                  <tr key={metric.key} className="border-t border-line-soft">
+                    <th className="px-5 py-3 text-sm font-medium text-ink">
+                      {metric.label}
+                      <span className="block text-2xs font-normal text-muted">
+                        {metric.direction === "higher" ? "클수록 좋아요" : "작을수록 좋아요"}
+                      </span>
+                    </th>
+                    {(["stable", "aggressive"] as const).map((comparisonProfile) => (
+                      <PairCell
+                        key={comparisonProfile}
+                        metric={metric}
+                        profile={comparisonProfile}
+                        sample="all"
+                        rows={data.four_run_metrics}
+                        deltas={allDeltas}
+                      />
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+          <p className="m-0 px-1 text-2xs text-muted">같은 종목·기간·시드·평가 함수로 비교했어요 · 테스트 기간 전체</p>
         </section>
 
-        <section
-          aria-labelledby="conclusion-title"
-          className="border-l-4 border-brand bg-white px-5 py-5"
-        >
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h2 id="conclusion-title" className="text-base font-semibold">
-              연구 결론
-            </h2>
-            <span className="rounded-md bg-track px-2 py-1 text-2xs font-medium text-muted">
-              {isSample ? "실제 결과 반영 전" : "러너 결과 반영"}
+        <details className="disclosure surface p-6">
+          <summary>
+            <span className="flex flex-col gap-0.5">
+              <span className="text-lg font-semibold">자세히 보기</span>
+              <span className="text-xs text-muted">연구 결론 · 4런 전체 표 · 시장이 크게 흔들린 날만 따로 본 결과</span>
             </span>
+          </summary>
+          <div className="mt-6 flex flex-col gap-8">
+            <section aria-labelledby="conclusion-title" className="flex flex-col gap-2">
+              <h3 id="conclusion-title" className="text-base font-semibold">
+                연구 결론 <span className="text-xs font-normal text-muted">{isSample ? "실제 결과 반영 전" : "실험 결과 반영"}</span>
+              </h3>
+              <p className="m-0 text-sm leading-6 text-body">{conclusion}</p>
+              <p className="m-0 flex flex-wrap gap-2">
+                {CONTROL_CONDITIONS.map((condition) => (
+                  <span key={condition} className="text-xs text-muted">
+                    {condition}
+                  </span>
+                ))}
+              </p>
+            </section>
+            <section aria-labelledby="four-run-title" className="flex flex-col gap-3">
+              <SectionHeading id="four-run-title" title="4런 전체 구간 비교" description="안정형·공격형 각각 A/B를 같은 표본에서 평가" />
+              <div className="overflow-x-auto rounded-md bg-field">
+                <FourRunTable rows={data.four_run_metrics} deltas={allDeltas} />
+              </div>
+            </section>
+            <section aria-labelledby="subsample-title" className="flex flex-col gap-3">
+              <SectionHeading
+                id="subsample-title"
+                title="시장이 크게 흔들린 날만 따로 보기"
+                description="일별 시장 변동성 상위 20% 날짜"
+              />
+              <div className="grid grid-cols-1 gap-4">
+                <SamplePanel
+                  title="전체 구간에서의 A vs B"
+                  subtitle="테스트 기간의 모든 관측치"
+                  sample="all"
+                  rows={data.four_run_metrics}
+                  deltas={data.comparison_deltas}
+                />
+                <SamplePanel
+                  title="흔들린 날에서의 A vs B"
+                  subtitle="일별 시장 변동성 상위 20%"
+                  sample="volatile_top_20pct"
+                  rows={data.volatile_subsample_metrics}
+                  deltas={data.comparison_deltas}
+                />
+              </div>
+            </section>
           </div>
-          <p className="mt-2 text-sm leading-6 text-body">{conclusion}</p>
-        </section>
+        </details>
       </main>
 
       <DisclaimerFooter fixed={false} />
@@ -171,45 +188,21 @@ export default function PerformanceDashboard({
   );
 }
 
-function SectionHeading({
-  id,
-  title,
-  description,
-  marker,
-}: {
-  id: string;
-  title: string;
-  description: string;
-  marker?: string;
-}) {
+function SectionHeading({ id, title, description }: { id: string; title: string; description: string }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-0.5">
-      {marker && (
-        <span className="rounded-md bg-brand-soft px-2 py-1 text-2xs font-semibold text-brand">
-          {marker}
-        </span>
-      )}
-      <h2 id={id} className="text-lg font-semibold">
+    <div className="flex flex-col gap-0.5">
+      <h3 id={id} className="text-base font-semibold">
         {title}
-      </h2>
+      </h3>
       <span className="text-xs text-muted">{description}</span>
     </div>
   );
 }
 
+// 지표 설명은 "?" 동그라미 대신 표 머리글의 title(마우스 올리면 보임)로 둔다.
 function MetricInfoBadge({ description }: { description?: string }) {
   if (!description) return null;
-  return (
-    <span
-      title={description}
-      tabIndex={0}
-      role="img"
-      aria-label={description}
-      className="inline-flex size-3.5 flex-none cursor-help items-center justify-center rounded-full border border-edge bg-white text-2xs font-medium leading-none text-muted"
-    >
-      ?
-    </span>
-  );
+  return <span className="sr-only">{description}</span>;
 }
 
 function FourRunTable({
@@ -264,7 +257,7 @@ function FourRunTable({
                   <span
                     className={`grid size-6 place-items-center rounded-md text-2xs font-semibold ${
                       row.variant === "B"
-                        ? "bg-brand text-white"
+                        ? "bg-ink text-white"
                         : "border border-edge bg-field text-body"
                     }`}
                   >
@@ -290,7 +283,7 @@ function FourRunTable({
                     </div>
                     {row.variant === "B" && (
                       <div className={`mt-0.5 text-2xs font-medium ${OUTCOME_STYLE[outcome!].text}`}>
-                        {OUTCOME_STYLE[outcome!].mark} {formatDeltaValue(deltaValue, metric)} · {OUTCOME_STYLE[outcome!].label}
+                        {deltaMark(deltaValue)} {formatDeltaValue(deltaValue, metric)} · {OUTCOME_STYLE[outcome!].label}
                       </div>
                     )}
                   </td>
@@ -325,8 +318,8 @@ function SamplePanel({
     }));
 
   return (
-    <article className="min-w-0 surface">
-      <div className="border-b border-line px-4 py-3.5">
+    <article className="min-w-0 rounded-md bg-field">
+      <div className="px-4 py-3.5">
         <h3 className="text-sm font-semibold">{title}</h3>
         <p className="mt-0.5 text-2xs text-muted">{subtitle}</p>
       </div>
@@ -431,12 +424,12 @@ function PairCell({
 
   return (
     <td className="px-2 py-2 tabular-nums">
-      <div className="whitespace-nowrap text-2xs font-semibold text-body">
+      <div className="whitespace-nowrap text-xs font-medium text-body">
         A {formatMetricValue(baselineValue, metric)} → B{" "}
         {formatMetricValue(treatmentValue, metric)}
       </div>
-      <div className={`mt-0.5 text-2xs font-semibold ${style.text}`}>
-        {style.mark} {formatDeltaValue(deltaValue, metric)} · {style.label}
+      <div className={`mt-0.5 text-xs font-semibold ${style.text}`}>
+        {deltaMark(deltaValue)} {formatDeltaValue(deltaValue, metric)} · {style.label}
       </div>
     </td>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "../components/disclaimer-footer";
 import SiteHeader from "../components/site-header";
@@ -70,7 +70,14 @@ export default function HoldingsEditor({
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [options, setOptions] = useState(catalog);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(""); // 종목 추가 시트 안 오류
+  const [saveError, setSaveError] = useState(""); // 저장 오류
+  const sheetRef = useRef<HTMLDialogElement>(null);
+
+  function openSheet() {
+    setError("");
+    sheetRef.current?.showModal();
+  }
 
   // 로그인 사용자는 종목 마스터가 크므로 입력한 만큼만 검색한다.
   useEffect(() => {
@@ -128,6 +135,7 @@ export default function HoldingsEditor({
     setRows((current) => [...current, candidate]);
     setDraft(EMPTY_DRAFT);
     setStatus("idle");
+    sheetRef.current?.close();
   }
 
   function updateRow(code: string, patch: Partial<SavedHolding>) {
@@ -143,182 +151,184 @@ export default function HoldingsEditor({
   }
 
   async function submit() {
-    setError("");
+    setSaveError("");
     setStatus("saving");
     try {
       await saveHoldings(rows, onboardingState.mode === "supabase" ? "supabase" : "demo");
       setStatus("saved");
     } catch (cause) {
       setStatus("idle");
-      setError(cause instanceof Error ? cause.message : "저장하지 못했습니다.");
+      setSaveError(cause instanceof Error ? cause.message : "저장하지 못했습니다.");
     }
   }
 
   const total = rows.reduce((sum, row) => sum + row.quantity * row.avgBuyPrice, 0);
 
+  const field =
+    "h-11 w-full rounded-md bg-field px-3.5 text-sm tabular-nums text-ink outline-none focus:bg-white focus:ring-2 focus:ring-brand/30";
+
   return (
     <div className="w-full">
-      <SiteHeader
-        profile={profile}
-        marketStatus={marketStatus}
-        activePage="portfolio"
-      />
+      <SiteHeader profile={profile} marketStatus={marketStatus} activePage="portfolio" />
 
-      <div className="mx-auto box-border flex w-full max-w-[880px] flex-col gap-6 px-5 pt-6 sm:px-8">
-        <div className="flex flex-col gap-1.5">
-          <h1 className="text-xl font-semibold">보유 종목</h1>
-          <p className="text-sm text-body">
-            직접 입력한 수량과 평균 매입가로 포트폴리오 맵과 보유 종목 알림을 만듭니다.
-            증권사 계좌를 연동하지 않으며, 입력한 값은 매매에 쓰이지 않습니다.
+      <main className="mx-auto box-border flex w-full max-w-[720px] flex-col gap-6 px-4 pb-12 pt-8 sm:px-8">
+        <div className="flex flex-col gap-1 px-1">
+          <h1 className="text-3xl font-semibold">보유 종목</h1>
+          <p className="m-0 text-sm text-body">
+            직접 입력한 수량으로 대시보드의 보유 종목 맵을 만들어요. 증권사 계좌와 연결하지 않아요.
           </p>
         </div>
 
-        {/* 추가 폼 */}
-        <section className="flex flex-col gap-3 surface px-5 py-5">
-          <h2 className="text-sm font-semibold">종목 추가</h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.4fr_0.8fr_1fr_max-content]">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">종목명 또는 코드</span>
-              <input
-                list="stock-catalog"
-                value={draft.name}
-                onChange={(event) => setDraft({ ...draft, name: event.target.value })}
-                placeholder="삼성전자"
-                className="h-10 rounded-md border border-edge bg-field px-3 text-sm outline-none placeholder:text-muted focus:border-brand focus:bg-white"
-              />
-              <datalist id="stock-catalog">
-                {options.map((item) => (
-                  <option key={item.code} value={item.name}>
-                    {item.code}
-                  </option>
-                ))}
-              </datalist>
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">수량 (주)</span>
-              <input
-                inputMode="numeric"
-                value={draft.quantity}
-                onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
-                placeholder="10"
-                className="h-10 rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none placeholder:text-muted focus:border-brand focus:bg-white"
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">평균 매입가 (원)</span>
-              <input
-                inputMode="numeric"
-                value={draft.avgBuyPrice}
-                onChange={(event) => setDraft({ ...draft, avgBuyPrice: event.target.value })}
-                placeholder="71,200"
-                className="h-10 rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none placeholder:text-muted focus:border-brand focus:bg-white"
-              />
-            </label>
-            <button
-              type="button"
-              onClick={addRow}
-              className="h-10 self-end whitespace-nowrap rounded-md bg-ink px-5 text-sm font-medium text-white hover:bg-body"
-            >
-              추가
+        {rows.length === 0 ? (
+          <div className="surface flex flex-col items-center gap-4 px-6 py-12 text-center">
+            <p className="m-0 text-sm text-body">아직 등록한 종목이 없어요.</p>
+            <button type="button" onClick={openSheet} className="btn-primary">
+              종목 추가
             </button>
           </div>
-          {error && (
-            <p role="alert" className="text-xs text-danger">
-              {error}
-            </p>
-          )}
-        </section>
-
-        {/* 목록 */}
-        <section className="flex flex-col gap-3 surface px-5 py-5">
-          <div className="flex items-baseline justify-between gap-3">
-            <h2 className="text-sm font-semibold">
-              등록한 종목 <span className="text-muted tabular-nums">{rows.length}개</span>
-            </h2>
-            {rows.length > 0 && (
-              <span className="text-xs text-muted tabular-nums">
-                등록 매입금액 합계 {formatWon(total)}원
+        ) : (
+          <section aria-label="등록한 종목" className="flex flex-col gap-2">
+            <div className="flex items-baseline justify-between px-1">
+              <span className="eyebrow tabular-nums">
+                {rows.length}종목 · 매입금액 합계 {formatWon(total)}원
               </span>
-            )}
-          </div>
-
-          {rows.length === 0 ? (
-            <div className="rounded-md bg-field px-4 py-8 text-center">
-              <p className="text-sm font-medium">아직 등록한 종목이 없습니다</p>
-              <p className="mt-1.5 text-xs text-muted">
-                위에서 종목을 추가하면 대시보드에 포트폴리오 맵과 보유 종목 알림이 나타납니다.
-              </p>
+              <button type="button" onClick={openSheet} className="btn-text text-xs">
+                종목 추가
+              </button>
             </div>
-          ) : (
-            <ul className="flex flex-col">
+            <ul className="group-list m-0 list-none p-0">
               {rows.map((row) => (
-                <li
-                  key={row.code}
-                  className="grid grid-cols-1 items-center gap-3 border-t border-line-soft py-3 first:border-t-0 sm:grid-cols-[1.4fr_0.8fr_1fr_auto]"
-                >
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">{row.name}</span>
+                <li key={row.code} className="grid grid-cols-2 items-center gap-3 px-5 py-3.5 sm:grid-cols-[1.4fr_1fr_1fr_auto]">
+                  <div className="col-span-2 flex items-baseline gap-2 sm:col-span-1">
+                    <span className="text-base font-medium">{row.name}</span>
                     <span className="text-xs text-muted tabular-nums">{row.code}</span>
                   </div>
-                  <label className="flex items-center gap-2">
-                    <span className="text-xs text-muted sm:hidden">수량</span>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-2xs text-muted">수량(주)</span>
                     <input
                       inputMode="numeric"
                       aria-label={`${row.name} 수량`}
                       value={String(row.quantity)}
-                      onChange={(event) =>
-                        updateRow(row.code, { quantity: toInt(event.target.value) })
-                      }
-                      className="h-9 w-full rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none focus:border-brand focus:bg-white"
+                      onChange={(event) => updateRow(row.code, { quantity: toInt(event.target.value) })}
+                      className="h-9 w-full rounded-sm bg-field px-3 text-sm tabular-nums outline-none focus:bg-white focus:ring-2 focus:ring-brand/30"
                     />
                   </label>
-                  <label className="flex items-center gap-2">
-                    <span className="text-xs text-muted sm:hidden">평단</span>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-2xs text-muted">평균 매입가(원)</span>
                     <input
                       inputMode="numeric"
                       aria-label={`${row.name} 평균 매입가`}
                       value={String(row.avgBuyPrice)}
-                      onChange={(event) =>
-                        updateRow(row.code, { avgBuyPrice: toInt(event.target.value) })
-                      }
-                      className="h-9 w-full rounded-md border border-edge bg-field px-3 text-sm tabular-nums outline-none focus:border-brand focus:bg-white"
+                      onChange={(event) => updateRow(row.code, { avgBuyPrice: toInt(event.target.value) })}
+                      className="h-9 w-full rounded-sm bg-field px-3 text-sm tabular-nums outline-none focus:bg-white focus:ring-2 focus:ring-brand/30"
                     />
                   </label>
                   <button
                     type="button"
                     onClick={() => removeRow(row.code)}
-                    className="h-9 justify-self-start rounded-md border border-edge px-3 text-xs font-medium text-muted hover:border-ghost hover:text-ink sm:justify-self-end"
+                    className="col-span-2 justify-self-start text-xs font-medium text-danger hover:underline sm:col-span-1 sm:justify-self-end"
                   >
                     삭제
                   </button>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
+          </section>
+        )}
 
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={submit}
-            disabled={status === "saving"}
-            className="btn-primary"
-          >
+        {saveError && (
+          <p role="alert" className="m-0 px-1 text-sm text-danger">
+            {saveError}
+          </p>
+        )}
+
+        <div className="flex flex-wrap items-center gap-3 px-1">
+          <button type="button" onClick={submit} disabled={status === "saving"} className="btn-primary">
             {status === "saving" ? "저장 중…" : "저장"}
           </button>
           {status === "saved" && (
             <span role="status" className="text-sm text-body">
-              저장했습니다.{" "}
-              <Link href="/">대시보드에서 확인하기 →</Link>
+              저장했어요. <Link href="/">대시보드에서 보기</Link>
             </span>
           )}
           <span className="ml-auto text-xs text-muted">
-            {supabaseMode
-              ? "내 계정에 저장됩니다"
-              : "데모 계정이라 이 브라우저에만 저장됩니다"}
+            {supabaseMode ? "내 계정에 저장돼요" : "데모 계정이라 이 브라우저에만 저장돼요"}
           </span>
         </div>
-      </div>
+      </main>
+
+      {/* 종목 추가 시트 — 네이티브 dialog라 포커스 가두기·Esc 닫기를 브라우저가 맡는다 */}
+      <dialog
+        ref={sheetRef}
+        aria-labelledby="add-sheet-title"
+        className="m-auto w-[min(440px,calc(100vw-32px))] rounded-xl bg-white p-0 text-ink shadow-modal backdrop:bg-black/30"
+      >
+        <form
+          method="dialog"
+          onSubmit={(event) => {
+            event.preventDefault();
+            addRow();
+          }}
+          className="flex flex-col gap-4 p-6"
+        >
+          <h2 id="add-sheet-title" className="text-lg font-semibold">
+            종목 추가
+          </h2>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs text-muted">종목명 또는 코드</span>
+            <input
+              list="stock-catalog"
+              value={draft.name}
+              onChange={(event) => setDraft({ ...draft, name: event.target.value })}
+              placeholder="삼성전자"
+              autoFocus
+              className={field}
+            />
+            <datalist id="stock-catalog">
+              {options.map((item) => (
+                <option key={item.code} value={item.name}>
+                  {item.code}
+                </option>
+              ))}
+            </datalist>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">수량(주)</span>
+              <input
+                inputMode="numeric"
+                value={draft.quantity}
+                onChange={(event) => setDraft({ ...draft, quantity: event.target.value })}
+                placeholder="10"
+                className={field}
+              />
+            </label>
+            <label className="flex flex-col gap-1.5">
+              <span className="text-xs text-muted">평균 매입가(원)</span>
+              <input
+                inputMode="numeric"
+                value={draft.avgBuyPrice}
+                onChange={(event) => setDraft({ ...draft, avgBuyPrice: event.target.value })}
+                placeholder="71,200"
+                className={field}
+              />
+            </label>
+          </div>
+          {error && (
+            <p role="alert" className="m-0 text-sm text-danger">
+              {error}
+            </p>
+          )}
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => sheetRef.current?.close()} className="btn-secondary">
+              취소
+            </button>
+            <button type="submit" className="btn-primary">
+              추가
+            </button>
+          </div>
+        </form>
+      </dialog>
 
       <DisclaimerFooter fixed={false} />
     </div>
