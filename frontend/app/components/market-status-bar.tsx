@@ -25,8 +25,12 @@ function Quote({ quote }: { quote: MarketIndexQuote }) {
   );
 }
 
+// 백분위(0~100) → 구간 말. 산식: frontend/scripts/build_demo_snapshot.py
+const level = (score: number) => (score < 100 / 3 ? "낮음" : score < 200 / 3 ? "보통" : "높음");
+
 export default function MarketStatusBar({ status }: { status: MarketStatus }) {
   const meta = MARKET_CONDITION_META[status.condition];
+  const real = status.provenance.kind === "real";
   const quotes = status.indexQuotes.filter(({ symbol }) => SHOWN.has(symbol));
 
   return (
@@ -38,7 +42,24 @@ export default function MarketStatusBar({ status }: { status: MarketStatus }) {
         ) : (
           <span className="text-xs text-muted">지수 데이터가 아직 없어요</span>
         )}
-        <span className="flex-none whitespace-nowrap text-xs text-body lg:ml-auto">{meta.comment}</span>
+        {real ? (
+          <details className="relative flex-none lg:ml-auto">
+            <summary className="cursor-pointer list-none whitespace-nowrap text-xs text-body">
+              시장 흔들림 <strong className="font-medium text-ink">{level(status.volatilityScore)}</strong> · 거래{" "}
+              <strong className="font-medium text-ink">{level(status.volumeScore)}</strong>
+              <span className="ml-1 text-muted underline underline-offset-2">자세히</span>
+            </summary>
+            <div className="fixed left-4 right-4 top-28 z-50 rounded-md bg-white p-4 text-xs leading-5 text-body shadow-modal sm:left-auto sm:right-8 sm:w-80">
+              <p className="m-0">
+                흔들림: KOSPI 최근 20거래일 가격 흔들림이 지난 1년 중 아래에서 {status.volatilityScore}% 위치예요.
+              </p>
+              <p className="m-0 mt-1">거래: 최근 20거래일 평균 거래대금이 지난 1년 중 아래에서 {status.volumeScore}% 위치예요.</p>
+              <p className="m-0 mt-2 text-muted">3등분해 낮음·보통·높음으로 불러요. {meta.comment}.</p>
+            </div>
+          </details>
+        ) : (
+          <span className="flex-none whitespace-nowrap text-xs text-body lg:ml-auto">{meta.comment}</span>
+        )}
         <SourceChip provenance={status.provenance} />
       </div>
     </section>

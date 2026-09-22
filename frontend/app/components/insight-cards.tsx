@@ -411,7 +411,7 @@ function MarketPanel({ detail, insights }: { detail: StockDetail; insights: Stoc
       <p className="m-0 flex flex-wrap gap-x-3 gap-y-1">
         {sentiment && <SourceChip provenance={provenance.sentiment} />}
         {psychology && <SourceChip provenance={psychology.provenance} />}
-        <SourceChip provenance={detail.provenance} />
+        {risk && <SourceChip provenance={detail.priceProvenance ?? detail.provenance} />}
       </p>
     </>
   );
@@ -652,6 +652,12 @@ export function CalculationBasis({
           {Math.round(bit.confidence * 100)}%
         </p>
         <p className="m-0">탭 순서(카드 순서): {order.join(" → ")}</p>
+        {insights.psychology && (
+          <p className="m-0 tabular-nums">
+            가격 흐름 분위기 psych_greed_fear_axis {signed(insights.psychology.axis)} = (fear_greed + disposition) ÷ 2 · -1
+            움츠러듦 ~ +1 들뜸 (psychology_market_v1)
+          </p>
+        )}
         {nudges.map((nudge) => (
           <p key={nudge.id} className="m-0 tabular-nums">
             {nudge.id} 근거 축 {AXIS_META[nudge.axis].name}({nudge.axis}) {signed(nudge.ratio)} · -1{" "}
@@ -687,7 +693,8 @@ export function CalculationBasis({
 // 데이터 출처 전체 — 섹션마다 한 줄로 둔 출처를 한곳에 모은다.
 export function SourceList({ detail, insights }: { detail: StockDetail; insights: StockInsights }) {
   const rows: [string, DataProvenance][] = [
-    ["주가·모델 신호", detail.provenance],
+    ["주가", detail.priceProvenance ?? detail.provenance],
+    ["모델 신호·범위·근거", detail.provenance],
     [TERM.sentiment, insights.provenance.sentiment],
     [TERM.supply, insights.provenance.supply],
     [TERM.financial, insights.provenance.financial],

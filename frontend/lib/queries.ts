@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { CLOSING_PRICE } from "./closing-prices.ts";
+import { snapshotPrice } from "./providers/demo-snapshot.ts";
 import { costBasis } from "./holdings-rules.ts";
 import {
   avoidanceNotice,
@@ -14,7 +15,6 @@ import {
 import {
   mapAvoidedAssetLabels,
   mapExcludedStocks,
-  mapMarketStatus,
   mapPortfolioHolding,
   mapProfileSummary,
   mapRecommendedStock,
@@ -23,7 +23,6 @@ import {
   type AvoidedAssetRow,
   type ExcludedStock,
   type IpsProfileRow,
-  type MarketStatusRow,
   type PortfolioHoldingRow,
   type PredictionDetailRow,
   type PredictionFeatureRow,
@@ -129,7 +128,7 @@ export async function getAuthenticatedDashboardData(): Promise<DashboardData> {
   if (!appUser) throw new Error("연결된 서비스 사용자 정보가 없습니다.");
 
   const [currentMarketStatus, profileContext, holdingRows] = await Promise.all([
-    marketStatusOrExample(client),
+    loadMarketStatus(),
     loadProfileQueryContext(client, appUser.id),
     loadHoldings(client, appUser.id),
   ]);
@@ -186,27 +185,11 @@ export async function getAuthenticatedStockDetailData(
   return queryStockDetail(client, appUser.id, code);
 }
 
-// 시장 상태는 공개 데이터라 비어 있거나 조회에 실패해도 내 화면 전체를 깨뜨리지 않는다.
-// 예시값(provenance mock)으로 대체하고, 화면은 "예시 데이터"로 표시한다.
-async function marketStatusOrExample(client: SupabaseClient): Promise<MarketStatus> {
-  try {
-    return await queryMarketStatus(client);
-  } catch (error) {
-    console.warn("[DB fallback] market status:", error);
-    return marketStatus;
-  }
-}
-
-async function queryMarketStatus(client: SupabaseClient): Promise<MarketStatus> {
-  const { data, error } = await client
-    .from("market_status")
-    .select("status_date,condition,volatility_score,volume_score,index_quotes")
-    .order("status_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  assertQuery(error, "시장 상태 조회");
-  if (!data) throw new Error("시장 상태 데이터가 없습니다.");
-  return mapMarketStatus(data as MarketStatusRow);
+// 시장 브리핑은 실데이터 스냅샷(KRX 지수, providers/demo-snapshot.ts)을 쓴다.
+// DB market_status에는 손으로 쓴 시드만 있어 읽지 않는다(없는 데이터를 실데이터처럼 보이지 않게).
+// ponytail: 백엔드가 market_status를 매일 채우게 되면 여기서 DB를 다시 읽는다.
+async function loadMarketStatus(): Promise<MarketStatus> {
+  return marketStatus;
 }
 
 async function queryRecommendedStocks(
@@ -322,7 +305,7 @@ async function queryStockDetail(
 ): Promise<StockDetailData> {
   const [holdingRows, marketResult, userResult, profileResult, stockResult] = await Promise.all([
     loadHoldings(client, userId),
-    marketStatusOrExample(client),
+    loadMarketStatus(),
     client
       .from("users")
       .select("id,display_name,avatar_label")
@@ -375,11 +358,11 @@ async function queryStockDetail(
   assertQuery(featureError, "상세 화면 예측 근거 조회");
 
   return {
-    detail: mapStockDetail(
-      prediction,
-      stockResult.data as StockRow,
-      (featureData ?? []) as PredictionFeatureRow[],
-    ),
+    // 시세는 DB 저장 계약이 없어 실데이터 스냅샷에서 붙인다(데모 4종목만).
+    detail: {
+      ...mapStockDetail(prediction, stockResult.data as StockRow, (featureData ?? []) as PredictionFeatureRow[]),
+      ...snapshotPrice(code),
+    },
     profile: mapProfileSummary(
       userResult.data as UserRow,
       profile,

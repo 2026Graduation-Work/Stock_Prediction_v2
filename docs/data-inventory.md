@@ -1,8 +1,8 @@
 # 데이터 인벤토리 — 화면 수치의 출처
 
-- 작성: 2026-09-19 (main `039809e` 기준)
+- 작성: 2026-09-19 · **재분류: 2026-09-22 (Task E, 데모 기준일 2025-12-30)**
 - 용도: 중간보고서 "데이터 경계" 표의 원본. 화면에 나오는 수치를 한 행씩 적고, 실데이터인지와 실데이터로 바꾸려면 무엇이 필요한지 적는다.
-- 범위: 시장 브리핑 바, 대시보드(성향 카드·추천/보유 종목 카드·포트폴리오 맵), 종목 상세(상단·인사이트 카드 6종), `/performance`
+- 범위: 시장 브리핑 바, 대시보드(요약·보유 종목 맵·신호가 강한 종목·성향), 종목 상세(헤더·한눈에 보기·체크포인트·판단 근거 4탭·더 알아보기), 모델 성적표
 - 이 문서는 팀의 데이터 취급 기록이며 법률 자문이 아니다. 약관은 바뀔 수 있으니 실데이터 전환 전에 다시 확인한다.
 
 ## 분류 기호
@@ -11,145 +11,141 @@
 |---|---|
 | ✅ 연결 | 실데이터가 화면까지 이어져 있다 |
 | 🟡 있음·세팅미완 | 원천 데이터나 계산 코드는 레포에 있지만 화면까지 연결이 안 됐다 |
-| 🔵 새로확보 | 레포에 없어 새로 받아야 한다 |
-| ⚪ 데모유지 | 손으로 정한 값·합성값. 당분간 예시로 두고, 화면에 예시임을 표시해야 한다 |
+| 🔵 새로확보 | 레포에 없어 새로 받아야 한다(계정·키 필요) |
+| ⚪ 데모유지 | 손으로 정한 값·합성값. 예시로 두고, 화면에 "예시 데이터"로 표시한다 |
 | ⛔ 사용불가 | 약관 등으로 쓸 수 없다 |
 
 ## 데이터 경로 공통 사항
 
-화면 데이터는 두 갈래 중 하나로 들어온다. **둘 다 실데이터가 아니다.**
+- **실데이터 스냅샷** — `frontend/lib/providers/demo-snapshot.json`(생성: `frontend/scripts/build_demo_snapshot.py`). 기준일 **2025-12-30**(2025년 마지막 거래일, 감성 코퍼스 2025-10-29~12-31 안). 받은 원자료는 커밋하지 않고 화면에 필요한 열만 출처·기준일과 함께 둔다.
+  - 종목 시세(삼성전자·현대차·카카오·셀트리온): **네이버 금융 수정주가**(FinanceDataReader 0.9.x의 기본 경로 `NaverDailyReader`). 조회일까지의 배당·권리락이 과거 가격에 소급 반영되므로 셀트리온처럼 호가 단위에 맞지 않는 종가가 나온다(예: 172,523원). KRX 원시 종가(`KRX:코드`)는 인증이 필요해 쓰지 않았다.
+  - 지수(KS11·KQ11·KS200): **KRX 지수 데이터를 FDR이 GitHub에 캐시한 파일**(`KrxIndexReaderCache`, FinanceData/fdr_krx_data_cache).
+- **예시** — `frontend/lib/mock-data.ts`(예측 수치), `frontend/lib/providers/fixtures.ts`(수급·기여도·재무), `frontend/lib/mock-performance.ts`. 화면에 "예시 데이터"로 표시된다.
+- **Supabase** — 로그인 사용자의 성향·보유 종목(사용자가 직접 입력)과 예측 시드 4행. 예측 시드는 손으로 쓴 값이라 "예시 데이터"로 표시된다(`mappers.ts` `SUPABASE_DEMO`). 시드 날짜도 2025-12-30으로 맞췄다. `market_status` 테이블은 시드뿐이라 앱은 읽지 않고 스냅샷을 쓴다(`queries.ts` `loadMarketStatus`).
+- **이슈 #107**: 모델 재학습 전까지 파이프라인으로 `predictions`를 채우지 않는다. 예측 스코어·순위·신호·상승 비율·수익률 범위는 예시로 둔다.
 
-1. **mock** — `frontend/lib/mock-data.ts`, `frontend/lib/providers/fixtures.ts`, `frontend/lib/mock-performance.ts`. Supabase 환경변수가 없거나 조회가 실패하면 쓰인다(`frontend/lib/queries.ts:585` `withFallback`).
-2. **Supabase** — `frontend/lib/queries.ts`가 테이블을 직접 조회한다. 그런데 테이블을 채우는 것은 **손으로 쓴 데모 시드**(`supabase/seed.sql`, 김민지 페르소나)뿐이고, 백엔드에서 Supabase에 쓰는 코드는 없다(`backend/` 전체에서 `supabase`·`predictions`·`market_status` 쓰기 없음). 설문 결과 저장(`frontend/lib/save-profile.ts:58`)만 예외다.
+### 시장 분위기 점수 산식 (결정론, 튜닝 없음)
 
-- Supabase 경로로 들어온 값은 `source: "supabase"`가 붙어 **"샘플" 배지 없이** 표시된다(`frontend/lib/mappers.ts:136`, `frontend/app/components/market-status-bar.tsx:49`). 시드 값도 실데이터처럼 보인다는 뜻이다.
-- 로컬 `frontend/`에는 `.env.example`만 있다. 배포(Vercel) 환경에 Supabase 변수가 설정됐는지는 이 문서에서 확인하지 않았다.
+- 흔들림 = KOSPI 20거래일 실현변동성(일간 로그수익률 표준편차 × √252)의 기준일 값이 **직전 252거래일(약 1년)** 같은 값들 중 몇 번째 백분위인지 (2025-12-30: 65)
+- 거래 = KOSPI 20거래일 평균 거래대금의 같은 방식 백분위 (2025-12-30: 77)
+- 화면 구간 말: 백분위 < 33.3 낮음, < 66.7 보통, 그 이상 높음 → "시장 흔들림 보통 · 거래 높음". 숫자는 "자세히" 안에만.
+- 시장 상태(condition): 흔들림 백분위 < 60 stable, < 90 caution, 그 이상 high_volatility (2025-12-30: caution)
+
+### 가격 흐름으로 본 분위기 (psychology_market_v1, #69)
+
+- `psych_greed_fear_axis = (psych_fear_greed + psych_disposition) / 2`, -1~+1, 기준일까지의 종가·거래량만 사용(`backend/analysis/chart/experiments/features/psychology/`).
+- 구간 말: ≥0.5 많이 들뜸, ≥0.2 조금 들뜸, >-0.2 차분함, >-0.5 조금 움츠러듦, 그 외 많이 움츠러듦.
+- 2025-12-30: 삼성전자 +0.94 많이 들뜸 · 현대차 +0.73 많이 들뜸 · 카카오 -0.06 차분함 · 셀트리온 -0.33 조금 움츠러듦. 뉴스가 없는 종목도 실데이터 분위기를 갖는다.
 
 ## 1. 시장 브리핑 바
 
-컴포넌트 `frontend/app/components/market-status-bar.tsx` · 데이터 `frontend/lib/queries.ts:197` → Supabase `market_status`(`supabase/seed.sql:474`) 또는 mock(`frontend/lib/mock-data.ts:14`)
+컴포넌트 `frontend/app/components/market-status-bar.tsx` · 데이터 `mock-data.ts` `marketStatus` = `MARKET_SNAPSHOT`
 
-| 화면 위치 | 코드 출처 | 원천 | 기간 | 약관 메모 | 분류 | 실데이터 전환에 필요한 것 |
-|---|---|---|---|---|---|---|
-| 기준일("2025.10.02 기준") | `market-status-bar.tsx:56` ← `mock-data.ts:15` / `seed.sql:482` | mock / seed | mock 2025-10-02, seed 2026-07-07 | — | ⚪ | 지수 데이터를 연결하면 그 날짜를 쓴다 |
-| KOSPI·KOSDAQ·KOSPI 200 지수와 등락률 | `market-status-bar.tsx:22-24` ← `mock-data.ts:20-41` / `seed.sql:486-489` | mock / seed | 위와 같음 | pykrx는 KRX 로그인 필요(§5). FDR의 내부 원천별 약관 확인 필요 | 🔵 | FinanceDataReader `KS11`은 로그인 없이 조회됨(§5 참고). `KQ11`·`KS200`도 같은 방식으로 받아 `market_status.index_quotes`에 적재 |
-| 원/달러 | `market-status-bar.tsx:22-24` ← `mock-data.ts:42-48` | mock / seed | 위와 같음 | — | 🔵 | 환율 원천 선정(FDR `USD/KRW`는 이번에 시험하지 않음) |
-| 변동성 점수 61 · 거래량 점수 48 | `market-status-bar.tsx:69-70` ← `mock-data.ts:18-19` | mock / seed | — | — | ⚪ | **산식이 정의돼 있지 않다.** 지수 일봉에서 계산할 산식부터 정해야 한다 |
-| 시장 상태 라벨·코멘트("주의" 등) | `market-status-bar.tsx:75,78` ← `display.ts:112` + `condition` | mock / seed | — | — | ⚪ | 위 점수 산식과 상태 구간 정의 |
+| 화면 위치 | 원천 | 기간 | 분류 | 비고 |
+|---|---|---|---|---|
+| 기준일("시장 · 12.30") | 스냅샷 | 2025-12-30 | ✅ | 로그인 여부와 관계없이 같은 스냅샷 |
+| KOSPI·KOSDAQ·KOSPI 200 지수와 등락률 | KRX(FDR 캐시) | 2025-12-30 | ✅ | 원/달러는 실데이터가 없어 화면에서 뺐다 |
+| 흔들림·거래 구간 말과 백분위("자세히") | KRX(FDR 캐시)에서 계산 | 직전 1년 | ✅ | 위 산식 |
+| 시장 상태 한 문장 | 위 흔들림 백분위 구간 | — | ✅ | `display.ts` `MARKET_CONDITION_META` |
 
 ## 2. 대시보드
 
-### 2-1. 성향 카드
+### 2-1. 한 줄 요약·성향
 
-컴포넌트 `frontend/app/components/investor-profile-card.tsx` · 데이터: 이 브라우저에서 설문을 마쳤으면 저장된 결과(`frontend/app/components/dashboard.tsx:118-126`, `frontend/lib/save-profile.ts:127`), 아니면 `queries.ts:225` → Supabase `ips_profiles`(시드) 또는 mock `mock-data.ts:52`
+| 화면 위치 | 원천 | 분류 | 비고 |
+|---|---|---|---|
+| 맨 위 한 줄 요약 | 보유 종목(사용자 입력) × 신호(예시) 결정론 템플릿 | ✅ | 문장 규칙은 실제, 신호 입력은 예시(`lib/dashboard-summary.ts`) |
+| 성향 유형·설명 | 사용자 설문(16/24문항) 규칙 기반 산출 | ✅ | 비로그인은 이 브라우저, 로그인은 Supabase 저장 |
+| 위험 감수·흔들림 민감도·투자 기간(설문 결과 화면) | 설문 8축 요약 | ✅ | 대시보드에서는 뺐고 결과 화면에 있다 |
+| 목록에서 빼 둔 종목 유형 | 설문에서 사용자가 직접 고름(하드 제약) | ✅ | |
+| 진단 시점 | 설문 timestamp | ✅ | |
 
-| 화면 위치 | 코드 출처 | 원천 | 기간 | 약관 메모 | 분류 | 실데이터 전환에 필요한 것 |
-|---|---|---|---|---|---|---|
-| 성향 유형·페르소나 | `investor-profile-card.tsx:40` ← `dashboard.tsx:56-57` | 사용자 설문 응답(규칙 기반 산출) | 설문 시점 | 개인정보: 로그인 시 Supabase 저장 | ✅ | 설문 전·비로그인 상태는 김민지 데모(⚪) |
-| 위험 감수 점수 | `investor-profile-card.tsx:43` ← `dashboard.tsx:58` | 설문 `risk_tolerance`×100 | 설문 시점 | 위와 같음 | ✅ | — |
-| 심리 민감도 점수 | `investor-profile-card.tsx:44` ← `dashboard.tsx:59` | 설문 `fomo_index`×100 | 설문 시점 | 위와 같음 | ✅ | — |
-| 투자 기간 | `investor-profile-card.tsx:49` ← `dashboard.tsx:47-48` | 설문 `time_horizon_months` | 설문 시점 | 위와 같음 | ✅ | — |
-| 설문 시점 | `investor-profile-card.tsx:82` ← `dashboard.tsx:50-53` | 설문 `timestamp` | — | — | ✅ | — |
+### 2-2. 오늘 신호가 강한 종목
 
-### 2-2. 추천 종목·보유 종목 알림 카드
+| 화면 위치 | 원천 | 분류 | 비고 |
+|---|---|---|---|
+| 신호(강한 긍정~강한 부정) | 예시 / 시드 | ⚪ | #107. 전 종목 추론 → 순위 → 신호 매핑 → `predictions` 적재는 재학습 후 |
+| "오늘 분석한 종목 중 상위 N%" | 예시 / 시드 | ⚪ | 위와 같음 |
+| 한 줄 이유(모델 근거 1순위 문장) | 예시 문장 | ⚪ | LightGBM `pred_contrib` → 한국어 라벨 매핑 필요 |
+| 위험도 높음 표시 | 예시 위험등급 × 성향 | ⚪ | 위험등급 산식 합의 필요 |
+| 위험 플래그(고변동성 등) | 예시 / 시드 | ⚪ | SPAC·관리종목은 종목 목록, 고변동성은 가격에서 계산 가능 |
+| 제외된 종목 목록 | 제외 항목(✅) × 종목 플래그(예시) | ⚪ | 플래그가 실데이터가 되면 자동으로 맞는다 |
+| 수익률 범위·상승 비율·기간별 방향(상세로 이동) | 예시 / 시드 | ⚪ | 백테스트 필요 |
+| 모델 신호 순 정렬 | 예시 순위 | ⚪ | 성향으로 고르지 않는다(소프트 틸트) |
 
-컴포넌트 `frontend/app/components/stock-card.tsx` · 데이터 `queries.ts:250,285` → Supabase `predictions`(시드 4행, `seed.sql:248`) 또는 mock `mock-data.ts:63-112`
+### 2-3. 보유 종목 맵
 
-모델 쪽 현황: 차트 블록에 LightGBM 기준 모델 2개(`backend/analysis/chart/core/models/baseline_h5_…txt`, `baseline_h20_…txt`)와 추론 함수(`backend/analysis/chart/core/inference.py:80` `predict_success_probability`)가 있다. 출력은 **상승 확률까지**다. 전 종목 순위(`rank_percentile`)·신호등 매핑·수익률 밴드·적중률을 계산해 `predictions`에 적재하는 코드는 없다. h10 모델도 없다.
-
-| 화면 위치 | 코드 출처 | 원천 | 기간 | 약관 메모 | 분류 | 실데이터 전환에 필요한 것 |
-|---|---|---|---|---|---|---|
-| 위험등급 N · 라벨 | `stock-card.tsx:84` ← `stocks.risk_grade` / `mock-data.ts:67` | seed / mock | — | — | ⚪ | **등급 산식이 정의돼 있지 않다**(변동성 기준인지 등). 산식 합의 |
-| 위험 플래그(고변동성 등) | `stock-card.tsx:86` ← `stocks.risk_flags` / `mock-data.ts:102` | seed / mock | — | — | ⚪ | SPAC·관리종목은 종목 목록(FDR `KRX-DESC` 등)에서, 고변동성은 가격에서 계산 |
-| 신호등 · "신호 강도 상위 N%" | `stock-card.tsx:95-97` ← `signal_light`·`rank_percentile` | seed / mock | — | — | 🟡 | 전 종목 일괄 추론 → 순위 → 신호등 매핑(`schema/chart_output.schema.json`) → `predictions` 적재 |
-| 예상 수익률 밴드 · N% 신뢰구간 | `stock-card.tsx:107,122` ← `return_low/high`·`return_ci_level` | seed / mock | — | — | 🟡 | 신호 구간별 과거 실현 수익률 분포 산출(백테스트) |
-| 적중률 · 유사 사례 N건 | `stock-card.tsx:129,131` ← `bucket_hit_rate`·`similar_case_count` | seed / mock | — | — | 🟡 | 위 백테스트에서 구간별 적중률·표본 수 |
-| H5·H10·H20 방향과 일치도 | `stock-card.tsx:137-151` ← `horizon_h5/h10/h20` | seed / mock | — | — | 🟡 | h5·h20 모델은 있음. h10 모델 학습 필요 |
-| 주의 문구 | `stock-card.tsx:161` ← `predictions.caution` / `mock-data.ts:103` | seed / mock 문장 | — | — | ⚪ | 위험등급·성향 비교 규칙으로 생성 |
-| 회피 설정으로 제외된 종목 N개·목록 | `dashboard.tsx:204-221` ← `avoided_assets` + `stocks.risk_flags` / `mock-data.ts:116-119` | 회피 항목은 설문(✅), 제외 종목은 seed / mock | — | — | ⚪ | 종목별 플래그를 실데이터로 채우면 목록이 자동으로 맞는다 |
-
-### 2-3. 포트폴리오 맵
-
-컴포넌트 `frontend/app/components/portfolio-heatmap.tsx` · 데이터 `queries.ts:217,322` → Supabase `portfolio_holdings`(시드) 또는 mock `mock-data.ts:143`
-
-| 화면 위치 | 코드 출처 | 원천 | 기간 | 약관 메모 | 분류 | 실데이터 전환에 필요한 것 |
-|---|---|---|---|---|---|---|
-| 보유 수량 · 매입금액(만원) · 타일 크기 | `portfolio-heatmap.tsx:31,108` | seed / mock | — | 개인 자산 정보 | ⚪ | **보유 종목 입력 UI가 없다.** 입력 화면을 만들거나 데모로 유지 |
-| 보유 종목 신호 라벨·색 | `portfolio-heatmap.tsx:86-106` ← `predictions.signal_light` | seed / mock | — | — | 🟡 | 2-2 신호 파이프라인과 같음 |
+| 화면 위치 | 원천 | 분류 | 비고 |
+|---|---|---|---|
+| 보유 종목·수량·평균 매입가·칸 넓이 | **사용자 직접 입력**(온보딩·보유 종목 화면). 평균 매입가를 비우면 기준일 종가(스냅샷) × 수량 | ✅ | 0004로 평균 매입가 nullable. 데모는 김민지 예시(예시 표시) |
+| 칸 색(오늘 신호) | 예시 / 시드 | ⚪ | 2-2와 같음 |
 
 ## 3. 종목 상세
 
-페이지 `frontend/app/stocks/[code]/page.tsx`는 항상 mock(`getMockStockDetailData`)으로 먼저 그리고, 로그인 상태면 Supabase로 다시 조회한다(`frontend/app/components/stock-detail-boundary.tsx:38`). Supabase 경로는 현재가·가격 추이·수익률 분포·AI 조언을 채우지 않는다(`frontend/lib/mappers.ts:177`). 상세 mock은 삼성전자·현대차·셀트리온 3종목, 인사이트 카드 데이터는 삼성전자·현대차 2종목뿐이다(`frontend/lib/providers/index.ts:2`).
+상세 페이지는 데모 4종목(삼성전자·현대차·카카오·셀트리온). 로그인 상태면 예측은 Supabase 시드, 시세는 같은 스냅샷을 붙인다(`queries.ts` `snapshotPrice`).
 
-### 3-1. 상단·예측 영역
+### 3-1. 헤더·한눈에 보기·더 알아보기
 
-컴포넌트 `frontend/app/components/stock-detail.tsx`
+| 화면 위치 | 원천 | 기간 | 분류 | 비고 |
+|---|---|---|---|---|
+| 현재가·전일 대비 | 네이버 금융 수정주가(FDR) | 2025-12-30 | ✅ | |
+| 기준일 | 스냅샷 | 2025-12-30 | ✅ | 예측 예시도 같은 날짜로 맞춤(기간 불일치 해소) |
+| 주가 흐름(최근 60거래일) | 네이버 금융 수정주가(FDR) | 2025-10-01 ~ 2025-12-30 | ✅ | 실제 거래일 날짜 포함 |
+| 모델 신호·상위 N%·수익률 범위("10번 중 7번")·상승 비율·기간별 방향 | 예시 / 시드 | — | ⚪ | #107 |
+| 과거 비슷한 신호 수익률 분포 | 예시(손으로 정한 도수) | — | ⚪ | 백테스트 결과 필요. 카카오는 예시도 없어 "생략" |
+| 모델이 본 이유(근거 문장) | 예시 / 시드 문장 | — | ⚪ | ⚠️ "영업이익이 예상치를 9% 상회" 같은 사실처럼 읽히는 예시 문장 있음 |
+| 숫자를 풀어 쓴 설명(AI) | 예시 문장 | — | ⚪ | 생성기 없음 |
 
-| 화면 위치 | 코드 출처 | 원천 | 기간 | 약관 메모 | 분류 | 실데이터 전환에 필요한 것 |
-|---|---|---|---|---|---|---|
-| 현재가 · 등락률 | `stock-detail.tsx:230-233` ← `mock-data.ts:236-237` | mock | 2025-10-02 | FDR 원천 약관 확인 | 🟡 | 레포에 삼성전자 일봉이 있다(`backend/analysis/chart/data/raw/005930.parquet`, 2010-01-04 ~ 2026-06-19, FDR). 다른 종목은 FDR로 수집 |
-| 데이터·예측 기준일 | `stock-detail.tsx:224` ← `asOf` | mock / seed | 2025-10-02 | — | ⚪ | 신호 파이프라인 기준일을 쓴다 |
-| 신호등·순위·밴드·적중률·유사 사례·H5/H10/H20 | `stock-detail.tsx:254-315,420` | mock / seed | — | — | 🟡 | 2-2와 같음 |
-| 과거 유사 신호 실현 수익률 분포(히스토그램) | `stock-detail.tsx:335` ← `mock-data.ts:200,244,290` | mock(손으로 정한 도수) | — | — | 🟡 | 백테스트 결과의 구간별 도수. Supabase 경로는 일부러 비워 둔다(`stock-detail.tsx:187`) |
-| 가격 추이 차트(60거래일) | `stock-detail.tsx:382` ← `mock-data.ts:176` `priceSeries` | **합성 곡선**(보간 + 사인파) | 날짜 없음 | — | 🟡 | 현재가와 같은 원천. 삼성전자는 레포 parquet로 바로 가능 |
-| 근거 Top 3(제목·설명·출처) | `stock-detail.tsx:437` ← `mock-data.ts:211,257,305` / `prediction_features` | mock / seed 문장 | — | — | 🟡 | 모델 기여도(LightGBM `pred_contrib`)를 한국어 라벨로 매핑. ⚠️ mock 문장에 "영업이익이 시장 예상치를 9% 상회" 같은 **사실처럼 읽히는 합성 주장**이 있다 |
-| AI 조언 문단 | `stock-detail.tsx:522` ← `mock-data.ts:231,277,325` | mock 문장(숫자 포함) | — | — | ⚪ | 생성기가 없다. 템플릿이나 LLM 생성은 별도 결정 필요 |
+### 3-2. 체크포인트·판단 근거 4탭
 
-### 3-2. 인사이트 카드 6종
+| 화면 위치 | 원천 | 기간 | 분류 | 비고 |
+|---|---|---|---|---|
+| 체크포인트(최대 2) | 판정 규칙(기획 확정본) × 입력(실제 시세 + 예시 수급·백분위 + 감성) | — | ⚪ | 입력이 모두 실데이터가 되면 따라서 실데이터 |
+| 모델이 본 이유(부호 막대 %) | 예시 가중치 | — | ⚪ | 모델 `pred_contrib` 묶음 합 |
+| 누가 사고팔았나(투자자별 20영업일 순매수) | 예시(시드 고정 난수) | 2025-12 | 🔵 | **KRX 계정(KRX_ID/KRX_PW) 필요** — pykrx가 로그인을 요구(§5). `backend/.env` 없음 |
+| 뉴스 분위기 — 삼성전자 | **실데이터** BigKinds 8,920건 × KR-FinBERT | 2025-12-02 ~ 12-21 | ✅ | 주가 기간과 겹친다(기존 기간 불일치 해소) |
+| 뉴스 분위기 — 삼성전자 대표 기사 3건 | 실제 기사 제목 | 2025-12-21 | ✅ | 제목 노출 가능 여부는 §6 |
+| 뉴스 분위기 — 현대차 | 합성(난수) + "[합성 픽스처]" 제목 | — | ⚪ | 현대차·카카오·셀트리온 BigKinds 엑셀이 로컬에 없다 |
+| 가격 흐름으로 본 분위기(4종목) | 실제 시세 → psychology_market_v1 | 2025-12-30 | ✅ | 위 정의 |
+| 가격 흔들림(1년 기준 %) | 실제 시세에서 계산 | 60거래일 | ✅ | |
+| 가격 흔들림 "시장 상위 N%" | 예시 백분위 | — | 🔵 | 전 종목 60일 변동성 분포(전 종목 일봉) |
+| 3개월 최고가 대비·최근 3거래일 | 실제 시세에서 계산 | 60거래일 | ✅ | |
+| 회사 체력 6지표(PER·PBR·ROE·영업이익률·부채비율·매출 증가율) | 예시("실제 공시값 아님") | — | 🟡 | **DART_API_KEY 필요**. `value_pipeline` DART 수집기 있음. 영업이익률 추가·주식수 기준 시점(#68) 명시 필요 |
+| 계산 근거(8축 레이더·분류식) | 사용자 설문 | 설문 시점 | ✅ | |
 
-컴포넌트 `frontend/app/components/insight-cards.tsx` · 데이터 `frontend/lib/providers/index.ts:103` `loadStockInsights`
+## 4. 모델 성적표
 
-| 화면 위치 | 코드 출처 | 원천 | 기간 | 약관 메모 | 분류 | 실데이터 전환에 필요한 것 |
-|---|---|---|---|---|---|---|
-| **확인해 볼 점**(성향 넛지 최대 2개) | `insight-cards.tsx:686` ← `providers/index.ts:164` `toNudgeMarket` + `lib/profiling/nudges.ts` | 판정 규칙은 기획 확정본. 입력값은 수급 픽스처·감성·합성 가격·변동성 백분위 픽스처·보유 종목 | 입력 카드별로 다름 | — | ⚪ | 입력(수급·가격·백분위)이 실데이터가 되면 따라서 실데이터가 된다 |
-| **기여도 분해**(신호별 비중 %) | `insight-cards.tsx:294,691` ← `fixtures.ts:87` `CONTRIBUTION_FIXTURE` | 픽스처(손으로 정한 가중치) | — | — | 🟡 | 모델 `pred_contrib` → 피처 묶음(기술·재무·감성·수급)별 합. 현재 모델 피처는 Alpha158 기술지표뿐이라 재무·감성·수급 항목은 모델에 없다 |
-| **수급**(개인·외국인·기관 20영업일 순매수, 억원) | `insight-cards.tsx:311-339,700` ← `fixtures.ts:62` `SUPPLY_FIXTURE` | 픽스처(시드 고정 난수) | 2025-09-04 ~ 2025-10-02 | KRX 데이터 이용 조건 확인 필요(`providers/index.ts:71` TODO) | 🔵 | pykrx 조회 실패(§5, KRX 로그인 필요). KRX 계정과 약관 확인 후 수집. 기타법인 포함해야 합계가 0이 된다 |
-| **뉴스 감성** 삼성전자(일별 점수·기사 수) | `insight-cards.tsx:388,709` ← `providers/sentiment-fixture.ts` | **실데이터**: BigKinds 수동 다운로드 기사 8,920건을 KR-FinBERT로 채점 | 2025-12-02 ~ 2025-12-21 (20일 창) | BigKinds: 가공 데이터 Git 비보관 결정과 충돌(아래 §4) | ✅ | 정적 스냅샷이다. 상세 화면 기준일(2025-10-02)과 기간이 맞지 않는다(`sentiment-fixture.ts:10`) |
-| 뉴스 감성 삼성전자 대표 기사 3건(제목·언론사) | `insight-cards.tsx:452` ← `sentiment-fixture.ts:119` | 실제 기사 제목 | 2025-12-21 | 기사 제목을 공개 레포에 보관하고 공개 화면에 노출 중 | ✅ | 제목 노출 가능 여부 확인. 안 되면 건수·점수만 표시 |
-| 뉴스 감성 현대차 | `fixtures.ts:69` `HYUNDAI_SENTIMENT` | 합성(난수) + "[합성 픽스처]" 제목 | 삼성전자와 같은 날짜 | — | ⚪ | 현대차 BigKinds 기사 수동 다운로드 후 같은 스크립트(`frontend/scripts/build_sentiment_fixture.py`)로 생성 |
-| **위험/변동성**: 연 변동성 % | `insight-cards.tsx:480` ← `providers/index.ts:143` `riskSnapshot` | 합성 가격 곡선에서 계산 | 60거래일 | — | 🟡 | 실제 일봉만 연결하면 계산식은 그대로 쓴다 |
-| 위험/변동성: "시장 상위 N%" | `insight-cards.tsx:482` ← `fixtures.ts:192` | 픽스처(손으로 정한 백분위) | — | — | 🔵 | 전 종목 60일 변동성 분포(전 종목 일봉) |
-| 위험/변동성: 3개월 고점 대비 · 최근 3거래일 | `insight-cards.tsx:497,500` ← `riskSnapshot` | 합성 가격에서 계산 | 60거래일 | — | 🟡 | 실제 일봉 연결 |
-| **재무** 6지표(PER·PBR·ROE·영업이익률·부채비율·매출 증가율) | `insight-cards.tsx:510,723` ← `fixtures.ts:165` | 픽스처("실제 공시값이 아니다") | "최근 4개 분기 합산" 라벨만 있음 | DART Open API(무료 키) | 🟡 | `value_pipeline` DART 수집기(`backend/analysis/text/value_pipeline/collectors.py:248`)가 PER·PBR·ROE·매출 증가율·부채비율을 계산한다. 영업이익률은 추가해야 하고, 수집기는 연간 기준이라 "4개 분기 합산" 라벨과 다르다. 주식수 as-of 문제(PR #67 후속)도 남아 있다 |
-| **성향 프로필 8축**(데모 슬라이더) | `insight-cards.tsx:534` ← Supabase `ips_profiles.profile_payload.style_axes` / `mock-data.ts:128` | 설문 v1.1 응답(로그인) / 데모 값 | 설문 시점 | — | ✅ | 비로그인은 김민지 데모(⚪) |
-
-## 4. /performance
-
-페이지 `frontend/app/performance/page.tsx` · 데이터 `frontend/lib/performance-data.ts:52` → `frontend/artifacts/performance/comparison_results.json`(없음) → mock `frontend/lib/mock-performance.ts`
-
-결과 파일을 만드는 러너는 있다(`backend/analysis/chart/experiments/comparison/runner.py:562`). 시장 심리 피처(`backend/analysis/chart/experiments/features/psychology/`, PR #69)도 main에 있다. 다만 러너를 돌린 결과가 커밋되지 않아 화면은 샘플을 보여 준다.
-
-| 화면 위치 | 코드 출처 | 원천 | 기간 | 약관 메모 | 분류 | 실데이터 전환에 필요한 것 |
-|---|---|---|---|---|---|---|
-| 4런 지표표(AUC·적중률·Brier·ECE·Sharpe·MDD·누적수익률·거래 수) | `performance-dashboard.tsx:135,312` ← `mock-performance.ts:5` | mock("화면 검증용 샘플") | — | — | 🟡 | 러너 실행 → `comparison_results.json`을 `frontend/artifacts/performance/`에 둔다. 전 종목 일봉·피처 준비 필요 |
-| 급변 구간 서브샘플 | `performance-dashboard.tsx:154` | mock | — | — | 🟡 | 위와 같음 |
-| A vs B 비교(전체·급변) | `performance-dashboard.tsx:160-168` | mock | — | — | 🟡 | 위와 같음 |
-| 결론 문구 | `performance-dashboard.tsx:188` ← `performance-data.ts:48` | 샘플 고정 문구 | — | — | 🟡 | 결과 파일이 있으면 `buildExperimentConclusion`이 생성 |
-| 헤더의 성향·시장 브리핑 | `performance/page.tsx:12` | **항상 mock**(로그인해도 Supabase를 조회하지 않음) | — | — | ⚪ | 대시보드와 같은 조회로 바꾸기 |
+| 화면 위치 | 원천 | 분류 | 비고 |
+|---|---|---|---|
+| 판별력(AUC) 한 문장 | 예시("화면 검증용 샘플") | 🟡 | 러너 실행 → `frontend/artifacts/performance/comparison_results.json` |
+| A/B 요약 표 | 예시 | 🟡 | 위와 같음 |
+| 4런 전체 표·흔들린 날 비교(자세히 보기) | 예시 | 🟡 | 위와 같음 |
+| 연구 결론 문구 | 샘플 고정 문구 | 🟡 | 결과 파일이 있으면 `buildExperimentConclusion`이 생성 |
+| 헤더의 성향 | 김민지 고정 | ⚪ | 시장 브리핑은 스냅샷(✅) |
 
 ## 분류별 개수
 
-위 표의 행 기준(43행).
+위 표의 행 기준(43행). 2026-09-19 → 2026-09-22.
 
-| 분류 | 개수 |
-|---|---|
-| ✅ 연결 | 8 |
-| 🟡 있음·세팅미완 | 18 |
-| 🔵 새로확보 | 4 |
-| ⚪ 데모유지 | 13 |
-| ⛔ 사용불가 | 0 (화면 밖 네이버 경로는 §약관 이슈) |
+| 분류 | 이전 | 지금 |
+|---|---|---|
+| ✅ 연결 | 8 | **19** |
+| 🟡 있음·세팅미완 | 18 | 5 |
+| 🔵 새로확보 | 4 | 2 |
+| ⚪ 데모유지 | 13 | 17 |
+| ⛔ 사용불가 | 0 | 0 |
 
-✅ 8개 중 6개는 사용자가 직접 답한 설문 결과이고, 시장 데이터로 ✅인 것은 **삼성전자 뉴스 감성 1종(점수·대표 기사)뿐**이다.
+- 시장 데이터 ✅: 시장 브리핑 4행, 4종목 시세·주가 흐름·가격 흔들림·고점 대비·가격 흐름 분위기, 삼성전자 뉴스 분위기.
+- 사용자 데이터 ✅: 설문 결과, 보유 종목(직접 입력).
+- 🟡→⚪로 옮긴 예측 행: 파이프라인 코드는 있지만 #107에 따라 재학습 전까지 채우지 않기로 해서 "예시 유지"로 분류했다.
 
-## 실데이터 전환 우선순위 Top 5 (작업량 대비 효과)
+## 실데이터 전환 다음 순서
 
-1. **가격 계열**(현재가·등락률·가격 추이·연 변동성·고점 대비·3거래일 수익률, 6행): 삼성전자 일봉이 이미 레포에 있고 계산식도 있어서, 원천만 바꾸면 된다. 수급 외 넛지 입력도 함께 실데이터가 된다.
-2. **시장 브리핑 지수**(KOSPI·KOSDAQ·KOSPI 200): FDR로 로그인 없이 조회되는 것을 확인했다. 모든 화면 맨 위에 있어서 첫인상이 바뀐다. Supabase 시드 값이 "샘플" 배지 없이 보이는 문제도 같이 고친다.
-3. **/performance 비교실험 실행**: 러너와 심리 피처가 main에 있다. 연구 질문 ①(A/B)의 결과 그 자체라 중간보고서에 가장 직접 쓰인다.
-4. **재무 6지표**: DART 수집기가 이미 머지돼 있다. 영업이익률 추가, 연간/분기 라벨 정리, 주식수 as-of 후속이 필요하다.
-5. **뉴스 감성 기간 정렬 + 현대차 실데이터**: 스크립트가 있어 현대차는 기사 다운로드만 하면 된다. 상세 기준일을 감성 기간(2025-10-29 ~ 12-31 코퍼스) 안으로 맞추면 카드 간 기간 불일치도 사라진다.
-
-그다음은 신호 파이프라인(전 종목 추론 → 순위·신호등 → 백테스트 밴드·적중률 → `predictions` 적재)이다. 효과는 가장 크지만(10행 이상) 작업량도 가장 크다.
+1. **수급**(🔵): KRX 정보데이터시스템 계정 → `backend/.env`에 `KRX_ID`/`KRX_PW` → pykrx로 4종목 20영업일 투자자별 순매수(개인·외국인·기관합계·기타법인).
+2. **재무 6지표**(🟡): DART Open API 키 → `backend/.env`에 `DART_API_KEY` → `value_pipeline` 수집기로 최근 사업연도 재무, 기준일(2025-12-30) 종가로 PER·PBR, 주식수 기준 시점 명시.
+3. **뉴스 분위기 3종목**: 현대차·카카오·셀트리온 BigKinds 엑셀 수동 다운로드(2025-10-29~12-31) → `frontend/scripts/build_sentiment_fixture.py`.
+4. **모델 성적표**: 러너 실행 결과 파일 커밋.
+5. **예측 파이프라인**: #107 재학습 후 `predictions` 적재.
 
 ## 5. pykrx 조회 결과 (2026-09-19)
 
