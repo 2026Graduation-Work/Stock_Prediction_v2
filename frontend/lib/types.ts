@@ -87,6 +87,8 @@ export interface StockDetail extends RecommendedStock {
   asOf: string; // 데이터·예측 기준일 (ISO). 두 날짜는 항상 동일하게 유지
   returnHorizon?: "h5" | "h10" | "h20"; // 수익률 밴드·분포의 거래일 기준
   priceHistory?: number[]; // 최근 60거래일 종가(원). 마지막 원소 = currentPrice
+  priceDates?: string[]; // priceHistory와 같은 길이의 거래일(YYYY-MM-DD). 없으면 기준일에서 거꾸로 센다
+  priceProvenance?: DataProvenance; // 시세 출처. 예측(provenance)과 다를 수 있다
   realizedReturns?: ReturnBin[]; // similarCaseCount건의 실현 수익률 분포
   reasons: PredictionReason[]; // 기여도 순 Top 3
   aiAdvice?: string; // LLM 생성 설명(수치 번역만, 행동 제안 없음)

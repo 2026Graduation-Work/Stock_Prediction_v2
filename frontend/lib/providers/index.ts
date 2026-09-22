@@ -12,6 +12,7 @@ import {
   businessDaysEndingAt,
 } from "./fixtures.ts";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
+import { PRICE_PROVENANCE, STOCK_SNAPSHOT } from "./demo-snapshot.ts";
 
 // 억원. + 순매수, - 순매도. 날짜 오름차순. 네 주체의 합은 0이다(KRX 투자자 분류).
 export interface SupplyDemandDay {
@@ -104,6 +105,7 @@ export type HoldingWeight = Pick<PortfolioHolding, "code" | "quantity" | "avgBuy
 export interface PsychologyLine {
   word: string;
   explain: string;
+  axis: number; // psych_greed_fear_axis -1(움츠러듦)~+1(들뜸). 숫자는 계산 근거에만
   provenance: DataProvenance;
 }
 
@@ -125,8 +127,16 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
     contributionProvider(code),
     financialProvider(code),
   ]);
+  const psychology = STOCK_SNAPSHOT[code]?.psychology;
   return {
-    psychology: null,
+    psychology: psychology
+      ? {
+          word: psychology.word,
+          explain: "최근 20일 오름세와 석 달 평균 거래 가격 대비 위치로 본 분위기예요",
+          axis: psychology.axis,
+          provenance: PRICE_PROVENANCE,
+        }
+      : null,
     supply,
     sentiment,
     contributions,
@@ -157,6 +167,9 @@ export interface Period {
 export function pricePeriod(detail: StockDetail): Period | null {
   const count = detail.priceHistory?.length ?? 0;
   if (count < 2) return null;
+  if (detail.priceDates?.length === count) {
+    return { start: detail.priceDates[0], end: detail.priceDates[count - 1] };
+  }
   const dates = businessDaysEndingAt(detail.asOf, count);
   return { start: dates[0], end: dates[dates.length - 1] };
 }

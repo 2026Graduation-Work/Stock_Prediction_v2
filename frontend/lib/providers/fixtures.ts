@@ -10,7 +10,7 @@ import type {
 } from "./index";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
 
-const PREDICTION_AS_OF = "2025-10-02"; // mock-data.ts 상세 화면 기준일
+const PREDICTION_AS_OF = "2025-12-30"; // 데모 기준일(실데이터 스냅샷과 같은 날)
 
 // mulberry32. 시드가 같으면 항상 같은 수열이다.
 function seeded(seed: number) {
@@ -26,9 +26,9 @@ function seeded(seed: number) {
 
 const signedUnit = (random: () => number) => random() * 2 - 1;
 
-// ponytail: 평일 휴장일은 mock 시세·수급 구간(2025-07 ~ 10-02)에 걸린 날만 둔다.
+// ponytail: 평일 휴장일은 예시 수급 구간(2025-12 20영업일)에 걸린 날만 둔다.
 // 실데이터 연동 시 날짜를 데이터에서 받으므로 이 표는 지운다.
-const KRX_WEEKDAY_HOLIDAYS = new Set(["2025-08-15"]);
+const KRX_WEEKDAY_HOLIDAYS = new Set(["2025-12-25"]);
 
 export function businessDaysEndingAt(end: string, count: number): string[] {
   const days: string[] = [];

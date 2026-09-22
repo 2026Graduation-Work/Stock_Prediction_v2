@@ -280,8 +280,8 @@ insert into public.predictions (
 values
   (
     '005930',
-    '2026-07-07',
-    '2026-07-07',
+    '2025-12-30',
+    '2025-12-30',
     'stable',
     'h20',
     0.67,
@@ -311,8 +311,8 @@ values
   ),
   (
     '005380',
-    '2026-07-07',
-    '2026-07-07',
+    '2025-12-30',
+    '2025-12-30',
     'stable',
     'h20',
     0.75,
@@ -342,8 +342,8 @@ values
   ),
   (
     '068270',
-    '2026-07-07',
-    '2026-07-07',
+    '2025-12-30',
+    '2025-12-30',
     'stable',
     'h20',
     0.55,
@@ -373,8 +373,8 @@ values
   ),
   (
     '035720',
-    '2026-07-07',
-    '2026-07-07',
+    '2025-12-30',
+    '2025-12-30',
     'stable',
     'h20',
     0.38,
@@ -446,14 +446,14 @@ select
   seed.display_order
 from (
   values
-    ('005930', '2026-07-07'::date, 'stable', 'volume_ratio_20d', '최근 거래량이 평소보다 증가했습니다.', 0.31, 1),
-    ('005930', '2026-07-07'::date, 'stable', 'volatility_20d', '최근 변동성은 신호를 일부 낮췄습니다.', -0.12, 2),
-    ('005380', '2026-07-07'::date, 'stable', 'momentum_20d', '최근 20일 가격 흐름이 견조합니다.', 0.43, 1),
-    ('005380', '2026-07-07'::date, 'stable', 'volume_ratio_20d', '거래량 흐름이 신호를 뒷받침합니다.', 0.22, 2),
-    ('068270', '2026-07-07'::date, 'stable', 'momentum_20d', '가격 흐름의 방향성이 뚜렷하지 않습니다.', 0.08, 1),
-    ('068270', '2026-07-07'::date, 'stable', 'volatility_20d', '최근 변동성이 평소보다 높습니다.', 0.38, 2),
-    ('035720', '2026-07-07'::date, 'stable', 'momentum_20d', '최근 가격 흐름이 약세입니다.', -0.36, 1),
-    ('035720', '2026-07-07'::date, 'stable', 'volatility_20d', '변동성이 신호의 불확실성을 높입니다.', 0.20, 2)
+    ('005930', '2025-12-30'::date, 'stable', 'volume_ratio_20d', '최근 거래량이 평소보다 증가했습니다.', 0.31, 1),
+    ('005930', '2025-12-30'::date, 'stable', 'volatility_20d', '최근 변동성은 신호를 일부 낮췄습니다.', -0.12, 2),
+    ('005380', '2025-12-30'::date, 'stable', 'momentum_20d', '최근 20일 가격 흐름이 견조합니다.', 0.43, 1),
+    ('005380', '2025-12-30'::date, 'stable', 'volume_ratio_20d', '거래량 흐름이 신호를 뒷받침합니다.', 0.22, 2),
+    ('068270', '2025-12-30'::date, 'stable', 'momentum_20d', '가격 흐름의 방향성이 뚜렷하지 않습니다.', 0.08, 1),
+    ('068270', '2025-12-30'::date, 'stable', 'volatility_20d', '최근 변동성이 평소보다 높습니다.', 0.38, 2),
+    ('035720', '2025-12-30'::date, 'stable', 'momentum_20d', '최근 가격 흐름이 약세입니다.', -0.36, 1),
+    ('035720', '2025-12-30'::date, 'stable', 'volatility_20d', '변동성이 신호의 불확실성을 높입니다.', 0.20, 2)
 ) as seed (
   stock_code,
   prediction_date,
@@ -472,6 +472,8 @@ on conflict (prediction_id, feature) do update set
   contribution = excluded.contribution,
   display_order = excluded.display_order;
 
+-- 시장 상태: 실데이터 스냅샷과 같은 값(frontend/scripts/build_demo_snapshot.py, KRX 지수·FDR 캐시, 기준일 2025-12-30).
+-- 앱은 이 테이블 대신 스냅샷을 직접 읽는다(frontend/lib/queries.ts loadMarketStatus).
 insert into public.market_status (
   status_date,
   condition,
@@ -480,15 +482,14 @@ insert into public.market_status (
   index_quotes
 )
 values (
-  '2026-07-07',
+  '2025-12-30',
   'caution',
-  61,
-  48,
+  65,
+  77,
   '[
-    {"symbol":"KOSPI","label":"KOSPI","value":2790.30,"change":31.00,"change_percent":1.12},
-    {"symbol":"KOSDAQ","label":"KOSDAQ","value":829.43,"change":4.55,"change_percent":0.55},
-    {"symbol":"KOSPI200","label":"KOSPI 200","value":371.90,"change":4.28,"change_percent":1.16},
-    {"symbol":"USD/KRW","label":"원/달러","value":1220.00,"change":-2.00,"change_percent":-0.16}
+    {"symbol":"KOSPI","label":"KOSPI","value":4214.17,"change":-6.39,"change_percent":-0.15},
+    {"symbol":"KOSDAQ","label":"KOSDAQ","value":925.47,"change":-7.12,"change_percent":-0.76},
+    {"symbol":"KOSPI200","label":"KOSPI 200","value":605.98,"change":0.29,"change_percent":0.05}
   ]'::jsonb
 )
 on conflict (status_date) do update set

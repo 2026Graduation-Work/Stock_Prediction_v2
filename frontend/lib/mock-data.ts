@@ -3,6 +3,7 @@
 //  데이터 기준일과 예측 생성일은 하나의 날짜로 통일한다. 팀 리뷰 결정)
 
 import { summaryFromStyleAxes } from "./profiling-rules.ts";
+import { MARKET_SNAPSHOT, SNAPSHOT_AS_OF, snapshotPrice } from "./providers/demo-snapshot.ts";
 import type {
   DataProvenance,
   InvestorProfileSummary,
@@ -16,43 +17,8 @@ import type {
 // 이 파일의 수치는 모두 손으로 정한 예시다. 화면에는 "예시 데이터"로 표시된다.
 const DEMO: DataProvenance = { kind: "mock", source: "데모 데이터" };
 
-export const marketStatus: MarketStatus = {
-  date: "2025-10-02",
-  provenance: DEMO,
-  condition: "caution",
-  volatilityScore: 61,
-  volumeScore: 48,
-  indexQuotes: [
-    {
-      symbol: "KOSPI",
-      label: "KOSPI",
-      value: 3549.21,
-      change: 93.38,
-      changePercent: 2.7,
-    },
-    {
-      symbol: "KOSDAQ",
-      label: "KOSDAQ",
-      value: 854.25,
-      change: 8.91,
-      changePercent: 1.05,
-    },
-    {
-      symbol: "KOSPI200",
-      label: "KOSPI 200",
-      value: 493.41,
-      change: 14.04,
-      changePercent: 2.93,
-    },
-    {
-      symbol: "USD/KRW",
-      label: "원/달러",
-      value: 1401.82,
-      change: -1.33,
-      changePercent: -0.09,
-    },
-  ],
-};
+// 시장 브리핑은 실데이터 스냅샷(KRX 지수, FinanceDataReader 캐시). 산식: scripts/build_demo_snapshot.py
+export const marketStatus: MarketStatus = MARKET_SNAPSHOT;
 
 const samsungElectronics: RecommendedStock = {
   code: "005930",
@@ -200,32 +166,14 @@ export const portfolioHoldings: PortfolioHolding[] = [
   },
 ];
 
-// 결정론적 60거래일 종가 시리즈(같은 입력 → 같은 출력).
-// 웨이포인트 선형 보간에 사인 파동을 얹고, 양 끝은 웨이포인트 값과 정확히 일치시킨다.
-function priceSeries(waypoints: number[], wiggle: number, tick: number, days = 60): number[] {
-  const spans = waypoints.length - 1;
-  return Array.from({ length: days }, (_, i) => {
-    const t = (i / (days - 1)) * spans;
-    const k = Math.min(Math.floor(t), spans - 1);
-    const base = waypoints[k] + (waypoints[k + 1] - waypoints[k]) * (t - k);
-    const wave = Math.sin(i * 1.9 + waypoints[0]) + 0.6 * Math.sin(i * 0.7);
-    const damp = Math.sin((Math.PI * i) / (days - 1));
-    return Math.round((base + wave * wiggle * damp) / tick) * tick;
-  });
-}
+// 시세는 실데이터 스냅샷(네이버 금융 수정주가, 기준일 2025-12-30). 예측 수치(신호·밴드·분포·근거)는 예시다.
+const realPrice = (code: string) => ({ asOf: SNAPSHOT_AS_OF, ...snapshotPrice(code) });
 
 // 종목 상세. 진입 동선: 대시보드 카드 "근거 보기" → /stocks/[code]
 export const stockDetails: Record<string, StockDetail> = {
   [celltrion.code]: {
     ...celltrion,
-    currentPrice: 190_800,
-    changePercent: 1.2,
-    asOf: "2025-10-02",
-    priceHistory: priceSeries(
-      [176_200, 183_400, 178_900, 187_300, 183_900, 192_300, 187_400, 190_800],
-      1_400,
-      100,
-    ),
+    ...realPrice(celltrion.code),
     realizedReturns: [
       { from: -6, to: -4, count: 2 },
       { from: -4, to: -2, count: 3 },
@@ -262,14 +210,7 @@ export const stockDetails: Record<string, StockDetail> = {
   },
   [samsungElectronics.code]: {
     ...samsungElectronics,
-    currentPrice: 92_300,
-    changePercent: 0.8,
-    asOf: "2025-10-02",
-    priceHistory: priceSeries(
-      [84_300, 87_900, 86_200, 89_800, 88_400, 91_200, 90_100, 92_300],
-      600,
-      100,
-    ),
+    ...realPrice(samsungElectronics.code),
     realizedReturns: [
       { from: -4, to: -3, count: 3 },
       { from: -3, to: -2, count: 6 },
@@ -308,14 +249,7 @@ export const stockDetails: Record<string, StockDetail> = {
   },
   [hyundaiMotor.code]: {
     ...hyundaiMotor,
-    currentPrice: 265_000,
-    changePercent: 2.1,
-    asOf: "2025-10-02",
-    priceHistory: priceSeries(
-      [238_000, 246_000, 242_500, 252_000, 249_000, 258_000, 254_500, 265_000],
-      2_200,
-      500,
-    ),
+    ...realPrice(hyundaiMotor.code),
     realizedReturns: [
       { from: -3, to: -2, count: 1 },
       { from: -2, to: -1, count: 2 },
@@ -355,6 +289,9 @@ export const stockDetails: Record<string, StockDetail> = {
       "현대차의 모델 신호는 강한 긍정으로, 오늘 분석한 종목 중 상위 5%예요. 과거 비슷한 신호 52건의 2주 뒤 수익률은 +0.6%에서 +7.2% 사이로 아래쪽 끝도 0% 위였고, 실제로 오른 경우는 66%였어요. 다만 비슷한 사례가 52건으로 많지 않아, 사례가 더 많은 신호보다 범위를 덜 믿을 만해요. 위험도는 낮음이에요.",
   },
 };
+
+// 카카오는 예측 근거·분포 예시가 없다. 시세만 실데이터로 두고 나머지는 "없음"으로 보인다.
+stockDetails[kakao.code] = { ...kakao, ...realPrice(kakao.code), reasons: [] };
 
 // 데모 모드에서 보유 종목을 고를 때 쓰는 종목 목록.
 // 로그인 사용자는 Supabase stocks 테이블을 직접 검색한다.
