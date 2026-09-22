@@ -1,5 +1,5 @@
 // 편향 넛지 11종과 화면 안내 1종. 순수 함수, 외부 의존성 없음.
-// 문구는 기획 확정본이다. 한 글자도 바꾸지 않는다.
+// 문구는 2026-09-22 쉬운 말·해요체로 다듬었다(팀 승인). 판정 조건·근거 축은 그대로다.
 // 형식 규칙: 사실 + 사실 병렬. 인과 주장·추종 유도·매수/매도 권유 금지.
 
 import { SENTIMENT_SHIFT_P90 } from "../providers/sentiment-fixture.ts";
@@ -63,7 +63,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "information_reliance",
     side: 1,
     market: (m) => m.retailNetBuyStreakDays >= STREAK_DAYS,
-    text: "개인 투자자 순매수가 5일 연속입니다. 당신은 시장 분위기와 타인의 판단을 근거로 삼는 편이라고 답했습니다. 지금 판단이 그 흐름과 같은지 확인해 보세요.",
+    text: "개인 투자자가 5일 연속 더 많이 샀어요. 시장 분위기와 다른 사람의 판단을 근거로 삼는 편이라고 답하셨어요. 지금 판단이 그 흐름을 따라가는 것인지 확인해 보세요.",
   },
   {
     id: "N02",
@@ -71,7 +71,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "information_reliance",
     side: 1,
     market: (m) => m.retailNetLatest > 0 && m.foreignNetLatest < 0,
-    text: "개인은 순매수, 외국인은 순매도 중입니다. 두 집단의 판단이 갈리고 있습니다. 어느 쪽 근거를 보고 계신지 짚어 보세요.",
+    text: "개인은 사고 외국인은 파는 중이에요. 두 집단의 판단이 갈리고 있어요. 어느 쪽 근거를 보고 계신지 짚어 보세요.",
   },
   {
     id: "N03",
@@ -79,7 +79,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "information_reliance",
     side: 1,
     market: (m) => m.institutionNetBuyDaysOf5 >= INSTITUTION_BUY_DAYS,
-    text: "기관 순매수가 최근 5일 중 4일입니다. 다만 기관의 매매 이유는 공개되지 않습니다. 당신이 보고 있는 근거는 무엇인지 짚어 보세요.",
+    text: "최근 5일 중 4일은 기관이 더 많이 샀어요. 다만 기관이 왜 샀는지는 공개되지 않아요. 내가 보고 있는 근거는 무엇인지 짚어 보세요.",
   },
   {
     id: "N04",
@@ -87,7 +87,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "drawdown_reaction",
     side: 1,
     market: (m) => m.volatilityPercentile >= VOLATILITY_TOP_10,
-    text: "이 종목의 최근 변동성은 시장 상위 10%입니다. 당신은 하락 구간에서 계획보다 일찍 정리하는 편이라고 답했습니다.",
+    text: "이 종목의 최근 가격 흔들림은 시장에서 상위 10% 안이에요. 가격이 떨어질 때 계획보다 일찍 파는 편이라고 답하셨어요.",
   },
   {
     id: "N05",
@@ -95,7 +95,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "drawdown_reaction",
     side: 1,
     market: (m) => m.drawdownFrom3mHigh <= DRAWDOWN_LIMIT,
-    text: "현재가가 3개월 고점보다 크게 아래에 있습니다. 진입할 때 보았던 근거가 지금도 유효한지 확인해 보세요.",
+    text: "지금 가격이 최근 3개월 최고가보다 크게 낮아요. 처음 살 때 봤던 근거가 지금도 맞는지 확인해 보세요.",
   },
   {
     id: "N06",
@@ -103,7 +103,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "urgency",
     side: 1,
     market: (m) => m.return3d >= RALLY_3D,
-    text: "최근 3거래일 동안 큰 폭으로 올랐습니다. 당신은 결정을 빠르게 내리는 편이라고 답했습니다.",
+    text: "최근 3거래일 동안 크게 올랐어요. 결정을 빨리 내리는 편이라고 답하셨어요.",
   },
   {
     id: "N07",
@@ -111,7 +111,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "urgency",
     side: 1,
     market: (m) => Math.abs(m.sentimentChange) >= SENTIMENT_SHIFT,
-    text: "오늘 이 종목 관련 뉴스 감성이 어제와 크게 달라졌습니다. 기사 여러 건이 같은 사안을 다루고 있을 수 있습니다.",
+    text: "오늘 이 종목의 뉴스 분위기가 어제와 크게 달라졌어요. 여러 기사가 같은 일을 다루고 있을 수 있어요.",
   },
   {
     id: "N08",
@@ -119,7 +119,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "concentration",
     side: 1,
     market: (m) => m.isTopHolding,
-    text: "보유 종목 중 이 종목의 비중이 가장 큽니다. 당신은 소수 종목에 집중하는 편이라고 답했습니다.",
+    text: "가진 종목 중 이 종목의 비중이 가장 커요. 몇 종목에 모아 담는 편이라고 답하셨어요.",
   },
   {
     id: "N09",
@@ -127,7 +127,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "turnover",
     side: 1,
     market: always,
-    text: "당신은 보유 기간이 짧은 편이라고 답했습니다. 이 종목에 대해 정해 둔 보유 기간이 있다면 지금 다시 확인해 보세요.",
+    text: "보유 기간이 짧은 편이라고 답하셨어요. 이 종목을 얼마나 들고 갈지 정해 두셨다면 지금 다시 확인해 보세요.",
   },
   {
     id: "N10",
@@ -136,7 +136,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "rule_adherence",
     side: 1,
     market: always,
-    text: "당신은 사전에 정한 매매 기준을 지키기 어려운 편이라고 답했습니다. 손절선과 목표가를 정해 두셨다면 지금 확인해 보세요.",
+    text: "미리 정한 매매 기준을 지키기 어려운 편이라고 답하셨어요. 다시 볼 가격(손절선·목표가)을 정해 두셨다면 지금 확인해 보세요.",
   },
   {
     id: "N11",
@@ -144,7 +144,7 @@ export const NUDGES: readonly NudgeRule[] = [
     axis: "loss_tolerance",
     side: -1,
     market: (m) => m.riskGrade <= 2,
-    text: "이 종목의 위험 등급은 상위권입니다. 당신은 원금 손실 가능성에 민감한 편이라고 답했습니다.",
+    text: "이 종목의 위험도는 높은 편이에요. 원금이 줄어드는 데 민감한 편이라고 답하셨어요.",
   },
 ];
 

@@ -12,11 +12,12 @@
 
 | 항목 | 상태 |
 |---|---|
-| 마이그레이션 0001~0003 · seed.sql | ✅ 적용 완료 (Supabase 'Stock Prediction', ref `oaqksneegnpteextxgux`, 서울) |
+| 마이그레이션 0001~0004 · seed.sql | ✅ 적용 완료(0004 평균 매입가 nullable, 2026-09-22) (Supabase 'Stock Prediction', ref `oaqksneegnpteextxgux`, 서울) |
 | RLS | ✅ anon 키로 확인: 종목·시장 상태는 읽힘, 개인 테이블은 42501로 거부 |
 | Vercel 환경변수(4번) | ✅ Production·Preview 등록 + 프로덕션 재배포 완료. 로그인 화면에 이메일 입력칸이 보임 |
-| Auth URL 설정(3-3) | ⬜ **사람이 할 일** — CLI 토큰 권한으로는 Management API가 403. 아래 값을 콘솔에 입력 |
-| Confirm email(3-2) | ⬜ **사람이 할 일** — 2026-09-22 API로 읽은 값: 켜져 있음(`mailer_autoconfirm=false`) |
+| Auth URL 설정(3-3) | ✅ 2026-09-22 콘솔에서 입력(Site URL + Redirect 3줄), API로 확인 |
+| Confirm email(3-2) | ✅ 2026-09-22 꺼짐(`mailer_autoconfirm=true`) |
+| 프로덕션 확인 | ✅ 2026-09-22 Playwright: 가입 → 16문항 → 저장 → 보유 종목 → 대시보드 → 로그아웃 → 재로그인(설문 없이 대시보드, 결과 유지) → 데모 버튼. 테스트 계정은 삭제 |
 
 > ⚠️ **교수님 검토 기간(9/28~10/2) 전에 접속 확인.** Supabase 무료 플랜은 7일간 요청이 없으면 프로젝트를
 > 일시정지합니다. 9/27 전후로 공개 주소에서 로그인을 한 번 해 보고, 멈춰 있으면 Supabase 대시보드에서
