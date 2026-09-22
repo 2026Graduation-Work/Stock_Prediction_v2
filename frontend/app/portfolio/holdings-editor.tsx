@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "../components/disclaimer-footer";
 import SiteHeader from "../components/site-header";
 import { useOnboarding } from "../components/onboarding-provider";
-import { getSupabaseClient } from "@/lib/supabase";
+import { useStockOptions } from "./use-stock-options";
 import {
   getSavedHoldingsSnapshot,
   getServerHoldingsSnapshot,
@@ -27,6 +27,11 @@ interface HoldingsEditorProps {
 type Draft = { code: string; name: string; quantity: string; avgBuyPrice: string };
 
 const EMPTY_DRAFT: Draft = { code: "", name: "", quantity: "", avgBuyPrice: "" };
+
+// 비워 두면 null(모름). 평균 매입가만 선택 입력이다.
+function toOptionalInt(value: string): number | null {
+  return value.trim() === "" ? null : toInt(value);
+}
 
 function toInt(value: string): number {
   const parsed = Number.parseInt(value.replaceAll(",", "").trim(), 10);
@@ -68,7 +73,6 @@ export default function HoldingsEditor({
 
   const [rows, setRows] = useState<SavedHolding[]>(initial);
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
-  const [options, setOptions] = useState(catalog);
   const [status, setStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [error, setError] = useState(""); // 종목 추가 시트 안 오류
   const [saveError, setSaveError] = useState(""); // 저장 오류
@@ -79,44 +83,17 @@ export default function HoldingsEditor({
     sheetRef.current?.showModal();
   }
 
-  // 로그인 사용자는 종목 마스터가 크므로 입력한 만큼만 검색한다.
-  useEffect(() => {
-    if (!supabaseMode) return;
-    const keyword = draft.name.trim();
-    if (keyword.length < 1) return;
-    const client = getSupabaseClient();
-    if (!client) return;
-
-    let active = true;
-    const timer = setTimeout(() => {
-      void client
-        .from("stocks")
-        .select("code,name")
-        .or(`name.ilike.%${keyword}%,code.ilike.${keyword}%`)
-        .limit(20)
-        .then(({ data }) => {
-          if (active && data) setOptions(data as { code: string; name: string }[]);
-        });
-    }, 250);
-
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [draft.name, supabaseMode]);
+  const { options, match } = useStockOptions(draft.name, supabaseMode, catalog);
 
   function addRow() {
     setError("");
-    const match = options.find(
-      (item) => item.name === draft.name.trim() || item.code === draft.name.trim(),
-    );
     const code = match?.code ?? draft.code.trim();
     const name = match?.name ?? draft.name.trim();
     const candidate: SavedHolding = {
       code,
       name,
       quantity: toInt(draft.quantity),
-      avgBuyPrice: toInt(draft.avgBuyPrice),
+      avgBuyPrice: toOptionalInt(draft.avgBuyPrice),
     };
 
     if (!match) {
@@ -128,7 +105,7 @@ export default function HoldingsEditor({
       return;
     }
     if (!isValidHolding(candidate)) {
-      setError("수량은 1 이상, 평균 매입가는 0 이상의 정수로 입력해 주세요.");
+      setError("수량은 1 이상의 정수로, 평균 매입가는 비워 두거나 0 이상의 정수로 입력해 주세요.");
       return;
     }
 
@@ -162,7 +139,8 @@ export default function HoldingsEditor({
     }
   }
 
-  const total = rows.reduce((sum, row) => sum + row.quantity * row.avgBuyPrice, 0);
+  // 합계는 평균 매입가를 입력한 종목만 더한다(모르는 종목은 현재가 기준이라 섞지 않는다)
+  const total = rows.reduce((sum, row) => sum + row.quantity * (row.avgBuyPrice ?? 0), 0);
 
   const field =
     "h-11 w-full rounded-md bg-field px-3.5 text-sm tabular-nums text-ink outline-none focus:bg-white focus:ring-2 focus:ring-brand/30";
@@ -218,8 +196,9 @@ export default function HoldingsEditor({
                     <input
                       inputMode="numeric"
                       aria-label={`${row.name} 평균 매입가`}
-                      value={String(row.avgBuyPrice)}
-                      onChange={(event) => updateRow(row.code, { avgBuyPrice: toInt(event.target.value) })}
+                      value={row.avgBuyPrice === null ? "" : String(row.avgBuyPrice)}
+                      placeholder="모름 · 현재가 기준"
+                      onChange={(event) => updateRow(row.code, { avgBuyPrice: toOptionalInt(event.target.value) })}
                       className="h-9 w-full rounded-sm bg-field px-3 text-sm tabular-nums outline-none focus:bg-white focus:ring-2 focus:ring-brand/30"
                     />
                   </label>
@@ -304,12 +283,12 @@ export default function HoldingsEditor({
               />
             </label>
             <label className="flex flex-col gap-1.5">
-              <span className="text-xs text-muted">평균 매입가(원)</span>
+              <span className="text-xs text-muted">평균 매입가(원, 선택)</span>
               <input
                 inputMode="numeric"
                 value={draft.avgBuyPrice}
                 onChange={(event) => setDraft({ ...draft, avgBuyPrice: event.target.value })}
-                placeholder="71,200"
+                placeholder="모르면 비워 두세요"
                 className={field}
               />
             </label>

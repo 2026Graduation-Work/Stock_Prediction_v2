@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CLOSING_PRICE } from "./closing-prices.ts";
+import { costBasis } from "./holdings-rules.ts";
 import {
   avoidanceNotice,
   holdingAlerts,
@@ -389,7 +391,7 @@ async function queryStockDetail(
     holdings: holdingRows.map(({ stock_code, quantity, avg_buy_price }) => ({
       code: stock_code,
       quantity,
-      avgBuyPrice: avg_buy_price,
+      avgBuyPrice: costBasis(avg_buy_price, CLOSING_PRICE[stock_code]).price,
     })),
     source: "supabase",
   };

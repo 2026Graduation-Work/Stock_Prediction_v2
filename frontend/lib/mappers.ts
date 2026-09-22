@@ -1,4 +1,6 @@
 import { AVOIDED_ASSET_LABELS, summaryFromStyleAxes } from "./profiling-rules";
+import { CLOSING_PRICE } from "./closing-prices.ts";
+import { costBasis } from "./holdings-rules.ts";
 import type {
   DataProvenance,
   HorizonAgreement,
@@ -79,7 +81,7 @@ export interface PredictionFeatureRow {
 export interface PortfolioHoldingRow {
   stock_code: string;
   quantity: number;
-  avg_buy_price: number;
+  avg_buy_price: number | null; // 0004부터 비워 둘 수 있음
   display_order: number;
 }
 
@@ -243,7 +245,7 @@ export function mapPortfolioHolding(
         ? prediction.signal_light
         : "neutral",
     quantity: holding.quantity,
-    avgBuyPrice: holding.avg_buy_price,
+    ...weightPrice(holding),
     provenance: SUPABASE_DEMO,
   };
 }
@@ -336,4 +338,10 @@ function featureSource(feature: string): {
 
 function includes<T extends string>(values: readonly T[], value: unknown): value is T {
   return typeof value === "string" && values.includes(value as T);
+}
+
+// 평균 매입가가 비어 있으면 기준일 종가로 비중을 센다(화면에 "현재가 기준"으로 표시).
+function weightPrice(holding: PortfolioHoldingRow): Pick<PortfolioHolding, "avgBuyPrice" | "priceBasis"> {
+  const { price, basis } = costBasis(holding.avg_buy_price, CLOSING_PRICE[holding.stock_code]);
+  return { avgBuyPrice: price, priceBasis: basis };
 }

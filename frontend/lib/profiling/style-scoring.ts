@@ -13,6 +13,9 @@ import type { StyleAxes, StyleAxis, StyleAxisId } from "../types.ts";
 import bank from "./style-questions.json" with { type: "json" };
 
 export type AssessmentMode = StyleAxes["assessment_mode"];
+// short(16문항)는 온보딩용 문항 선택일 뿐 채점 규칙은 같다. 스키마 v1.x의 assessment_mode enum이
+// quick·detailed로 고정(freeze)돼 있어, 저장할 때는 quick으로 기록한다. 축별 question_count(2)로 구분된다.
+export type SurveyMode = "short" | AssessmentMode;
 
 interface LikertQuestion {
   id: string;
@@ -21,6 +24,7 @@ interface LikertQuestion {
   direction: 1 | -1;
   weight: number;
   quick: boolean;
+  short?: boolean;
   text: string;
 }
 
@@ -61,8 +65,10 @@ const QUESTIONS = bank.questions as StyleQuestion[];
 const TURNOVER_DAY_RULES: readonly { max_ratio: number; days: number }[] =
   bank.turnover_day_rules;
 
-export function questionsForMode(mode: AssessmentMode): StyleQuestion[] {
-  return mode === "detailed" ? QUESTIONS : QUESTIONS.filter(({ quick }) => quick);
+export function questionsForMode(mode: SurveyMode): StyleQuestion[] {
+  if (mode === "detailed") return QUESTIONS;
+  if (mode === "short") return QUESTIONS.filter((question) => question.type === "likert" && question.short);
+  return QUESTIONS.filter(({ quick }) => quick);
 }
 
 function axesOf(question: StyleQuestion): StyleAxisId[] {
@@ -87,8 +93,8 @@ function orientedScores(
   return Object.fromEntries(axesOf(question).map((axis) => [axis, option.scores[axis] ?? 0]));
 }
 
-export function scoreStyleAxes(answers: StyleAnswers, mode: AssessmentMode): StyleAxes {
-  return scoreWithQuestions(answers, mode, questionsForMode(mode));
+export function scoreStyleAxes(answers: StyleAnswers, mode: SurveyMode): StyleAxes {
+  return scoreWithQuestions(answers, mode === "detailed" ? "detailed" : "quick", questionsForMode(mode));
 }
 
 // 문항 목록을 직접 받는 채점기. 시나리오형 문항이 은행에 들어오기 전에 테스트가 쓴다.
@@ -152,7 +158,7 @@ function axisResult(
 // 프리셋(축 방향 강도 -2~+2)을 리커트 응답으로 조립한다. 역채점 문항에는 반대 부호가 들어간다.
 export function answersFromPattern(
   pattern: Partial<Record<StyleAxisId, number>>,
-  mode: AssessmentMode,
+  mode: SurveyMode,
 ): StyleAnswers {
   const answers: StyleAnswers = {};
   for (const question of questionsForMode(mode)) {
