@@ -4,7 +4,6 @@
 
 import type {
   ContributionSignalInput,
-  FinancialSnapshot,
   SentimentSeries,
 } from "./index";
 import { SUPPLY_SNAPSHOT } from "./demo-snapshot.ts";
@@ -145,31 +144,6 @@ export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
 };
 
 // 실제 공시값이 아니다. DART 재무 연동 시 교체한다.
-export const FINANCIAL_FIXTURE: Record<string, FinancialSnapshot> = {
-  "005930": {
-    period: "최근 4개 분기 합산 기준",
-    metrics: [
-      { key: "per", label: "PER", value: 15.2, unit: "배", description: "주가 ÷ 주당순이익. 이익 대비 가격 수준" },
-      { key: "pbr", label: "PBR", value: 1.3, unit: "배", description: "주가 ÷ 주당순자산. 자산 대비 가격 수준" },
-      { key: "roe", label: "ROE", value: 8.4, unit: "%", description: "순이익 ÷ 자기자본. 자본으로 이익을 내는 효율" },
-      { key: "operating_margin", label: "영업이익률", value: 10.5, unit: "%", description: "영업이익 ÷ 매출" },
-      { key: "debt_ratio", label: "부채비율", value: 26.7, unit: "%", description: "부채 ÷ 자기자본" },
-      { key: "revenue_growth", label: "매출 증가율(전년 대비)", value: 7.1, unit: "%", description: "전년 같은 기간 대비 매출 변화" },
-    ],
-  },
-  "005380": {
-    period: "최근 4개 분기 합산 기준",
-    metrics: [
-      { key: "per", label: "PER", value: 5.1, unit: "배", description: "주가 ÷ 주당순이익. 이익 대비 가격 수준" },
-      { key: "pbr", label: "PBR", value: 0.6, unit: "배", description: "주가 ÷ 주당순자산. 자산 대비 가격 수준" },
-      { key: "roe", label: "ROE", value: 12.3, unit: "%", description: "순이익 ÷ 자기자본. 자본으로 이익을 내는 효율" },
-      { key: "operating_margin", label: "영업이익률", value: 8.2, unit: "%", description: "영업이익 ÷ 매출" },
-      { key: "debt_ratio", label: "부채비율", value: 180.4, unit: "%", description: "부채 ÷ 자기자본. 금융 자회사 부채 포함" },
-      { key: "revenue_growth", label: "매출 증가율(전년 대비)", value: 6.8, unit: "%", description: "전년 같은 기간 대비 매출 변화" },
-    ],
-  },
-};
-
 // 시장 전체 종목 중 최근 60거래일 변동성 백분위(1 = 가장 큼). 시장 분포 데이터가 없어 정한 값이다.
 // 대형주는 소형주를 포함한 시장 전체 기준으로 중간 부근이다. 넛지 발화와 무관하게 정했다.
 export const VOLATILITY_PERCENTILE_FIXTURE: Record<string, number> = {

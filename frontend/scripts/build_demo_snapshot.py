@@ -22,18 +22,27 @@
   /api/stock/{code}/trend). 기준일까지 최근 20영업일, 개인·외국인·기관 순매수 **수량(주)**.
   기타법인과 금액(원)은 이 경로에 없어 비워 둔다. pykrx(KRX)는 로그인이 필요해 쓰지 않았다.
 
+회사 체력(재무 6지표): DART 사업보고서(연결 우선). backend/analysis/text/value_pipeline의
+  select_fiscal_year(시점 규칙) · _fetch_dart_by_fiscal_year(수집) · compute_metrics(지표) ·
+  validation_agent(항등식·상식 범위·룩어헤드 검증)를 그대로 쓴다.
+  - 기준일 2025-12-30 → FY2024 사업보고서. 공시일이 기준일 이후이거나 기준일 이후 정정공시가 있으면 쓰지 않는다.
+  - 발행주식수는 FY2024 사업보고서 기준(SHARES_ASOF_YEAR=2024) — FY2025 보고서는 기준일 뒤에 공시된다.
+  - PER·PBR의 주가는 기준일 종가(수정주가). 검증에 걸린 지표는 null(화면 "확인 불가").
+  - 루트 .env의 DART_API_KEY가 필요하다. 키 값은 출력하지 않는다.
+
 가격 흐름으로 본 분위기: backend psychology_market_v1의 요약축 psych_greed_fear_axis
   = (psych_fear_greed + psych_disposition) / 2, 범위 -1~+1. 기준일까지의 종가·거래량만 쓴다.
   구간 말: ≥0.5 많이 들뜸, ≥0.2 조금 들뜸, >-0.2 차분함, >-0.5 조금 움츠러듦, 그 외 많이 움츠러듦.
 
 실행 (저장소 루트):
-    pip install finance-datareader pandas numpy requests
+    pip install finance-datareader pandas numpy requests opendartreader pydantic python-dotenv
     python frontend/scripts/build_demo_snapshot.py
 """
 
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -45,6 +54,18 @@ import requests
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "backend/analysis/chart/experiments/features"))
 from psychology.market_psychology import build_psychology_features  # noqa: E402
+
+# 재무 수집·지표·검증은 text 블록 코드를 그대로 쓴다. 주식수 기준연도는 import 전에 고정해야 한다.
+os.environ["SHARES_ASOF_YEAR"] = "2024"
+sys.path.insert(0, str(ROOT / "backend/analysis/text"))
+import opendartreader  # noqa: E402
+
+# ponytail: opendartreader 0.3.x는 모듈 이름이 소문자라 text 블록의 `import OpenDartReader`가 실패한다.
+# 블록 코드가 새 이름을 쓰게 되면 이 두 줄을 지운다.
+sys.modules.setdefault("OpenDartReader", opendartreader.OpenDartReader)
+from value_pipeline import collectors, metrics  # noqa: E402
+from value_pipeline.agents import validation_agent  # noqa: E402
+from value_pipeline.config import SETTINGS  # noqa: E402
 
 AS_OF = "2025-12-30"
 STOCKS = {"005930": "삼성전자", "005380": "현대차", "035720": "카카오", "068270": "셀트리온"}
@@ -191,6 +212,101 @@ def supply_snapshot() -> dict:
     return {"source": SUPPLY_SOURCE, "unit": "주", "stocks": result}
 
 
+FINANCIAL_METRICS = {  # key: (단위, 화면 배율)
+    "per": ("배", 1),
+    "pbr": ("배", 1),
+    "roe": ("%", 100),
+    "operating_margin": ("%", 100),
+    "debt_ratio": ("%", 100),
+    "revenue_growth": ("%", 100),
+}
+# 이 오류가 나면 재무 숫자 전체를 믿을 수 없다(매핑·단위·시점 오류)
+FATAL_CHECKS = ("회계 항등식", "시가총액", "룩어헤드", "유동자산", "유동부채", "이익잉여금")
+
+
+def _won(value: float) -> str:
+    return f"{value / 1e12:,.1f}조원" if abs(value) >= 1e12 else f"{value / 1e8:,.0f}억원"
+
+
+def _basis(key: str, f: dict, year: int) -> str:
+    price, shares = f["price"], f.get("shares_outstanding")
+    ni, eq = f.get("net_income"), f.get("total_equity")
+    if key == "per":
+        return f"주가 {price:,.0f}원 ÷ 주당순이익(당기순이익 {_won(ni)} ÷ 발행주식수 {shares:,.0f}주)"
+    if key == "pbr":
+        return f"주가 {price:,.0f}원 ÷ 주당순자산(자본총계 {_won(eq)} ÷ 발행주식수 {shares:,.0f}주)"
+    if key == "roe":
+        return f"당기순이익 {_won(ni)} ÷ 자본총계 {_won(eq)}"
+    if key == "operating_margin":
+        return f"영업이익 {_won(f['operating_profit'])} ÷ 매출 {_won(f['revenue'])}"
+    if key == "debt_ratio":
+        return f"부채총계 {_won(f['total_liabilities'])} ÷ 자본총계 {_won(eq)}"
+    return f"{year}년 매출 {_won(f['revenue'])} ÷ {year - 1}년 매출 {_won(f['revenue_prev'])} − 1"
+
+
+def financial_snapshot(closes: dict[str, int]) -> dict:
+    """종목별 기준일 시점 사업보고서 재무 6지표. 검증에 걸린 지표는 value=None."""
+    if not SETTINGS.has_dart:
+        raise SystemExit("루트 .env에 DART_API_KEY가 없습니다.")
+    dart = opendartreader.OpenDartReader(SETTINGS.dart_api_key)
+    year = collectors.select_fiscal_year(AS_OF)
+    after = (pd.Timestamp(AS_OF) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+    result = {}
+    for code, close in closes.items():
+        f = dict(collectors._fetch_dart_by_fiscal_year(code, year))
+        f["price"] = float(close)
+        values = metrics.compute_metrics(f)
+        validation = validation_agent(
+            {
+                "financial_result": {"metrics": values, "fiscal_year": f["fiscal_year"]},
+                "raw_financials": f,
+                "date": AS_OF,
+                "raw_news": [],
+                "news_result": {"article_count": 1},  # 뉴스 검사는 여기서 쓰지 않는다
+            }
+        )["validation"]
+        issues = list(validation["errors"])
+
+        statement = "연결"
+        frame = dart.finstate_all(code, year)
+        if frame is None or len(frame) == 0:
+            statement, frame = "별도", dart.finstate_all(code, year, fs_div="OFS")
+        receipt = str(frame["rcept_no"].iloc[0])
+        filed = f"{receipt[:4]}-{receipt[4:6]}-{receipt[6:8]}"  # 접수번호 앞 8자리 = 접수일
+        if filed > AS_OF:
+            issues.append(f"룩어헤드: 사업보고서 공시일 {filed}이 기준일 뒤")
+        later = dart.list(code, start=after, end=pd.Timestamp.today().strftime("%Y-%m-%d"), kind="A")
+        if len(later) and later["report_nm"].str.contains(f"{year}.12").any():
+            issues.append("룩어헤드: 기준일 뒤 같은 사업연도 정정공시가 있어 값이 바뀌었을 수 있음")
+
+        fatal = any(check in issue for issue in issues for check in FATAL_CHECKS)
+        rows = []
+        for key, (unit, scale) in FINANCIAL_METRICS.items():
+            value = values.get(key)
+            bad = fatal or any(issue.startswith(f"{key}=") for issue in issues)
+            rows.append(
+                {
+                    "key": key,
+                    "unit": unit,
+                    "value": None if bad or value is None else round(value * scale, 1),
+                    "basis": _basis(key, f, year),
+                    "note": "순손실이라 계산하지 않음"
+                    if key == "per" and value is None and (f.get("net_income") or 0) < 0
+                    else ("검증에 걸려 쓰지 않음" if bad else None),
+                }
+            )
+        result[code] = {
+            "fiscalYear": year,
+            "statement": statement,
+            "receiptNo": receipt,
+            "filedAt": filed,
+            "sharesBasis": f"{year}-12-31 보통주",
+            "metrics": rows,
+            "issues": issues,
+        }
+    return {"source": "DART 사업보고서", "stocks": result}
+
+
 def main() -> None:
     snapshot = {
         "$comment": "frontend/scripts/build_demo_snapshot.py가 만든 파일. 손으로 고치지 않는다.",
@@ -200,11 +316,14 @@ def main() -> None:
         "stocks": stock_snapshot(),
         "supply": supply_snapshot(),
     }
+    snapshot["financial"] = financial_snapshot({code: stock["close"] for code, stock in snapshot["stocks"].items()})
     OUT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}")
     print(json.dumps(snapshot["market"], ensure_ascii=False))
     for code, stock in snapshot["stocks"].items():
         print(code, stock["name"], stock["close"], stock["changePercent"], stock["psychology"])
+    for code, fin in snapshot["financial"]["stocks"].items():
+        print(code, fin["filedAt"], {row["key"]: row["value"] for row in fin["metrics"]}, fin["issues"])
 
 
 if __name__ == "__main__":

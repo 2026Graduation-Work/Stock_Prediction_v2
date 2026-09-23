@@ -68,14 +68,14 @@ test("수급: 데모 4종목은 실데이터 20영업일(기준일까지, 12-25 
   }
 });
 
-test("출처: 감성은 삼성전자만 실데이터, 모델 근거·재무는 픽스처", async () => {
+test("출처: 감성은 삼성전자만 실데이터, 모델 근거는 픽스처", async () => {
   const samsung = await loadStockInsights("005930");
   assert.deepEqual(samsung.provenance.sentiment, {
     kind: "real",
     source: "BigKinds · KR-FinBERT",
     asOf: samsung.sentiment?.days.at(-1)?.date,
   });
-  for (const key of ["contributions", "financial"] as const) {
+  for (const key of ["contributions"] as const) {
     assert.equal(samsung.provenance[key].kind, "fixture", key);
   }
   const hyundai = await loadStockInsights("005380");
@@ -92,6 +92,48 @@ test("가격 흐름 분위기: 데모 4종목은 실데이터 스냅샷에서 �
     assert.ok(["많이 들뜸", "조금 들뜸", "차분함", "조금 움츠러듦", "많이 움츠러듦"].includes(psychology.word));
   }
   assert.equal((await loadStockInsights("000660")).psychology, null);
+});
+
+// 기준일(2025-12-30) 시점에 이미 공시된 사업보고서만 쓰고(룩어헤드 방지), 지표는 상식 범위 안이다.
+// 범위는 backend value_pipeline agents._PLAUSIBLE과 같다(화면 단위로 환산).
+const FINANCIAL_RANGE: Record<string, [number, number]> = {
+  per: [0.5, 500],
+  pbr: [0.1, 100],
+  roe: [-100, 200],
+  operating_margin: [-100, 100],
+  debt_ratio: [0, 5000],
+  revenue_growth: [-100, 1000],
+};
+
+test("재무: 데모 4종목은 기준일 전에 공시된 FY2024 사업보고서의 6지표, 값은 상식 범위", async () => {
+  for (const code of ["005930", "005380", "035720", "068270"]) {
+    const { financial, provenance } = await loadStockInsights(code);
+    assert.ok(financial, code);
+    assert.deepEqual(provenance.financial, { kind: "real", source: "DART 사업보고서", asOf: "2025-12-30" });
+    assert.match(financial.period, /^2024 사업연도 · 연결재무제표 · 사업보고서 2025-0[1-9]-\d{2} 공시/);
+    const filedAt = financial.period.match(/사업보고서 (\d{4}-\d{2}-\d{2}) 공시/)?.[1] ?? "";
+    assert.ok(filedAt <= "2025-12-30", `${code} 공시일 ${filedAt}`);
+    assert.deepEqual(financial.metrics.map(({ key }) => key), Object.keys(FINANCIAL_RANGE));
+    for (const { key, value, note, basis } of financial.metrics) {
+      assert.ok(basis.length > 0, `${code} ${key} 계산 근거`);
+      if (value === null) {
+        assert.ok(note, `${code} ${key}: 확인 불가면 이유가 있다`);
+        continue;
+      }
+      const [low, high] = FINANCIAL_RANGE[key];
+      assert.ok(value >= low && value <= high, `${code} ${key}=${value}`);
+    }
+  }
+  // 카카오 FY2024는 순손실 → PER은 계산하지 않는다(0이나 음수로 채우지 않음)
+  const kakao = await financialProvider("035720");
+  assert.deepEqual(kakao?.metrics.find(({ key }) => key === "per"), {
+    key: "per",
+    label: "PER",
+    unit: "배",
+    value: null,
+    note: "순손실이라 계산하지 않음",
+    basis: kakao?.metrics.find(({ key }) => key === "per")?.basis,
+  });
 });
 
 function minjiWith(overrides: Record<string, number>): StyleAxes {
