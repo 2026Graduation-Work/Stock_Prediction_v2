@@ -66,10 +66,10 @@ ruff check . && pytest
 | 블록 | 하는 일 | 문서 |
 |---|---|---|
 | `backend/analysis/chart` | 가격·거래량 피처 + LightGBM 단기 예측, 백테스트 | [ONBOARDING.md](backend/analysis/chart/ONBOARDING.md) |
-| `backend/analysis/text` | 뉴스 감성(KR-FinBERT)·재무(DART) 분석. `DART_API_KEY` 필요 | [README](backend/analysis/text/README.md) |
+| `backend/analysis/text` | 뉴스 감성(과거 BigKinds · 최근 NewsAPI.ai, KR-FinBERT)·재무(DART) 분석 | [README](backend/analysis/text/README.md) |
 | `backend/profiling` | 성향 설문 정의와 출력 스키마 | [README](backend/profiling/README.md) |
 
-API 키는 각 블록의 `.env`에 두고 절대 커밋하지 마세요.
+API 키(`DART_API_KEY`, `NEWSAPI_AI_KEY` 등)는 저장소 루트의 `.env`에 둡니다. `.env`는 gitignore되어 있으니 절대 커밋하지 마세요.
 
 ## 구조
 
