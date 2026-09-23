@@ -36,7 +36,6 @@ export interface FinancialSnapshotRow {
   filedAt: string;
   sharesBasis: string;
   metrics: { key: string; unit: "배" | "%"; value: number | null; basis: string; note: string | null }[];
-  issues: string[];
 }
 export const FINANCIAL_SNAPSHOT = snapshot.financial.stocks as Record<string, FinancialSnapshotRow>;
 export const FINANCIAL_SOURCE: string = snapshot.financial.source;

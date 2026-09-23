@@ -1,25 +1,22 @@
 // 브랜드 마크: 진녹 타일 아래에서 올라와 옆을 보는 고양이(docs/brand/README.md).
-// 20px 이하는 눈을 뺀 단순형을 쓴다(작으면 눈이 뭉개진다).
+// 20px 이하는 눈을 뺀 단순형을 쓴다(작으면 눈이 뭉개진다). 늘 서비스명 글자 옆에 쓰므로 장식(aria-hidden)이다.
 export default function LogoMark({
   size = 28,
-  label,
   className,
 }: {
   size?: number;
-  label?: string; // 글자 워드마크 없이 단독으로 쓸 때만 준다
   className?: string;
 }) {
-  const a11y = label ? { role: "img", "aria-label": label } : { "aria-hidden": true };
   if (size <= 20) {
     return (
-      <svg width={size} height={size} viewBox="0 0 16 16" className={className} {...a11y}>
+      <svg width={size} height={size} viewBox="0 0 16 16" className={className} aria-hidden>
         <rect width="16" height="16" rx="3.5" fill="var(--color-logo-tile)" />
         <path fill="var(--color-logo-face)" d="M3 16v-6.5L3.5 4 6.5 6.5h3L12.5 4l.5 5.5V16Z" />
       </svg>
     );
   }
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" className={className} {...a11y}>
+    <svg width={size} height={size} viewBox="0 0 64 64" className={className} aria-hidden>
       <rect width="64" height="64" rx="15" fill="var(--color-logo-tile)" />
       <path
         fill="var(--color-logo-face)"
