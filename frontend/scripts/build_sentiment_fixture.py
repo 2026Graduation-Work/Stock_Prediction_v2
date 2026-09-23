@@ -1,4 +1,4 @@
-"""삼성전자 감성 픽스처 생성: news_corpus.csv 실데이터 → frontend/lib/providers/sentiment-fixture.ts
+"""뉴스 감성 생성: BigKinds 코퍼스 실데이터 → 삼성전자 sentiment-fixture.ts / 그 외 sentiment-<코드>.json
 
 backend value_pipeline news_agent와 같은 규칙으로 일별 감성을 낸다.
     관련성 필터(relevant_indices) → 하루 최대 max_daily_articles건
@@ -9,6 +9,14 @@ backend value_pipeline news_agent와 같은 규칙으로 일별 감성을 낸다
 N07 "뉴스 감성 급변" 임계는 전체 기간 일별 감성 변화량 |Δ|의 상위 10% 분위수(p90)다.
 화면에 싣는 20일 창은 |Δ| >= p90인 가장 늦은 날로 끝나게 고른다.
 점수를 만들지 않고 실제 코퍼스에서 그런 날짜 구간을 찾는다.
+
+종목(--ticker): 005930(기본)은 기존 sentiment-fixture.ts(대표 기사 제목 포함)를 만든다.
+그 외 종목은 frontend/lib/providers/sentiment-<코드>.json에 **날짜별 집계만** 쓴다(기사 제목·본문 없음,
+docs/decisions/bigkinds-acquisition.md). 코퍼스는 preprocess로 만든 news_corpus_<코드>.csv이고,
+삼성전자와 같은 기간(2025-10-29~12-31)만 쓴다.
+    cd backend && python -m analysis.text.preprocess --ticker 005380 --out news_corpus_005380.csv
+    python frontend/scripts/build_sentiment_fixture.py --ticker 005380 \\
+        --daily-csv backend/analysis/text/data/processed/news_sentiment_daily_005380.csv
 
 실행
     전수(기본, torch·transformers 필요). 일별 점수를 레포 CSV로도 남긴다:
@@ -42,10 +50,15 @@ from value_pipeline.agents import _text_of, relevant_indices  # noqa: E402
 from value_pipeline.config import SETTINGS  # noqa: E402
 from value_pipeline.sentiment import _lexicon_score, aggregate, score_texts  # noqa: E402
 
-CORPUS = TEXT_BLOCK / "data" / "processed" / "news_corpus.csv"
-OUT = ROOT / "frontend" / "lib" / "providers" / "sentiment-fixture.ts"
+PROCESSED = TEXT_BLOCK / "data" / "processed"
+PROVIDERS = ROOT / "frontend" / "lib" / "providers"
+COMPANIES = {"005930": "삼성전자", "005380": "현대차", "035720": "카카오", "068270": "셀트리온"}
+PERIOD = ("2025-10-29", "2025-12-31")  # 삼성전자 코퍼스 기간. 데모 기준일(2025-12-30)을 덮는다
+# parse_args()가 --ticker로 덮어쓴다
 TICKER = "005930"
-COMPANY = "삼성전자"
+COMPANY = COMPANIES[TICKER]
+CORPUS = PROCESSED / "news_corpus.csv"
+OUT = PROVIDERS / "sentiment-fixture.ts"
 BODY_CHARS = 1000  # preprocess.load_daily_news 기본값
 WINDOW_DAYS = 20
 HEADLINES = 3
@@ -55,6 +68,7 @@ DAILY_LINE = re.compile(r"^(\d{4}-\d{2}-\d{2})(?: n=|,)(\d+)(?: score=|,)([+-]?\
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--ticker", choices=sorted(COMPANIES), default="005930")
     parser.add_argument(
         "--scorer",
         choices=("finbert", "dictionary"),
@@ -79,7 +93,13 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="전수 KR-FinBERT 일별 점수(date,n,score)를 이 경로에 쓴다",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    global TICKER, COMPANY, CORPUS, OUT
+    TICKER, COMPANY = args.ticker, COMPANIES[args.ticker]
+    if TICKER != "005930":
+        CORPUS = PROCESSED / f"news_corpus_{TICKER}.csv"
+        OUT = PROVIDERS / f"sentiment-{TICKER}.json"
+    return args
 
 
 def display_path(path: Path) -> str:
@@ -94,7 +114,7 @@ def load_corpus() -> dict[str, list[dict]]:
     with CORPUS.open(encoding="utf-8-sig", newline="") as file:
         for row in csv.DictReader(file):
             title = row["title"].strip()
-            if row["ticker"] != TICKER or not title:
+            if row["ticker"] != TICKER or not title or not PERIOD[0] <= row["date"][:10] <= PERIOD[1]:
                 continue
             by_day[row["date"][:10]].append(
                 {
@@ -122,10 +142,10 @@ def parse_daily_log(path: Path) -> dict[str, tuple[int, float]]:
 
 def write_daily_csv(path: Path, days: list[dict], daily_log: Path | None) -> None:
     lines = [
-        f"# 삼성전자({TICKER}) 일별 뉴스 감성. KR-FinBERT({SETTINGS.finbert_model}) 전수 채점",
-        f"# 원천: backend/analysis/text/data/processed/news_corpus.csv, backend value_pipeline news_agent 규칙"
+        f"# {COMPANY}({TICKER}) 일별 뉴스 감성. KR-FinBERT({SETTINGS.finbert_model}) 전수 채점",
+        f"# 원천: {display_path(CORPUS)}, backend value_pipeline news_agent 규칙"
         f"(관련성 필터, 하루 최대 {SETTINGS.max_daily_articles}건, 제목 + 본문 앞 {BODY_CHARS}자)",
-        f"# 생성: python frontend/scripts/build_sentiment_fixture.py --daily-csv {display_path(path)}",
+        f"# 생성: python frontend/scripts/build_sentiment_fixture.py --ticker {TICKER} --daily-csv {display_path(path)}",
     ]
     if daily_log is not None:
         lines.append(
@@ -226,6 +246,23 @@ def main() -> None:
     if args.daily_log:
         flags += f" --daily-log {display_path(args.daily_log)}"
     previous = window[-2]
+    if TICKER != "005930":
+        # 기사 제목·본문은 커밋하지 않는다. 날짜별 평균 점수와 기사 수만 남긴다.
+        payload = {
+            "$comment": [
+                f"{COMPANY}({TICKER}) 뉴스 감성. 자동 생성 파일이므로 직접 고치지 않는다.",
+                f"생성: python frontend/scripts/build_sentiment_fixture.py --ticker {TICKER} {flags}",
+                f"원천: BigKinds {display_path(CORPUS)}, {days[0]['date']} ~ {days[-1]['date']} 중 관련 기사가 있는 {len(days)}일, 채점 {scored}건",
+                f"감성 백엔드: {backend}, 기사 텍스트 = 제목 + 본문 앞 {BODY_CHARS}자 (backend value_pipeline news_agent와 같은 규칙)",
+                f"20일 창: {window[0]['date']} ~ {last['date']}. 이 종목 |Δ| p90 = {p90}인 가장 늦은 날로 끝나게 골랐다(삼성전자와 같은 규칙)",
+            ],
+            "source": "real" if not placeholder else "placeholder",
+            "days": series["days"],
+            "headlines": [],
+        }
+        OUT.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"wrote {OUT} (days={len(days)}, scored={scored}, p90={p90}, window_end={last['date']})", file=sys.stderr)
+        return
     OUT.write_text(
         "\n".join(
             [

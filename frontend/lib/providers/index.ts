@@ -5,10 +5,10 @@ import type { NudgeMarket } from "../profiling/nudges";
 import type { DataProvenance, PortfolioHolding, RiskGrade, StockDetail } from "../types";
 import {
   CONTRIBUTION_FIXTURE,
-  HYUNDAI_SENTIMENT,
   VOLATILITY_PERCENTILE_FIXTURE,
   businessDaysEndingAt,
 } from "./fixtures.ts";
+import HYUNDAI_SENTIMENT from "./sentiment-005380.json" with { type: "json" };
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
 import {
   FINANCIAL_SNAPSHOT,
@@ -92,7 +92,7 @@ export const supplyDemandProvider: SupplyDemandProvider = async (code) =>
 
 const SENTIMENT_BY_CODE: Record<string, SentimentData> = {
   "005930": { ...SAMSUNG_SENTIMENT, source: "real" },
-  "005380": { ...HYUNDAI_SENTIMENT, source: "synthetic" },
+  "005380": { days: HYUNDAI_SENTIMENT.days, headlines: [], source: "real" }, // 기사 제목은 커밋하지 않는다
 };
 export const sentimentProvider: SentimentProvider = async (code) =>
   SENTIMENT_BY_CODE[code] ?? null;

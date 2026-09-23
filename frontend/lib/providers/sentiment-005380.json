@@ -1,0 +1,113 @@
+{
+  "$comment": [
+    "현대차(005380) 뉴스 감성. 자동 생성 파일이므로 직접 고치지 않는다.",
+    "생성: python frontend/scripts/build_sentiment_fixture.py --ticker 005380 --scorer finbert",
+    "원천: BigKinds backend/analysis/text/data/processed/news_corpus_005380.csv, 2025-10-29 ~ 2025-12-31 중 관련 기사가 있는 63일, 채점 542건",
+    "감성 백엔드: kr-finbert (snunlp/KR-FinBert-SC), 기사 텍스트 = 제목 + 본문 앞 1000자 (backend value_pipeline news_agent와 같은 규칙)",
+    "20일 창: 2025-11-13 ~ 2025-12-02. 이 종목 |Δ| p90 = 0.6615인 가장 늦은 날로 끝나게 골랐다(삼성전자와 같은 규칙)"
+  ],
+  "source": "real",
+  "days": [
+    {
+      "date": "2025-11-13",
+      "score": 0.2003,
+      "articleCount": 5
+    },
+    {
+      "date": "2025-11-14",
+      "score": -0.1139,
+      "articleCount": 8
+    },
+    {
+      "date": "2025-11-15",
+      "score": -0.0,
+      "articleCount": 1
+    },
+    {
+      "date": "2025-11-16",
+      "score": 0.4309,
+      "articleCount": 11
+    },
+    {
+      "date": "2025-11-17",
+      "score": 0.4578,
+      "articleCount": 16
+    },
+    {
+      "date": "2025-11-18",
+      "score": 0.56,
+      "articleCount": 8
+    },
+    {
+      "date": "2025-11-19",
+      "score": -0.0449,
+      "articleCount": 11
+    },
+    {
+      "date": "2025-11-20",
+      "score": 0.6178,
+      "articleCount": 8
+    },
+    {
+      "date": "2025-11-21",
+      "score": 0.7998,
+      "articleCount": 5
+    },
+    {
+      "date": "2025-11-22",
+      "score": -0.0467,
+      "articleCount": 2
+    },
+    {
+      "date": "2025-11-23",
+      "score": 0.0001,
+      "articleCount": 1
+    },
+    {
+      "date": "2025-11-24",
+      "score": 0.9676,
+      "articleCount": 4
+    },
+    {
+      "date": "2025-11-25",
+      "score": 0.4047,
+      "articleCount": 8
+    },
+    {
+      "date": "2025-11-26",
+      "score": 0.8458,
+      "articleCount": 7
+    },
+    {
+      "date": "2025-11-27",
+      "score": 0.1687,
+      "articleCount": 4
+    },
+    {
+      "date": "2025-11-28",
+      "score": 0.5803,
+      "articleCount": 15
+    },
+    {
+      "date": "2025-11-29",
+      "score": -0.0566,
+      "articleCount": 1
+    },
+    {
+      "date": "2025-11-30",
+      "score": 0.4755,
+      "articleCount": 3
+    },
+    {
+      "date": "2025-12-01",
+      "score": -0.2188,
+      "articleCount": 9
+    },
+    {
+      "date": "2025-12-02",
+      "score": 0.6057,
+      "articleCount": 11
+    }
+  ],
+  "headlines": []
+}
