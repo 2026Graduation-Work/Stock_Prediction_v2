@@ -7,9 +7,10 @@ import {
   parseSavedProfile,
 } from "./save-profile";
 import { getSupabaseClient, isSupabaseConfigured } from "./supabase";
+import { STORAGE_KEYS } from "./storage-keys";
 
-const DEMO_SESSION_STORAGE_KEY = "signallab.demo-session.v1";
-export const AUTH_UPDATED_EVENT = "signallab:auth-updated";
+const DEMO_SESSION_STORAGE_KEY = STORAGE_KEYS.demoSession;
+export const AUTH_UPDATED_EVENT = "takealook:auth-updated";
 
 export type OnboardingStatus =
   | "loading"

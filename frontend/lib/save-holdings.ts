@@ -2,6 +2,7 @@
 
 import { getSupabaseClient } from "./supabase";
 import { isValidHolding, type SavedHolding } from "./holdings-rules";
+import { STORAGE_KEYS } from "./storage-keys";
 
 export { isValidHolding, parseSavedHoldings } from "./holdings-rules";
 export type { SavedHolding } from "./holdings-rules";
@@ -9,8 +10,8 @@ export type { SavedHolding } from "./holdings-rules";
 // 보유 종목은 사용자가 직접 입력한 값이다(증권사 연동 없음).
 // 저장 경로는 설문 프로필(save-profile.ts)과 같은 모양을 따른다:
 // 데모는 이 브라우저에만, 로그인 사용자는 Supabase에.
-export const HOLDINGS_STORAGE_KEY = "signallab.holdings.v1";
-export const HOLDINGS_UPDATED_EVENT = "signallab:holdings-updated";
+export const HOLDINGS_STORAGE_KEY = STORAGE_KEYS.holdings;
+export const HOLDINGS_UPDATED_EVENT = "takealook:holdings-updated";
 
 export async function saveHoldings(
   holdings: SavedHolding[],

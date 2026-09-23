@@ -3,9 +3,10 @@
 import type { ProfilingOutput } from "./types";
 import { isStyleAxes, threeAxisSummary } from "./profiling-rules";
 import { getSupabaseClient } from "./supabase";
+import { STORAGE_KEYS } from "./storage-keys";
 
-export const PROFILE_STORAGE_KEY = "signallab.ips-profile.v1";
-export const PROFILE_UPDATED_EVENT = "signallab:profile-updated";
+export const PROFILE_STORAGE_KEY = STORAGE_KEYS.profile;
+export const PROFILE_UPDATED_EVENT = "takealook:profile-updated";
 
 // mode는 로그인한 방식이다. 데모 계정은 환경변수가 있어도 이 브라우저에만 저장한다.
 export async function saveProfile(

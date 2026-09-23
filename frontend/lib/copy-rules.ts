@@ -21,5 +21,5 @@ export const FORBIDDEN_COPY: readonly CopyRule[] = [
   { pattern: /신뢰구간/, reason: "개발 용어 → '10번 중 N번 이 범위'" },
   { pattern: /Supabase(?![A-Za-z_])/, reason: "내부 인프라 이름을 화면에 쓰지 않는다" },
   { pattern: /composite/, reason: "개발 용어 — 계산 근거 영역에서만" },
-  { pattern: /시그널랩|Signal ?Lab/, reason: "옛 서비스명 → Take a Look (docs/CHANGELOG.md)" },
+  { pattern: /시그널랩|signal ?lab(?!el)/i, reason: "옛 서비스명 → Take a Look (docs/CHANGELOG.md)" },
 ];
