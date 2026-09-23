@@ -1,29 +1,10 @@
 // FIXTURE — 실데이터 아님.
-// 삼성전자(005930)·현대차(005380) 두 종목만 둔다. 값은 시드 고정 PRNG와 손으로 정한 상수다(수급은 실데이터로 옮김).
+// 모델 근거(기여도) 예시만 남았다. 삼성전자(005930)·현대차(005380) 두 종목, 손으로 정한 상수다.
+// 수급·재무·감성은 실데이터(demo-snapshot.json, sentiment-*.json)로 옮겼다.
 // 실데이터 구현체로 교체하면 이 파일을 지운다.
 
-import type {
-  ContributionSignalInput,
-  SentimentSeries,
-} from "./index";
+import type { ContributionSignalInput } from "./index";
 import { SUPPLY_SNAPSHOT } from "./demo-snapshot.ts";
-import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
-
-const PREDICTION_AS_OF = "2025-12-30"; // 데모 기준일(실데이터 스냅샷과 같은 날)
-
-// mulberry32. 시드가 같으면 항상 같은 수열이다.
-function seeded(seed: number) {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let t = state;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-const signedUnit = (random: () => number) => random() * 2 - 1;
 
 // ponytail: 평일 휴장일은 예시 수급 구간(2025-12 20영업일)에 걸린 날만 둔다.
 // 실데이터 연동 시 날짜를 데이터에서 받으므로 이 표는 지운다.
@@ -40,22 +21,6 @@ export function businessDaysEndingAt(end: string, count: number): string[] {
   }
   return days;
 }
-
-// 현대차 감성은 합성이다. 삼성전자 실데이터와 같은 날짜 축에 PRNG 점수를 둔다.
-const hyundaiRandom = seeded(5380_2);
-export const HYUNDAI_SENTIMENT: SentimentSeries = {
-  days: SAMSUNG_SENTIMENT.days.map(({ date }) => ({
-    date,
-    score: Math.round((0.12 + signedUnit(hyundaiRandom) * 0.22) * 10000) / 10000,
-    articleCount: 18 + Math.floor(hyundaiRandom() * 30),
-  })),
-  // 합성 기사 제목은 실제 사건처럼 읽히지 않도록 합성임을 제목에 드러낸다.
-  headlines: [1, 2, 3].map((index) => ({
-    date: SAMSUNG_SENTIMENT.days.at(-1)?.date ?? PREDICTION_AS_OF,
-    title: `[합성 픽스처] 현대차 관련 기사 제목 ${index}`,
-    press: "합성 픽스처",
-  })),
-};
 
 // 원점수 weight는 부호 없는 크기. provider가 합 100으로 정규화한다.
 // direction은 그 근거가 신호를 어느 쪽으로 밀었는지(+1 오르는 쪽, -1 내리는 쪽)다.

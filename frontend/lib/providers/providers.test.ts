@@ -27,8 +27,9 @@ for (const code of CODES) {
 
     const sentiment = await sentimentProvider(code);
     assert.equal(sentiment?.days.length, 20);
-    assert.equal(sentiment?.headlines.length, 3);
-    assert.equal(sentiment?.source, code === "005930" ? "real" : "synthetic");
+    // 두 종목 모두 실제 BigKinds 기사 집계. 기사 제목은 삼성전자(기존)만 있고 현대차는 커밋하지 않는다.
+    assert.equal(sentiment?.headlines.length, code === "005930" ? 3 : 0);
+    assert.equal(sentiment?.source, "real");
     assert.ok(sentiment?.days.every(({ score }) => score >= -1 && score <= 1));
 
     const contributions = await contributionProvider(code);
@@ -68,7 +69,7 @@ test("수급: 데모 4종목은 실데이터 20영업일(기준일까지, 12-25 
   }
 });
 
-test("출처: 감성은 삼성전자만 실데이터, 모델 근거는 픽스처", async () => {
+test("출처: 감성은 삼성전자·현대차 실데이터, 모델 근거는 픽스처", async () => {
   const samsung = await loadStockInsights("005930");
   assert.deepEqual(samsung.provenance.sentiment, {
     kind: "real",
@@ -79,7 +80,8 @@ test("출처: 감성은 삼성전자만 실데이터, 모델 근거는 픽스처
     assert.equal(samsung.provenance[key].kind, "fixture", key);
   }
   const hyundai = await loadStockInsights("005380");
-  assert.equal(hyundai.provenance.sentiment.kind, "fixture");
+  assert.equal(hyundai.provenance.sentiment.kind, "real");
+  assert.equal(hyundai.provenance.sentiment.asOf, hyundai.sentiment?.days.at(-1)?.date);
 });
 
 test("가격 흐름 분위기: 데모 4종목은 실데이터 스냅샷에서 구간 말을 갖는다", async () => {
