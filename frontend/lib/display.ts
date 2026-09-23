@@ -2,12 +2,9 @@
 // 표현 제한 원칙: 확률 단정 대신 "과거 유사 신호 구간 상위 N%"류 표현만 사용한다.
 
 import type {
-  HorizonAgreement,
   HorizonDirection,
-  InvestmentHorizon,
   MarketCondition,
   RiskFlag,
-  RiskGrade,
   SignalLight,
 } from "./types";
 
@@ -52,26 +49,6 @@ export const SIGNAL_META: Record<SignalLight, SignalMeta> = {
   },
 };
 
-// 신호등 5점 표시 순서 (왼쪽 = 강한 긍정)
-export const SIGNAL_ORDER: SignalLight[] = [
-  "strong_positive",
-  "positive",
-  "neutral",
-  "negative",
-  "strong_negative",
-];
-
-export const RISK_GRADE_META: Record<
-  RiskGrade,
-  { label: string; tone: "quiet" | "warn" }
-> = {
-  5: { label: "매우 안전", tone: "quiet" },
-  4: { label: "안전", tone: "quiet" },
-  3: { label: "보통", tone: "quiet" },
-  2: { label: "위험", tone: "warn" },
-  1: { label: "매우 위험", tone: "warn" },
-};
-
 // risk_flags == profiling avoided_assets 태그 체계 (schema enum과 1:1)
 export const RISK_FLAG_LABEL: Record<RiskFlag, string> = {
   spac: "SPAC",
@@ -86,12 +63,6 @@ export const HORIZON_META: Record<HorizonDirection, { arrow: string; ink: string
   up: { arrow: "↑", ink: "var(--color-sig-p)" },
   flat: { arrow: "→", ink: "var(--color-muted)" },
   down: { arrow: "↓", ink: "var(--color-sig-ng)" },
-};
-
-export const AGREEMENT_LABEL: Record<HorizonAgreement, string> = {
-  aligned: "전 구간 방향 일치",
-  mixed: "대체로 일치",
-  conflict: "구간별 신호 엇갈림",
 };
 
 export const MARKET_CONDITION_META: Record<
@@ -113,10 +84,4 @@ export const MARKET_CONDITION_META: Record<
     ink: "var(--color-sig-ng)",
     comment: "시장 흔들림이 평소보다 크게 커진 구간이에요",
   },
-};
-
-export const INVESTMENT_HORIZON_LABEL: Record<InvestmentHorizon, string> = {
-  short: "단기",
-  mid: "중기",
-  long: "장기",
 };
