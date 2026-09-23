@@ -67,6 +67,8 @@ test("금지 표현 목록이 대표 문장을 잡는다", () => {
     "68% 신뢰구간",
     "Supabase 조회값",
     "composite +0.2",
+    "시그널랩 로그인",
+    "SignalLab",
   ]) {
     assert.ok(caught(text), text);
   }

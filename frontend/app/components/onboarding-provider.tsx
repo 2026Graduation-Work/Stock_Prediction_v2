@@ -17,6 +17,7 @@ import {
   subscribeToAuthChanges,
   type OnboardingState,
 } from "@/lib/auth";
+import { SERVICE_NAME } from "@/lib/brand";
 
 interface OnboardingContextValue {
   state: OnboardingState;
@@ -140,7 +141,7 @@ function onboardingDestination(
 function BrandMark() {
   return (
     <div className="flex items-center gap-2.5 text-ink">
-      <span className="text-xl font-semibold text-brand">시그널랩</span>
+      <span className="text-xl font-semibold text-brand">{SERVICE_NAME}</span>
     </div>
   );
 }

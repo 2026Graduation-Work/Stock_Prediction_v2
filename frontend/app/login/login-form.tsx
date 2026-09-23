@@ -9,6 +9,7 @@ import {
   startDemoSession,
 } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import { SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
 
 type AccountTab = "signin" | "signup";
 
@@ -76,9 +77,9 @@ export default function LoginForm() {
       <section className="surface flex w-full max-w-[400px] flex-col gap-6 px-6 py-9 sm:px-9">
         <div className="flex flex-col gap-2 text-center">
           <h1 className="text-3xl font-semibold">
-            <span className="text-brand">시그널랩</span> 로그인
+            <span className="text-brand">{SERVICE_NAME}</span> 로그인
           </h1>
-          <p className="m-0 text-sm text-body">종목을 판단할 근거를 쉽게 보여 드려요.</p>
+          <p className="m-0 text-sm text-body">{SERVICE_TAGLINE}</p>
         </div>
 
         {!accountAvailable ? (
