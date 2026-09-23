@@ -77,7 +77,9 @@ def load_prediction_model(model_path: str) -> lgb.Booster:
     return model
 
 
-def predict_success_probability(df: pd.DataFrame, model: lgb.Booster) -> pd.Series:
+def predict_success_probability(
+    df: pd.DataFrame, model: lgb.Booster, trading_days=None
+) -> pd.Series:
     """
     일봉 OHLCV 데이터프레임이 주어졌을 때,
     기술적 피처를 추출하고 학습 완료된 모델을 통해 '상승 성공(Class 2)' 확률을 리턴합니다.
@@ -89,6 +91,8 @@ def predict_success_probability(df: pd.DataFrame, model: lgb.Booster) -> pd.Seri
         VWAP은 거래대금/거래량으로 계산하고 수정주가 배율을 적용한 일별 값이어야 합니다.
     model : lgb.Booster
         load_prediction_model() 함수로 사전에 로드된 모델 객체
+    trading_days : set[date] | None
+        KRX 거래일. 없으면 get_krx_trading_days로 조회한다(범위를 덮는 캐시가 있으면 캐시).
 
     Returns:
     --------
@@ -98,7 +102,8 @@ def predict_success_probability(df: pd.DataFrame, model: lgb.Booster) -> pd.Seri
     df_processed = df.copy()
 
     # 1. 거래정지 및 누락일 보정
-    df_processed = normalize_trading_halts(df_processed)
+    # trading_days를 넘기면 달력을 다시 조회하지 않는다(여러 종목을 돌릴 때 한 번 받아 넘긴다)
+    df_processed = normalize_trading_halts(df_processed, trading_days)
 
     # 2. 기술적 지표 생성
     df_processed = generate_full_alpha158_features(df_processed)
