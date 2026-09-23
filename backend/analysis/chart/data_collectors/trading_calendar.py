@@ -171,8 +171,10 @@ def get_krx_trading_days(start_date: str, end_date: str) -> set[date]:
 def reindex_to_krx_trading_days(
     df: pd.DataFrame,
     trading_days: Collection[date | pd.Timestamp | str] | None = None,
+    start_date: date | pd.Timestamp | str | None = None,
+    end_date: date | pd.Timestamp | str | None = None,
 ) -> pd.DataFrame:
-    """종목 데이터를 실제 KRX 개장일로만 재구성합니다."""
+    """종목 데이터를 명시한 상장 구간 안의 실제 KRX 개장일로 재구성합니다."""
     if df.empty:
         return df.copy()
 
@@ -182,8 +184,12 @@ def reindex_to_krx_trading_days(
     indexed.index = pd.to_datetime(indexed.index).normalize()
     indexed = indexed.sort_index()
 
-    start = indexed.index.min()
-    end = indexed.index.max()
+    start = pd.Timestamp(start_date).normalize() if start_date is not None else indexed.index.min()
+    end = pd.Timestamp(end_date).normalize() if end_date is not None else indexed.index.max()
+    if start > end:
+        raise ValueError("상장 구간 시작일은 종료일보다 늦을 수 없습니다.")
+    if (indexed.index < start).any() or (indexed.index > end).any():
+        raise TradingCalendarError("원본 데이터에 지정된 상장 구간 밖의 날짜가 있습니다.")
     if trading_days is None:
         trading_days = get_krx_trading_days(
             start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d")

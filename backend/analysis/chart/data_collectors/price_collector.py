@@ -13,8 +13,18 @@ try:
 except ImportError:  # 직접 스크립트 실행: python data_collectors/price_collector.py
     from trading_calendar import get_krx_trading_days
 
+try:
+    from point_in_time_universe import intervals_overlapping, validate_security_master
+except ImportError:  # 직접 스크립트 실행 시 chart 루트를 import path에 추가
+    import sys
+
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from point_in_time_universe import intervals_overlapping, validate_security_master
+
 # 데이터 저장 경로 설정
 DATA_DIR = "./data/raw"
+SECURITY_MASTER_PATH = "./data/universe/security_master.parquet"
+TICKER_METADATA_PATH = "./data/ticker_metadata.csv"
 os.makedirs(DATA_DIR, exist_ok=True)
 
 # 기본 전체 수집 시작일 (최근 10년 기준, 실행 연도 자동 반영)
@@ -81,47 +91,159 @@ def _attach_actual_vwap(adjusted_df: pd.DataFrame, raw_df: pd.DataFrame) -> pd.D
     return combined
 
 
-def get_all_tickers() -> pd.DataFrame:
-    """
-    KOSPI, KOSDAQ 활성 종목 및 KRX-DELISTING(상장폐지) 종목 리스트를 병합합니다.
-    """
+def _active_master_frame(frame: pd.DataFrame, market: str, snapshot_date: pd.Timestamp) -> pd.DataFrame:
+    required = {"Code", "Name", "ListingDate"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise RuntimeError(f"{market}-DESC 필수 컬럼 누락: {missing}")
+    result = frame.copy()
+    result["Market"] = market
+    result["SecuGroup"] = result.get("SecuGroup", "주권")
+    result["DelistingDate"] = pd.NaT
+    result["Source"] = f"{market}-DESC"
+    result["ListingDateSource"] = "FDR_DESC"
+    result["SnapshotDate"] = snapshot_date
+    return result[
+        list(
+            sorted(
+                {
+                    *required,
+                    "Market",
+                    "SecuGroup",
+                    "DelistingDate",
+                    "Source",
+                    "SnapshotDate",
+                    "ListingDateSource",
+                }
+            )
+        )
+    ]
+
+
+def _delisted_master_frame(frame: pd.DataFrame, snapshot_date: pd.Timestamp) -> pd.DataFrame:
+    result = frame.rename(columns={"Symbol": "Code"}).copy()
+    required = {"Code", "Name", "Market", "SecuGroup", "ListingDate", "DelistingDate"}
+    missing = sorted(required - set(result.columns))
+    if missing:
+        raise RuntimeError(f"KRX-DELISTING 필수 컬럼 누락: {missing}")
+    result = result[
+        result["Market"].isin(["KOSPI", "KOSDAQ"]) & result["SecuGroup"].eq("주권")
+    ].copy()
+    result["Source"] = "KRX-DELISTING"
+    result["ListingDateSource"] = "FDR_DELISTING"
+    result["SnapshotDate"] = snapshot_date
+    return result[[*sorted(required), "Source", "SnapshotDate", "ListingDateSource"]]
+
+
+def _fetch_stock_listing(name: str, attempts: int = 3) -> pd.DataFrame:
+    errors = []
+    for attempt in range(1, attempts + 1):
+        try:
+            frame = fdr.StockListing(name)
+            if frame.empty:
+                raise ValueError("응답이 비어 있습니다.")
+            return frame
+        except Exception as exc:
+            errors.append(str(exc))
+            if attempt < attempts:
+                time.sleep(attempt)
+    raise RuntimeError(f"{name} 조회 {attempts}회 실패: {'; '.join(errors)}")
+
+
+def _infer_missing_listing_dates(master: pd.DataFrame) -> pd.DataFrame:
+    """DESC가 비운 상장일을 공급자의 최초 OHLCV 거래일로 보강한다."""
+    result = master.copy()
+    result["ListingDate"] = pd.to_datetime(result["ListingDate"], errors="coerce")
+    if os.path.isfile(SECURITY_MASTER_PATH):
+        previous = pd.read_parquet(SECURITY_MASTER_PATH)
+        previous["Code"] = previous["Code"].astype("string").str.upper().str.zfill(6)
+        previous = previous.sort_values("ListingDate").drop_duplicates("Code", keep="last")
+        previous_dates = previous.set_index("Code")["ListingDate"]
+        previous_sources = previous.set_index("Code").get("ListingDateSource")
+        normalized_codes = result["Code"].astype("string").str.upper().str.zfill(6)
+        reusable = result["ListingDate"].isna() & normalized_codes.isin(previous_dates.index)
+        result.loc[reusable, "ListingDate"] = normalized_codes[reusable].map(previous_dates)
+        if previous_sources is not None:
+            result.loc[reusable, "ListingDateSource"] = normalized_codes[reusable].map(
+                previous_sources
+            )
+    missing_rows = result.index[result["ListingDate"].isna()]
+    failures = []
+    today = pd.Timestamp.now().strftime("%Y-%m-%d")
+    for row_index in missing_rows:
+        code = str(result.at[row_index, "Code"]).strip().upper().zfill(6)
+        errors = []
+        for attempt in range(1, 4):
+            try:
+                history = fdr.DataReader(code, "1980-01-01", today)
+                dates = pd.to_datetime(history.index, errors="coerce").dropna()
+                if len(dates) == 0:
+                    raise ValueError("OHLCV 응답이 비어 있습니다.")
+                result.at[row_index, "ListingDate"] = dates.min().normalize()
+                result.at[row_index, "ListingDateSource"] = "FDR_FIRST_TRADE"
+                break
+            except Exception as exc:
+                errors.append(str(exc))
+                if attempt < 3:
+                    time.sleep(attempt)
+        if pd.isna(result.at[row_index, "ListingDate"]):
+            failures.append(f"{code}: {'; '.join(errors)}")
+    if failures:
+        raise RuntimeError(
+            "상장일 누락 종목의 최초 거래일 보강에 실패했습니다: " + "; ".join(failures[:10])
+        )
+    return result
+
+
+def build_security_master() -> pd.DataFrame:
+    """현재 활성 목록과 전체 상폐 이력을 상장 구간 마스터로 병합한다."""
+    snapshot_date = pd.Timestamp.now().normalize()
+    active_frames = []
+    for market in ("KOSPI", "KOSDAQ"):
+        active_frames.append(
+            _active_master_frame(_fetch_stock_listing(f"{market}-DESC"), market, snapshot_date)
+        )
+    delisted = _delisted_master_frame(_fetch_stock_listing("KRX-DELISTING"), snapshot_date)
+    master = pd.concat([*active_frames, delisted], ignore_index=True)
+    master = validate_security_master(_infer_missing_listing_dates(master))
+    return master
+
+
+def _write_security_master(master: pd.DataFrame) -> None:
+    os.makedirs(os.path.dirname(SECURITY_MASTER_PATH), exist_ok=True)
+    master.to_parquet(SECURITY_MASTER_PATH, index=False)
+
+    # 기존 점검/대시보드 소비자를 위한 1-code-1-row 파생 파일이다. PIT의 SSOT는
+    # security_master.parquet이며 이 CSV를 universe 판정에 사용하지 않는다.
+    latest = master.sort_values(["Code", "ListingDate"]).drop_duplicates("Code", keep="last")
+    latest = latest.copy()
+    latest["IsDelisted"] = latest["DelistingDate"].notna()
+    latest.to_csv(TICKER_METADATA_PATH, index=False, encoding="utf-8-sig")
+
+
+def get_all_tickers(start_date: str | None = None, end_date: str | None = None) -> pd.DataFrame:
+    """기간 중 한 번이라도 KOSPI/KOSDAQ 주권이었던 모든 상장 구간을 반환한다."""
     print("수집 대상 종목 리스트 구성 중...")
-
-    # 1. 활성 상장 종목 (KOSPI & KOSDAQ)
     try:
-        kospi = fdr.StockListing("KOSPI")
-        kosdaq = fdr.StockListing("KOSDAQ")
-        active = pd.concat([kospi, kosdaq], ignore_index=True)
-        active = active[["Code", "Name"]].drop_duplicates()
-        active["IsDelisted"] = False
-        print(f"  [활성] KOSPI/KOSDAQ 총 {len(active)}개")
+        master = build_security_master()
     except Exception as e:
-        print(f"  [활성] 리스트 수집 실패: {e}")
-        active = pd.DataFrame(columns=["Code", "Name", "IsDelisted"])
-
-    # 2. 상장폐지 종목 (KRX-DELISTING)
-    try:
-        raw_delisted = fdr.StockListing("KRX-DELISTING")
-        delisted = raw_delisted.rename(columns={"Symbol": "Code"})[
-            ["Code", "Name"]
-        ].drop_duplicates()
-        delisted["IsDelisted"] = True
-        print(f"  [상폐] KRX-DELISTING 총 {len(delisted)}개")
-    except Exception as e:
-        print(f"  [상폐] 리스트 수집 실패: {e}")
-        delisted = pd.DataFrame(columns=["Code", "Name", "IsDelisted"])
-
-    # 3. 병합
-    all_stocks = pd.concat([active, delisted], ignore_index=True)
-    all_stocks = all_stocks.drop_duplicates(subset=["Code"], keep="first")
-    # KRX 한국 증시 표준 규격이 6자리 문자열임
-    # 파이썬, csv 에서 데이터 읽을 때 맨 앞에 0 잘라버려서 이거 신경써줘야함
-    all_stocks["Code"] = all_stocks["Code"].str.zfill(6)
-    print(f"  [합계] 총 {len(all_stocks)}개 종목")
-
-    all_stocks.to_csv("./data/ticker_metadata.csv", index=False, encoding="utf-8-sig")
-    print("  종목 메타데이터 저장 완료 (./data/ticker_metadata.csv)")
-    return all_stocks
+        raise RuntimeError(f"PIT 종목 마스터 구성 실패: {e}") from e
+    _write_security_master(master)
+    selected = master
+    if start_date is not None or end_date is not None:
+        selected = intervals_overlapping(
+            master,
+            start_date or master["ListingDate"].min(),
+            end_date or pd.Timestamp.now().normalize(),
+        )
+    selected = selected.copy()
+    selected["IsDelisted"] = selected["DelistingDate"].notna()
+    print(
+        f"  [합계] 상장 구간 {len(selected)}개 / 종목 {selected['Code'].nunique()}개 "
+        f"(상폐 구간 {int(selected['IsDelisted'].sum())}개)"
+    )
+    print(f"  PIT 종목 마스터 저장 완료 ({SECURITY_MASTER_PATH})")
+    return selected
 
 
 # krx -> 한국 거래소 정보데이터 시스템에서 직접 post 요청 날려서 긁어옴.
@@ -328,15 +450,36 @@ def update_ohlcv_daily():
     print("\n✅ 일일 가격 데일리 업데이트 완료.")
 
 
-def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool = False):
+def _collection_bounds(row: pd.Series, start_date: str, end_date: str) -> tuple[pd.Timestamp, pd.Timestamp] | None:
+    """전역 요청 범위를 한 상장 구간의 inclusive 수집 범위로 제한한다."""
+    listing_date = pd.Timestamp(row["ListingDate"]).normalize()
+    delisting_date = pd.to_datetime(row["DelistingDate"], errors="coerce")
+    interval_start = max(pd.Timestamp(start_date).normalize(), listing_date)
+    interval_end = pd.Timestamp(end_date).normalize()
+    if pd.notna(delisting_date):
+        interval_end = min(interval_end, delisting_date.normalize() - pd.Timedelta(days=1))
+    return None if interval_start > interval_end else (interval_start, interval_end)
+
+
+def download_ohlcv_full(
+    start_date: str = _DEFAULT_START_DATE,
+    repair_only: bool = False,
+    codes: list[str] | None = None,
+):
     """
     [전체 이력 수집 및 정밀 보정 함수]
     지정된 start_date부터 오늘까지 전체 종목의 과거 가격 이력을 다운로드하여 구축합니다.
     또한, 이미 구축된 파일 중 중간 영업일(Gap) 누락을 감지하고 메워줍니다.
     속도와 안정성을 위해 FDR DataReader를 기본으로 사용하고 pykrx를 백업으로 사용합니다.
     """
-    all_stocks = get_all_tickers()
     today_str = datetime.now().strftime("%Y-%m-%d")
+    all_stocks = get_all_tickers(start_date, today_str)
+    if codes:
+        requested_codes = {str(code).strip().upper().zfill(6) for code in codes}
+        all_stocks = all_stocks[all_stocks["Code"].isin(requested_codes)].copy()
+        missing_codes = requested_codes - set(all_stocks["Code"])
+        if missing_codes:
+            raise ValueError(f"PIT 종목 마스터에 없는 --codes 값: {sorted(missing_codes)}")
 
     # 개별 종목이 아닌 KRX 시장 메타데이터로 실제 개장일을 확정합니다.
     actual_business_days = get_krx_trading_days(start_date, today_str)
@@ -348,16 +491,20 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
         code = row["Code"]
         name = row["Name"]
         is_delisted = row["IsDelisted"]
-
-        if is_delisted:
+        delisting_date = pd.to_datetime(row["DelistingDate"], errors="coerce")
+        bounds = _collection_bounds(row, start_date, today_str)
+        if bounds is None:
             continue
+        interval_start, interval_end = bounds
+        interval_start_str = interval_start.strftime("%Y-%m-%d")
+        interval_end_str = interval_end.strftime("%Y-%m-%d")
 
         file_path = os.path.join(DATA_DIR, f"{code}.parquet")
 
         try:
             existing_df = None
             needs_download = True
-            fetch_start_str = start_date
+            fetch_start_str = interval_start_str
 
             if os.path.exists(file_path):
                 existing_df = pd.read_parquet(file_path)
@@ -366,11 +513,15 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
 
                     # 1. 중간 누락(Gap) 탐지
                     first_date = existing_df["Date"].min()
-                    check_start = max(first_date, pd.to_datetime(start_date))
+                    check_start = max(first_date, interval_start)
                     vwap_incomplete = not _has_complete_actual_vwap(
                         existing_df.loc[existing_df["Date"] >= check_start]
                     )
-                    check_days = {d for d in actual_business_days if d >= check_start.date()}
+                    check_days = {
+                        d
+                        for d in actual_business_days
+                        if check_start.date() <= d <= interval_end.date()
+                    }
                     existing_dates = set(existing_df["Date"].dt.date)
                     missing_days = check_days - existing_dates
 
@@ -378,12 +529,9 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
                     fetch_start_str = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
 
                     # 2. 업데이트 및 보정 필요성 판단
-                    if not is_delisted and (
-                        fetch_start_str <= today_str or missing_days or vwap_incomplete
-                    ):
+                    if fetch_start_str <= interval_end_str or missing_days or vwap_incomplete:
                         needs_download = True
-                        # 누락이 많거나 업데이트 범위가 넓으면 해당 종목만 start_date부터 전체를 다시 받아 머지
-                        fetch_start_str = start_date
+                        fetch_start_str = interval_start_str
                     else:
                         if repair_only:
                             continue
@@ -393,20 +541,55 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
                 continue
 
             # FDR DataReader로 먼저 고속 시도
-            df = _fetch_ohlcv_fdr(code, fetch_start_str, today_str)
+            df = _fetch_ohlcv_fdr(code, fetch_start_str, interval_end_str)
             # FDR 실패 시 pykrx로 백업 시도
             if df.empty:
-                df = _fetch_ohlcv_pykrx(code, fetch_start_str, today_str)
+                df = _fetch_ohlcv_pykrx(code, fetch_start_str, interval_end_str)
 
             if df.empty:
                 if existing_df is not None:
-                    # 기존 데이터는 보존
+                    failed.append(
+                        (
+                            code,
+                            name,
+                            is_delisted,
+                            interval_start_str,
+                            interval_end_str,
+                            "No data fetched; existing file preserved",
+                        )
+                    )
                     continue
                 else:
-                    failed.append((code, name, is_delisted, "No data fetched"))
+                    failed.append(
+                        (
+                            code,
+                            name,
+                            is_delisted,
+                            interval_start_str,
+                            interval_end_str,
+                            "No data fetched",
+                        )
+                    )
                     continue
 
             df = df.reset_index()
+            df["Date"] = pd.to_datetime(df["Date"])
+            df = df[
+                df["Date"].ge(interval_start)
+                & (pd.isna(delisting_date) | df["Date"].lt(delisting_date))
+            ]
+            if df.empty:
+                failed.append(
+                    (
+                        code,
+                        name,
+                        is_delisted,
+                        interval_start_str,
+                        interval_end_str,
+                        "No rows inside listing interval",
+                    )
+                )
+                continue
             df["Code"] = code
             df["Name"] = name
             df["IsDelisted"] = is_delisted
@@ -426,16 +609,38 @@ def download_ohlcv_full(start_date: str = _DEFAULT_START_DATE, repair_only: bool
             time.sleep(0.05)  # FDR 중심이라 슬립 시간을 줄여 고속 처리 가능
 
         except Exception as e:
-            failed.append((code, name, is_delisted, str(e)))
+            failed.append(
+                (
+                    code,
+                    name,
+                    is_delisted,
+                    interval_start_str,
+                    interval_end_str,
+                    str(e),
+                )
+            )
             time.sleep(0.1)
 
     if failed:
-        pd.DataFrame(failed, columns=["Code", "Name", "IsDelisted", "Error"]).to_csv(
+        pd.DataFrame(
+            failed,
+            columns=[
+                "Code",
+                "Name",
+                "IsDelisted",
+                "RequestedStart",
+                "RequestedEnd",
+                "Error",
+            ],
+        ).to_csv(
             "./data/failed_downloads.csv", index=False, encoding="utf-8-sig"
         )
         print(f"\n⚠️ 수집/보정 중 실패: {len(failed)}개 → ./data/failed_downloads.csv 참고")
+        raise RuntimeError(
+            "PIT 가격 데이터셋이 불완전합니다. failed_downloads.csv를 해결한 뒤 재실행하세요."
+        )
 
-    print("\n✅ 전체 가격 데이터 다운로드 및 갭 보정 완료.")
+    print("\n✅ 전체 PIT 가격 데이터 다운로드 및 갭 보정 완료.")
 
 
 if __name__ == "__main__":
@@ -444,6 +649,9 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 사용 예시:
+  # [종목 마스터만 갱신] OHLCV를 받기 전에 PIT 계약 확인
+  python price_collector.py --mode master
+
   # [최초 구축 / 전체 갭 복구] 특정 날짜부터 전체 수집 및 중간 갭 완벽 복구
   python price_collector.py --mode full --start-date 2020-01-01
 
@@ -453,9 +661,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--mode",
-        choices=["full", "update"],
+        choices=["master", "full", "update"],
         default="update",
-        help="full: 전체 이력 다운로드 및 갭 보정 | update: 데일리 초고속 덧붙이기 (기본값)",
+        help="master: PIT 종목 마스터 생성 | full: 전체 이력 다운로드 및 갭 보정 | update: 데일리 초고속 덧붙이기 (기본값)",
     )
     parser.add_argument(
         "--start-date",
@@ -468,12 +676,24 @@ if __name__ == "__main__":
         action="store_true",
         help="--mode full 전용: 누락된 갭이 있는 종목만 골라서 복구 작업을 수행합니다.",
     )
+    parser.add_argument(
+        "--codes",
+        default="",
+        help="--mode full 전용: 쉼표로 구분한 6자리 코드만 수집/보정",
+    )
     args = parser.parse_args()
 
-    if args.mode == "full":
+    if args.mode == "master":
+        get_all_tickers()
+    elif args.mode == "full":
         start = args.start_date if args.start_date else _DEFAULT_START_DATE
         print(f"[실행] 전체 이력 구축 및 갭 복구 모드 (Full) | 시작일: {start}")
-        download_ohlcv_full(start_date=start, repair_only=args.repair_only)
+        requested_codes = [code for code in args.codes.split(",") if code.strip()]
+        download_ohlcv_full(
+            start_date=start,
+            repair_only=args.repair_only,
+            codes=requested_codes or None,
+        )
     else:
         print("[실행] 데일리 업데이트 모드 (Update)")
         update_ohlcv_daily()

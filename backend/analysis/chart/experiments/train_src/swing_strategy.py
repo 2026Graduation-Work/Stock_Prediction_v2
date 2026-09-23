@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from point_in_time_universe import membership_matrix
 
 
 class SwingStrategy:
@@ -14,7 +15,9 @@ class SwingStrategy:
         self.prob_threshold = self.strat_cfg.get("prob_threshold", 0.75)
         self.top_n = self.strat_cfg.get("top_n", 5)
 
-    def generate_signals(self, predictions: pd.DataFrame, price_df: pd.DataFrame) -> tuple:
+    def generate_signals(
+        self, predictions: pd.DataFrame, price_df: pd.DataFrame, universe_master=None
+    ) -> tuple:
         """
         predictions: ['Date', 'Code', 'Prob'] 데이터프레임
         price_df: ['Date', 'Code', 'Open', 'Sigma', 'Trading_Halt'] 데이터프레임
@@ -47,10 +50,16 @@ class SwingStrategy:
         prediction_dates = prediction_dates.reindex(
             index=raw_open_price.index, columns=raw_open_price.columns, fill_value=False
         ).fillna(False)
+        membership = (
+            membership_matrix(raw_open_price.index, raw_open_price.columns, universe_master)
+            if universe_master is not None
+            else raw_open_price.notna()
+        )
 
         # 3. 매수 진입 유효성 검사 (확률 컷 통과 + 거래정지 아님 + 상장됨)
         valid_mask = (
             (prob >= self.prob_threshold)
+            & membership
             & raw_open_price.notna()
             & (open_price > 1.0)
             & (trading_halt == 0)
@@ -75,7 +84,13 @@ class SwingStrategy:
         # T+1일(매수 집행일)이 거래정지일이면 진입 차단
         # T+1이 embargo라면 이전 fold의 신호를 실행하지 않는다. 다음 fold 첫날도
         # prediction 날짜이지만 raw signal이 없으므로, 과거 fold 신호가 건너오지 않는다.
-        entries = entries & prediction_dates & raw_open_price.notna() & (trading_halt == 0)
+        entries = (
+            entries
+            & prediction_dates
+            & membership
+            & raw_open_price.notna()
+            & (trading_halt == 0)
+        )
 
         # 7. 강제 리밸런싱 및 수수료 폭탄 방지
         # VectorBT는 빈칸이 아니면 매일 비중을 조절하려 하므로, 매수 진입일 외에는 NaN으로 둠

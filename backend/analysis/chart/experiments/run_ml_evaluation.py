@@ -15,6 +15,7 @@ from evaluation.metrics import (
 from experiment_utils import (
     build_fold_alignment,
     find_processed_dir,
+    find_universe_file,
     filter_to_test_fold_rows,
     generate_predictions_hash,
     label_params_from_config,
@@ -87,6 +88,7 @@ def main(config_path, predictions_path=None):
     final_predictions["Date"] = pd.to_datetime(final_predictions["Date"]).dt.tz_localize(None)
 
     processed_dir = find_processed_dir(config, __file__)
+    universe_file = find_universe_file(config, __file__)
     print(f"[*] 데이터 소스 디렉토리: {processed_dir}")
 
     full_test_start, full_test_end = test_date_bounds(splits)
@@ -103,6 +105,7 @@ def main(config_path, predictions_path=None):
         tickers=tickers_cfg,
         label_params=label_params,
         training=False,  # Load all requested columns normally
+        universe_file=universe_file,
     )
     actual_df["Date"] = pd.to_datetime(actual_df["Date"]).dt.tz_localize(None)
     actual_df = filter_to_test_fold_rows(actual_df, splits)

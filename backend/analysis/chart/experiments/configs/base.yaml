@@ -5,6 +5,11 @@ tags: ["baseline", "triple_barrier", "alpha158", "h5"]
 data:
   tickers: ""
   universe: "krx_common_stock"
+  universe_file: "data/universe/security_master.parquet"
+  universe_policy:
+    markets: ["KOSPI", "KOSDAQ"]
+    secu_groups: ["주권"]
+    point_in_time: true
   price_dir: "data/processed"
   # 일반적으로 비워 둔다. 파일 메타데이터가 같은 상태에서 데이터를 교체했을 때만
   # local.yaml에 새 식별자를 넣어 학습 캐시를 분리한다.
@@ -72,6 +77,7 @@ strategy:
   position_weighting: "equal_weight"
 
 backtest:
+  delisting_policy: "last_tradable_close"
   initial_cash: 10000000
   signal_lag_days: 1
   entry_price: "open"

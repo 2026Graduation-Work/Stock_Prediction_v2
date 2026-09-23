@@ -221,6 +221,8 @@ def _load_horizon_data(anchor_file: str, horizon: str, spec: dict) -> HorizonDat
         horizon_days = int(config.get("labels", {}).get("horizon", horizon.removeprefix("H")))
         extended_end = (pd.to_datetime(end) + pd.Timedelta(days=horizon_days * 3)).strftime("%Y-%m-%d")
         processed_dir = find_processed_dir(config, anchor_file)
+        universe_value = config.get("data", {}).get("universe_file")
+        universe_file = str(Path(processed_dir).parents[1] / universe_value) if universe_value else None
         market_df = load_parquet_data(
             processed_dir,
             start,
@@ -228,6 +230,7 @@ def _load_horizon_data(anchor_file: str, horizon: str, spec: dict) -> HorizonDat
             columns_only=["Date", "Code", "Open", "Close"],
             tickers=config.get("data", {}).get("tickers"),
             label_params=None,
+            universe_file=universe_file,
         )
         fee = float(config.get("backtest", {}).get("fee", 0.0))
         returns_df = _add_forward_returns(market_df, horizon_days, fee)
@@ -240,6 +243,7 @@ def _load_horizon_data(anchor_file: str, horizon: str, spec: dict) -> HorizonDat
             columns_only=["Date", "Code"],
             tickers=config.get("data", {}).get("tickers"),
             label_params=label_params_from_config(config),
+            universe_file=universe_file,
         )[["Date", "Code", "Y_Label"]]
         labels["Date"] = pd.to_datetime(labels["Date"]).dt.tz_localize(None)
         labels["Code"] = labels["Code"].astype(str).str.zfill(6)

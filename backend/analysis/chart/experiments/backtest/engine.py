@@ -8,6 +8,8 @@ import pandas as pd
 
 import vectorbt as vbt
 
+from point_in_time_universe import membership_matrix
+
 
 BENCHMARK_WEIGHTS_VERSION = "krx_annual_market_cap_v1"
 
@@ -127,7 +129,7 @@ def _save_benchmark_cache(series: pd.Series, source: str, reason: str) -> None:
 
 
 def _compute_internal_equal_weight_benchmark(
-    index: pd.DatetimeIndex, price_df: pd.DataFrame | None
+    index: pd.DatetimeIndex, price_df: pd.DataFrame | None, universe_master=None
 ) -> pd.Series:
     if price_df is None or price_df.empty:
         return _empty_benchmark(index, "unavailable", "price_df is empty")
@@ -141,6 +143,8 @@ def _compute_internal_equal_weight_benchmark(
     prices["Date"] = _parse_naive_dates(prices["Date"])
     close = prices.pivot(index="Date", columns="Code", values="Close").sort_index().ffill()
     close = close.reindex(index).ffill()
+    if universe_master is not None:
+        close = close.where(membership_matrix(close.index, close.columns, universe_master))
     returns = close.pct_change(fill_method=None)
 
     if "Trading_Halt" in prices.columns:
@@ -160,7 +164,7 @@ def _compute_internal_equal_weight_benchmark(
 
 
 def compute_custom_krx_composite(
-    index: pd.DatetimeIndex, price_df: pd.DataFrame | None = None
+    index: pd.DatetimeIndex, price_df: pd.DataFrame | None = None, universe_master=None
 ) -> pd.Series:
     """
     커스텀 KRX 통합 지수 (Custom KRX Composite Index) 산출 함수
@@ -225,7 +229,7 @@ def compute_custom_krx_composite(
         valid, validity_reason = _is_valid_benchmark(result)
         if not valid:
             print("⚠️ 외부 KRX 지수 수익률이 전부 0입니다. 내부 equal-weight benchmark로 대체합니다.")
-            return _compute_internal_equal_weight_benchmark(index, price_df)
+            return _compute_internal_equal_weight_benchmark(index, price_df, universe_master)
 
         result = _attach_benchmark_attrs(
             result, "external_krx", "KOSPI/KOSDAQ yfinance download succeeded"
@@ -236,7 +240,7 @@ def compute_custom_krx_composite(
 
     except Exception as e:
         print(f"⚠️ 커스텀 KRX 통합 지수 산출 실패 ({e}) - 내부 equal-weight benchmark로 대체")
-        return _compute_internal_equal_weight_benchmark(index, price_df)
+        return _compute_internal_equal_weight_benchmark(index, price_df, universe_master)
 
 
 def calculate_rule_exits(
@@ -360,12 +364,24 @@ class VectorBTEngine:
         self.up_mult = self.bt_cfg.get("up_mult", 3.5)
         self.down_mult = self.bt_cfg.get("down_mult", 2.0)
         self.hard_sl_mult = self.bt_cfg.get("hard_sl_mult", 2.5)
+        self.delisting_policy = self.bt_cfg.get("delisting_policy", "last_tradable_close")
+        if self.delisting_policy != "last_tradable_close":
+            raise ValueError(
+                "현재 지원하는 backtest.delisting_policy는 last_tradable_close뿐입니다."
+            )
         # 라벨 horizon은 학습 타깃 정의이고, 실제 보유 기간은 별도 실험 변수다.
         self.holding_days = self.bt_cfg.get(
             "max_holding_days", config.get("labels", {}).get("horizon", 5)
         )
 
-    def run(self, entries: pd.DataFrame, weights: pd.DataFrame, price_df: pd.DataFrame, generate_report: bool = True):
+    def run(
+        self,
+        entries: pd.DataFrame,
+        weights: pd.DataFrame,
+        price_df: pd.DataFrame,
+        generate_report: bool = True,
+        universe_master=None,
+    ):
         print(
             f"[Backtest] 시뮬레이션 가동 (초기자금: {self.init_cash:,}원, 수수료: {self.fee * 100}%)"
         )
@@ -388,6 +404,17 @@ class VectorBTEngine:
             aligned.columns.name = entries.columns.name
             aligned_frames[idx] = aligned
         open_price, high_price, low_price, close_price, trading_halt, sigma = aligned_frames
+
+        membership = (
+            membership_matrix(entries.index, entries.columns, universe_master)
+            if universe_master is not None
+            else pd.DataFrame(True, index=entries.index, columns=entries.columns)
+        )
+        open_price = open_price.where(membership)
+        high_price = high_price.where(membership)
+        low_price = low_price.where(membership)
+        close_price = close_price.where(membership)
+        entries = entries & membership
 
         # 상장 전·데이터 시작 전의 미래 가격을 채우지 않는다. 가격이 없는 날에는 진입을 막는다.
         price_available = open_price.notna() & high_price.notna() & low_price.notna() & close_price.notna()
@@ -412,6 +439,29 @@ class VectorBTEngine:
             )
         exits = pd.DataFrame(exits_dict, index=entries.index)
         exit_prices = pd.DataFrame(exit_price_dict, index=entries.index)
+        # 상폐 뒤 마지막 가격을 계속 ffill하는 zombie position을 만들지 않는다.
+        # 청산가격 원천이 별도로 없는 현재 계약에서는 상폐 전 마지막 실제 거래일
+        # 종가로 강제 청산하는 명시적 대체 정책을 사용한다.
+        if universe_master is not None:
+            forced_delisting_exits = pd.DataFrame(
+                False, index=entries.index, columns=entries.columns
+            )
+            for interval in universe_master.loc[
+                universe_master["DelistingDate"].notna()
+                & universe_master["Code"].isin(entries.columns)
+            ].itertuples(index=False):
+                if not (entries.index.min() < interval.DelistingDate <= entries.index.max()):
+                    continue
+                candidates = entries.index[
+                    (entries.index < interval.DelistingDate)
+                    & membership[interval.Code]
+                    & trading_halt[interval.Code].eq(0)
+                    & close_price[interval.Code].notna()
+                ]
+                if len(candidates):
+                    forced_delisting_exits.loc[candidates[-1], interval.Code] = True
+            exits = exits | forced_delisting_exits
+            exit_prices = exit_prices.where(~forced_delisting_exits, close_price)
         order_price = open_price.astype(float).mask(exits, exit_prices.astype(float))
 
         # [4] 시그널 충돌 방지 마스킹 (Signal Conflict Resolution)
@@ -460,7 +510,9 @@ class VectorBTEngine:
 
                 daily_returns = pf.returns()
                 ew_benchmark = pf.benchmark_returns()
-                custom_krx_benchmark = compute_custom_krx_composite(open_price.index, price_df)
+                custom_krx_benchmark = compute_custom_krx_composite(
+                    open_price.index, price_df, universe_master
+                )
 
                 returns_df = pd.DataFrame(
                     {

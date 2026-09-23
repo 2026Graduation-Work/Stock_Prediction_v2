@@ -227,6 +227,26 @@ def _candidate_price_dirs(config: dict) -> list[Path]:
     return unique
 
 
+def find_universe_file(config: dict, anchor_file: str) -> str | None:
+    """설정한 PIT security master를 CWD와 무관하게 찾고, 설정 시 fail closed 한다."""
+    configured_value = config.get("data", {}).get("universe_file")
+    if not configured_value:
+        return None
+    configured = Path(configured_value)
+    if configured.is_absolute():
+        candidates = [configured]
+    else:
+        chart_dir = Path(anchor_file).resolve().parent
+        while chart_dir.name != "chart" and chart_dir != chart_dir.parent:
+            chart_dir = chart_dir.parent
+        candidates = [chart_dir / configured, Path.cwd() / configured]
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate.resolve())
+    rendered = ", ".join(str(path.resolve()) for path in candidates)
+    raise FileNotFoundError(f"설정된 PIT security master를 찾을 수 없습니다: {rendered}")
+
+
 def data_fingerprint(config: dict) -> dict:
     """Return a low-cost data-source fingerprint for cache invalidation.
 
@@ -247,12 +267,20 @@ def data_fingerprint(config: dict) -> dict:
         digest.update(str(file_path.relative_to(source_dir)).encode())
         digest.update(f"{stat.st_size}:{stat.st_mtime_ns}".encode())
         count += 1
-    return {
+    result = {
         "status": "available",
         "configured_version": configured_version,
         "file_count": count,
         "manifest_sha256": digest.hexdigest(),
     }
+    universe_file = find_universe_file(config, __file__)
+    if universe_file is not None:
+        universe_digest = hashlib.sha256()
+        with open(universe_file, "rb") as handle:
+            for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+                universe_digest.update(chunk)
+        result["universe_sha256"] = universe_digest.hexdigest()
+    return result
 
 
 def _hash_payload(config: dict, resolved_splits: list[dict], include_model: bool) -> dict:

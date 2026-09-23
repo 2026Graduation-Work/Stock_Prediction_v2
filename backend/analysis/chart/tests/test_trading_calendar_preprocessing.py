@@ -128,7 +128,16 @@ def test_processed_vwap_marker_distinguishes_legacy_file(tmp_path):
     legacy_path = tmp_path / "legacy.parquet"
     current_path = tmp_path / "current.parquet"
     pd.DataFrame({"vwap_0": [1.0]}).to_parquet(legacy_path, index=False)
-    pd.DataFrame({"VWAP": [100.0], "vwap_0": [1.0]}).to_parquet(current_path, index=False)
+    pd.DataFrame(
+        {
+            "VWAP": [100.0],
+            "vwap_0": [1.0],
+            "ListingDate": [pd.Timestamp("2020-01-01")],
+            "DelistingDate": [pd.NaT],
+            "UniverseSnapshotDate": [pd.Timestamp("2026-01-01")],
+            "InUniverse": [True],
+        }
+    ).to_parquet(current_path, index=False)
 
-    assert not preprocess_data._processed_has_actual_vwap(str(legacy_path))
-    assert preprocess_data._processed_has_actual_vwap(str(current_path))
+    assert not preprocess_data._processed_has_current_market_data(str(legacy_path))
+    assert preprocess_data._processed_has_current_market_data(str(current_path))

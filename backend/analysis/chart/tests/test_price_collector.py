@@ -6,6 +6,60 @@ import pytest
 from data_collectors import price_collector, trading_calendar
 
 
+def test_security_master_preserves_listing_intervals(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        price_collector,
+        "SECURITY_MASTER_PATH",
+        str(tmp_path / "universe" / "security_master.parquet"),
+    )
+    monkeypatch.setattr(price_collector, "TICKER_METADATA_PATH", str(tmp_path / "tickers.csv"))
+
+    def fake_listing(name):
+        if name == "KOSPI-DESC":
+            return pd.DataFrame(
+                {"Code": ["2"], "Name": ["B"], "ListingDate": ["2015-01-01"]}
+            )
+        if name == "KOSDAQ-DESC":
+            return pd.DataFrame(
+                {"Code": ["3"], "Name": ["C"], "ListingDate": ["2022-01-01"]}
+            )
+        return pd.DataFrame(
+            {
+                "Symbol": ["1"],
+                "Name": ["A"],
+                "Market": ["KOSPI"],
+                "SecuGroup": ["주권"],
+                "ListingDate": ["2010-01-01"],
+                "DelistingDate": ["2019-01-01"],
+            }
+        )
+
+    monkeypatch.setattr(price_collector.fdr, "StockListing", fake_listing)
+    selected = price_collector.get_all_tickers("2016-01-01", "2023-12-31")
+
+    assert set(selected["Code"]) == {"000001", "000002", "000003"}
+    assert selected.set_index("Code").loc["000001", "DelistingDate"] == pd.Timestamp("2019-01-01")
+    stored = pd.read_parquet(tmp_path / "universe" / "security_master.parquet")
+    assert {"ListingDate", "DelistingDate", "SnapshotDate"}.issubset(stored.columns)
+
+
+def test_delisted_collection_bounds_use_listing_interval() -> None:
+    row = pd.Series(
+        {"ListingDate": "2010-01-01", "DelistingDate": "2019-01-01", "IsDelisted": True}
+    )
+    assert price_collector._collection_bounds(row, "2016-01-01", "2026-01-01") == (
+        pd.Timestamp("2016-01-01"),
+        pd.Timestamp("2018-12-31"),
+    )
+
+
+def test_collection_bounds_exclude_not_yet_listed_interval() -> None:
+    row = pd.Series(
+        {"ListingDate": "2022-01-01", "DelistingDate": pd.NaT, "IsDelisted": False}
+    )
+    assert price_collector._collection_bounds(row, "2016-01-01", "2020-12-31") is None
+
+
 def _write_calendar_cache(path, start, end, trading_days):
     path.write_text(
         json.dumps(

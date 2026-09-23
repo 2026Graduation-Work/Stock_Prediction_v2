@@ -16,6 +16,7 @@ from evaluation.baselines import (
 from experiment_utils import (
     build_fold_alignment,
     find_processed_dir,
+    find_universe_file,
     generate_predictions_hash,
     load_predictions,
     resolve_splits,
@@ -23,6 +24,7 @@ from experiment_utils import (
     test_date_bounds,
     validate_embargo,
 )
+from point_in_time_universe import load_security_master
 from train_src.loaders import load_parquet_data
 from train_src.swing_strategy import SwingStrategy
 
@@ -83,6 +85,8 @@ def main(config_path, predictions_path=None):
     final_predictions = load_predictions(config, splits, __file__, predictions_path)
 
     processed_dir = find_processed_dir(config, __file__)
+    universe_file = find_universe_file(config, __file__)
+    universe_master = load_security_master(universe_file) if universe_file else None
     print(f"[*] 데이터 소스 디렉토리: {processed_dir}")
 
     full_test_start, full_test_end = test_date_bounds(splits)
@@ -95,6 +99,7 @@ def main(config_path, predictions_path=None):
         full_test_end,
         columns_only=price_cols,
         tickers=tickers_cfg,
+        universe_file=universe_file,
     )
     market_df["Date"] = pd.to_datetime(market_df["Date"]).dt.tz_localize(None)
 
@@ -122,7 +127,7 @@ def main(config_path, predictions_path=None):
 
     print("\n[1] 트레이딩 전략 매트릭스 변환 (Swing Strategy)...")
     strategy = SwingStrategy(config)
-    entries, weights = strategy.generate_signals(final_predictions, market_df)
+    entries, weights = strategy.generate_signals(final_predictions, market_df, universe_master)
     strategy_keys = pd.MultiIndex.from_product(
         [entries.index, entries.columns], names=["Date", "Code"]
     )
@@ -137,7 +142,7 @@ def main(config_path, predictions_path=None):
 
     print("\n[2] VectorBT 퀀트 시뮬레이터 가동 (Backtest Engine)...")
     bt_engine = VectorBTEngine(config)
-    pf = bt_engine.run(entries, weights, market_df)
+    pf = bt_engine.run(entries, weights, market_df, universe_master=universe_master)
 
     daily_returns = pf.returns()
     daily_returns.index = pd.to_datetime(daily_returns.index).tz_localize(None)
@@ -185,12 +190,18 @@ def main(config_path, predictions_path=None):
 
     for seed in range(100, 100 + random_seeds):
         random_entries, random_weights = generate_random_top_k_signals(
-            market_df, top_n=top_n, seed=seed
+            market_df, top_n=top_n, seed=seed, universe_master=universe_master
         )
         random_entries, random_weights = restrict_signals_to_test_folds(
             random_entries, random_weights, splits
         )
-        random_pf = bt_engine.run(random_entries, random_weights, market_df, generate_report=False)
+        random_pf = bt_engine.run(
+            random_entries,
+            random_weights,
+            market_df,
+            generate_report=False,
+            universe_master=universe_master,
+        )
         random_metrics = calculate_trading_metrics(
             random_pf.returns(),
             random_pf.trades.records_readable if len(random_pf.trades.records) > 0 else None,
@@ -199,25 +210,35 @@ def main(config_path, predictions_path=None):
         random_mdds.append(random_metrics.get("max_drawdown", np.nan))
         random_sharpes.append(random_metrics.get("sharpe_ratio", np.nan))
 
-    mom_entries, mom_weights = generate_momentum_signals(market_df, top_n=top_n, horizon=5)
+    mom_entries, mom_weights = generate_momentum_signals(
+        market_df, top_n=top_n, horizon=5, universe_master=universe_master
+    )
     mom_entries, mom_weights = restrict_signals_to_test_folds(
         mom_entries, mom_weights, splits
     )
-    mom_pf = bt_engine.run(mom_entries, mom_weights, market_df, generate_report=False)
+    mom_pf = bt_engine.run(
+        mom_entries, mom_weights, market_df, generate_report=False, universe_master=universe_master
+    )
     mom_metrics = calculate_trading_metrics(
         mom_pf.returns(), mom_pf.trades.records_readable if len(mom_pf.trades.records) > 0 else None
     )
 
-    ma_entries, ma_weights = generate_ma_breakout_signals(market_df, top_n=top_n, window=20)
+    ma_entries, ma_weights = generate_ma_breakout_signals(
+        market_df, top_n=top_n, window=20, universe_master=universe_master
+    )
     ma_entries, ma_weights = restrict_signals_to_test_folds(
         ma_entries, ma_weights, splits
     )
-    ma_pf = bt_engine.run(ma_entries, ma_weights, market_df, generate_report=False)
+    ma_pf = bt_engine.run(
+        ma_entries, ma_weights, market_df, generate_report=False, universe_master=universe_master
+    )
     ma_metrics = calculate_trading_metrics(
         ma_pf.returns(), ma_pf.trades.records_readable if len(ma_pf.trades.records) > 0 else None
     )
 
-    krx_returns = compute_custom_krx_composite(daily_returns.index, market_df)
+    krx_returns = compute_custom_krx_composite(
+        daily_returns.index, market_df, universe_master
+    )
     krx_source = krx_returns.attrs.get("benchmark_source", "unknown")
     krx_reason = krx_returns.attrs.get("benchmark_reason", "")
     krx_valid = krx_returns.attrs.get("benchmark_valid", False)
@@ -274,6 +295,7 @@ def main(config_path, predictions_path=None):
     summary.update(
         {
             "prediction_hash": predictions_hash,
+            "delisting_policy": bt_engine.delisting_policy,
             "benchmark_custom_krx_source": krx_source,
             "benchmark_custom_krx_reason": krx_reason,
             "benchmark_custom_krx_valid": krx_valid,

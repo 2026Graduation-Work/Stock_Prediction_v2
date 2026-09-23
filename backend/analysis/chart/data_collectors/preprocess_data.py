@@ -10,14 +10,23 @@ try:
 except ImportError:  # 직접 스크립트 실행: python data_collectors/preprocess_data.py
     from trading_calendar import get_krx_trading_days, reindex_to_krx_trading_days
 
+try:
+    from point_in_time_universe import load_security_master
+except ImportError:  # 직접 스크립트 실행 시 chart 루트를 import path에 추가
+    import sys
+
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from point_in_time_universe import load_security_master
+
 # 경로 설정
 RAW_DATA_DIR = "./data/raw"
 PROCESSED_DATA_DIR = "./data/processed"
+SECURITY_MASTER_PATH = "./data/universe/security_master.parquet"
 os.makedirs(PROCESSED_DATA_DIR, exist_ok=True)
 
 
 def normalize_trading_halts(
-    df: pd.DataFrame, trading_days=None
+    df: pd.DataFrame, trading_days=None, *, listing_date=None, delisting_date=None
 ) -> pd.DataFrame:
     """
     거래정지·권리락일 처리 (표준 퀀트 관례 적용)
@@ -38,7 +47,16 @@ def normalize_trading_halts(
     df = df.copy()
 
     # 1. 종목의 실제 거래 기간(상장~상폐)을 KRX 개장일로만 재구성
-    df = reindex_to_krx_trading_days(df, trading_days)
+    explicit_start = pd.Timestamp(listing_date).normalize() if listing_date is not None else None
+    explicit_end = None
+    if delisting_date is not None and pd.notna(delisting_date):
+        explicit_end = pd.Timestamp(delisting_date).normalize() - pd.Timedelta(days=1)
+    df = reindex_to_krx_trading_days(
+        df,
+        trading_days,
+        start_date=explicit_start,
+        end_date=explicit_end,
+    )
     if "VWAP" not in df.columns:
         raise ValueError(
             "실제 VWAP 컬럼이 없습니다. price_collector.py --mode full로 "
@@ -355,7 +373,7 @@ def calculate_dynamic_triple_barrier(df, horizon=5, up_mult=1.5, down_mult=1.2):
 _LOOKBACK_DAYS = 65
 
 
-def _load_trading_days_for_files(raw_files: list[str]) -> set:
+def _load_trading_days_for_files(raw_files: list[str], master: pd.DataFrame | None = None) -> set:
     """원본 파일 전체 기간을 덮는 KRX 캘린더를 한 번만 조회합니다."""
     min_date = None
     max_date = None
@@ -373,18 +391,80 @@ def _load_trading_days_for_files(raw_files: list[str]) -> set:
 
     if min_date is None or max_date is None:
         return set()
+    if master is not None:
+        file_codes = {os.path.splitext(os.path.basename(path))[0].upper() for path in raw_files}
+        known_delistings = master.loc[
+            master["Code"].isin(file_codes) & master["DelistingDate"].notna(),
+            "DelistingDate",
+        ] - pd.Timedelta(days=1)
+        if not known_delistings.empty:
+            max_date = max(max_date, min(known_delistings.max(), pd.Timestamp.now().normalize()))
     return get_krx_trading_days(
         min_date.strftime("%Y-%m-%d"), max_date.strftime("%Y-%m-%d")
     )
 
 
-def _processed_has_actual_vwap(file_path: str) -> bool:
-    """구형 HLC3 기반 processed 파일과 실제 VWAP 기반 파일을 구분합니다."""
+def _processed_has_current_market_data(file_path: str) -> bool:
+    """processed 파일에 실제 VWAP과 PIT 구간 메타데이터가 있는지 확인합니다."""
     try:
-        pd.read_parquet(file_path, columns=["VWAP"])
+        pd.read_parquet(
+            file_path,
+            columns=[
+                "VWAP",
+                "ListingDate",
+                "DelistingDate",
+                "UniverseSnapshotDate",
+                "InUniverse",
+            ],
+        )
         return True
     except Exception:
         return False
+
+
+def _preprocess_raw_frame(
+    df_raw: pd.DataFrame, master: pd.DataFrame, trading_days: set
+) -> pd.DataFrame:
+    """코드의 각 비중첩 상장 구간을 독립적으로 전처리한다."""
+    if df_raw.empty or "Code" not in df_raw.columns:
+        raise ValueError("raw 데이터에 Code가 없습니다.")
+    codes = df_raw["Code"].astype("string").str.zfill(6).dropna().unique()
+    if len(codes) != 1:
+        raise ValueError(f"종목별 raw 파일에는 Code 하나만 있어야 합니다: {codes.tolist()}")
+    code = codes[0]
+    intervals = master.loc[master["Code"].eq(code)].sort_values("ListingDate")
+    if intervals.empty:
+        raise ValueError(f"security master에 없는 종목입니다: {code}")
+
+    df_raw = df_raw.copy()
+    df_raw["Date"] = pd.to_datetime(df_raw["Date"]).dt.tz_localize(None).dt.normalize()
+    processed = []
+    for interval in intervals.itertuples(index=False):
+        in_interval = df_raw["Date"].ge(interval.ListingDate) & (
+            pd.isna(interval.DelistingDate) | df_raw["Date"].lt(interval.DelistingDate)
+        )
+        part = df_raw.loc[in_interval].copy()
+        if part.empty:
+            continue
+        # 확정된 상폐일이 있는 종목은 마지막 체결 뒤 상폐 전까지를 거래정지로
+        # 유지한다. 활성 종목은 수집된 마지막 거래일까지로 제한한다.
+        part = normalize_trading_halts(
+            part,
+            trading_days,
+            listing_date=max(interval.ListingDate, part["Date"].min()),
+            delisting_date=interval.DelistingDate,
+        )
+        part = generate_full_alpha158_features(part)
+        part = calculate_dynamic_triple_barrier(part)
+        part["ListingDate"] = interval.ListingDate
+        part["DelistingDate"] = interval.DelistingDate
+        part["UniverseSnapshotDate"] = interval.SnapshotDate
+        part["InUniverse"] = True
+        part = part.dropna(subset=["roc_60", "Sigma"])
+        processed.append(part)
+    if not processed:
+        return pd.DataFrame()
+    return pd.concat(processed, ignore_index=True).sort_values("Date").reset_index(drop=True)
 
 
 def preprocess_all_data():
@@ -392,15 +472,27 @@ def preprocess_all_data():
     [full 모드] 전체 전처리.
     processed 파일이 없는 종목만 raw → 피처 계산 → 저장.
     """
+    master = load_security_master(SECURITY_MASTER_PATH)
     raw_files = glob.glob(os.path.join(RAW_DATA_DIR, "*.parquet"))
-    print(f"총 {len(raw_files)}개의 원본 데이터를 전처리합니다...")
-    trading_days = _load_trading_days_for_files(raw_files)
+    master_codes = set(master["Code"])
+    excluded_files = [
+        path
+        for path in raw_files
+        if os.path.splitext(os.path.basename(path))[0].upper() not in master_codes
+    ]
+    raw_files = [path for path in raw_files if path not in excluded_files]
+    print(
+        f"PIT 주권 raw {len(raw_files)}개 전처리 "
+        f"(master 밖 파일 {len(excluded_files)}개 제외)..."
+    )
+    trading_days = _load_trading_days_for_files(raw_files, master)
+    failed = []
 
     for file_path in tqdm(raw_files, desc="데이터 전처리 중"):
         file_name = os.path.basename(file_path)
         save_path = os.path.join(PROCESSED_DATA_DIR, file_name)
 
-        if os.path.exists(save_path) and _processed_has_actual_vwap(save_path):
+        if os.path.exists(save_path) and _processed_has_current_market_data(save_path):
             continue
 
         try:
@@ -409,16 +501,18 @@ def preprocess_all_data():
             if len(df) < _LOOKBACK_DAYS:
                 continue
 
-            df = normalize_trading_halts(df, trading_days)
-            df = generate_full_alpha158_features(df)
-            df = calculate_dynamic_triple_barrier(df)
-            df = df.dropna(subset=["roc_60", "Sigma"])
+            df = _preprocess_raw_frame(df, master, trading_days)
+            if df.empty:
+                continue
 
             df.to_parquet(save_path, index=False)
 
         except Exception as e:
             print(f"Error processing {file_name}: {e}")
+            failed.append((file_name, str(e)))
 
+    if failed:
+        raise RuntimeError(f"PIT 전체 전처리 실패 {len(failed)}개: {failed[:5]}")
     print("✅ 전체 전처리 완료. (./data/processed/)")
 
 
@@ -436,9 +530,16 @@ def update_processed_data():
     4. last_date 이후 신규 행만 추출해서 기존 processed 파일 끝에 append한다.
     5. processed 파일이 없는 종목은 full 전처리로 폴백한다.
     """
+    master = load_security_master(SECURITY_MASTER_PATH)
     raw_files = glob.glob(os.path.join(RAW_DATA_DIR, "*.parquet"))
-    print(f"총 {len(raw_files)}개 종목 증분 전처리 시작...")
-    trading_days = _load_trading_days_for_files(raw_files)
+    master_codes = set(master["Code"])
+    raw_files = [
+        path
+        for path in raw_files
+        if os.path.splitext(os.path.basename(path))[0].upper() in master_codes
+    ]
+    print(f"총 {len(raw_files)}개 PIT 주권 증분 전처리 시작...")
+    trading_days = _load_trading_days_for_files(raw_files, master)
 
     updated, skipped, created, failed = 0, 0, 0, 0
 
@@ -453,10 +554,10 @@ def update_processed_data():
                 if len(df_raw) < _LOOKBACK_DAYS:
                     skipped += 1
                     continue
-                df_raw = normalize_trading_halts(df_raw, trading_days)
-                df_raw = generate_full_alpha158_features(df_raw)
-                df_raw = calculate_dynamic_triple_barrier(df_raw)
-                df_raw = df_raw.dropna(subset=["roc_60", "Sigma"])
+                df_raw = _preprocess_raw_frame(df_raw, master, trading_days)
+                if df_raw.empty:
+                    skipped += 1
+                    continue
                 df_raw.to_parquet(save_path, index=False)
                 created += 1
                 continue
@@ -464,15 +565,21 @@ def update_processed_data():
             # ── 기존 processed 파일의 마지막 날짜 확인 ──────────────────
             existing = pd.read_parquet(save_path)
             existing["Date"] = pd.to_datetime(existing["Date"])
-            if "VWAP" not in existing.columns:
+            if not {
+                "VWAP",
+                "ListingDate",
+                "DelistingDate",
+                "UniverseSnapshotDate",
+                "InUniverse",
+            }.issubset(existing.columns):
                 df_raw = pd.read_parquet(file_path)
                 if len(df_raw) < _LOOKBACK_DAYS:
                     skipped += 1
                     continue
-                df_raw = normalize_trading_halts(df_raw, trading_days)
-                df_raw = generate_full_alpha158_features(df_raw)
-                df_raw = calculate_dynamic_triple_barrier(df_raw)
-                df_raw = df_raw.dropna(subset=["roc_60", "Sigma"])
+                df_raw = _preprocess_raw_frame(df_raw, master, trading_days)
+                if df_raw.empty:
+                    skipped += 1
+                    continue
                 df_raw.to_parquet(save_path, index=False)
                 updated += 1
                 continue
@@ -490,10 +597,7 @@ def update_processed_data():
                 continue
 
             # ── 피처·라벨 파이프라인 ────────────────────────────────────
-            df_ctx = normalize_trading_halts(df_ctx, trading_days)
-            df_ctx = generate_full_alpha158_features(df_ctx)
-            df_ctx = calculate_dynamic_triple_barrier(df_ctx)
-            df_ctx = df_ctx.dropna(subset=["roc_60", "Sigma"])
+            df_ctx = _preprocess_raw_frame(df_ctx, master, trading_days)
 
             # ── last_date 이후 신규 행만 추출 ───────────────────────────
             df_ctx["Date"] = pd.to_datetime(df_ctx["Date"])
@@ -520,6 +624,8 @@ def update_processed_data():
     print(
         f"\n✅ 증분 전처리 완료: 신규={updated}개, 신규생성={created}개, 스킵={skipped}개, 실패={failed}개"
     )
+    if failed:
+        raise RuntimeError(f"PIT 증분 전처리 실패: {failed}개")
 
 
 if __name__ == "__main__":

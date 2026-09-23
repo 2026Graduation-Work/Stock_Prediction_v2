@@ -6,6 +6,41 @@ import pytest
 from experiments.train_src import loaders
 
 
+def test_loader_enforces_point_in_time_master(tmp_path) -> None:
+    source = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2017-01-02", "2018-01-02", "2019-01-01"]),
+            "Code": ["000001"] * 3,
+            "Open": [100.0] * 3,
+            "High": [100.0] * 3,
+            "Low": [100.0] * 3,
+            "Close": [100.0] * 3,
+            "Volume": [1] * 3,
+            "Trading_Halt": [0] * 3,
+        }
+    )
+    source.to_parquet(tmp_path / "000001.parquet", index=False)
+    master = pd.DataFrame(
+        {
+            "Code": ["000001"],
+            "Name": ["A"],
+            "Market": ["KOSPI"],
+            "SecuGroup": ["주권"],
+            "ListingDate": ["2018-01-01"],
+            "DelistingDate": ["2019-01-01"],
+            "Source": ["test"],
+            "SnapshotDate": ["2026-01-01"],
+        }
+    )
+    master_path = tmp_path / "master.parquet"
+    master.to_parquet(master_path, index=False)
+
+    loaded = loaders.load_parquet_data(
+        str(tmp_path), "2017-01-01", "2019-12-31", universe_file=str(master_path)
+    )
+    assert loaded["Date"].tolist() == [pd.Timestamp("2018-01-02")]
+
+
 def test_label_loading_keeps_requested_last_horizon_rows_with_right_buffer(monkeypatch) -> None:
     source = pd.DataFrame(
         {

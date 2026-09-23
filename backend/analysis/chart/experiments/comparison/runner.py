@@ -131,6 +131,7 @@ def _load_split(
     tickers: str | list[str] | None,
     label_params: dict[str, Any],
     features: list[str],
+    universe_file: Path | None = None,
 ) -> pd.DataFrame:
     if not price_dir.is_dir():
         raise ComparisonConfigError(f"feature-store directory does not exist: {price_dir}")
@@ -144,6 +145,7 @@ def _load_split(
             label_params=label_params,
             label_observation_end=label_observation_end,
             training=False,
+            universe_file=str(universe_file) if universe_file is not None else None,
         )
     except (ValueError, KeyError) as exc:
         raise ComparisonConfigError(f"failed to load feature store {price_dir}: {exc}") from exc
@@ -204,6 +206,13 @@ def prepare_profile_data(
         "baseline": _resolve_path(data["baseline_price_dir"], config_dir),
         "treatment": _resolve_path(data["treatment_price_dir"], config_dir),
     }
+    universe_file = (
+        _resolve_path(data["universe_file"], config_dir)
+        if data.get("universe_file")
+        else None
+    )
+    if universe_file is not None and not universe_file.is_file():
+        raise ComparisonConfigError(f"security master does not exist: {universe_file}")
     loaded: dict[tuple[str, str], pd.DataFrame] = {}
     for variant, path in paths.items():
         features = (
@@ -224,6 +233,7 @@ def prepare_profile_data(
                 tickers=tickers,
                 label_params=label_params,
                 features=features,
+                universe_file=universe_file,
             )
     for split in ("train", "test"):
         _assert_ab_alignment(
@@ -387,6 +397,7 @@ def _build_backtest_config(
         "description": f"A/B comparison canonical backtest: {profile} variant {variant}",
         "data": {
             "tickers": data.get("tickers", []),
+            "universe_file": data.get("universe_file"),
             "price_dir": str(data["baseline_price_dir"]),
             "version": data.get("version", f"comparison_{profile}"),
             "start_date": str(data["train_start"]),

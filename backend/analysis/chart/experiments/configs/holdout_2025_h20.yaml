@@ -4,7 +4,12 @@ tags: ["baseline", "final_holdout", "dynamic_sigma", "h20"]
 
 data:
   tickers: ""
-  universe: "kospi_all_2024-12-30_snapshot"
+  universe: "krx_equity_point_in_time"
+  universe_file: "data/universe/security_master.parquet"
+  universe_policy:
+    markets: ["KOSPI", "KOSDAQ"]
+    secu_groups: ["주권"]
+    point_in_time: true
   price_dir: "data/processed"
   version: "drive-snapshot-set-me"
   start_date: "2022-01-01"
@@ -63,6 +68,7 @@ strategy:
   position_weighting: "equal_weight"
 
 backtest:
+  delisting_policy: "last_tradable_close"
   initial_cash: 10000000
   signal_lag_days: 1
   entry_price: "open"

@@ -3,6 +3,11 @@ import os
 
 import numpy as np
 import pandas as pd
+from point_in_time_universe import (
+    filter_point_in_time_rows,
+    intervals_overlapping,
+    load_security_master,
+)
 from tqdm import tqdm
 
 
@@ -124,12 +129,23 @@ def load_parquet_data(
     label_observation_end: str = None,
     training: bool = False,
     keep_date: bool = False,
+    universe_file: str | None = None,
 ) -> pd.DataFrame:
     """
     Parquet 파일들을 디스크에서 읽어오는 로더입니다.
     메모리 절약을 위해 종목별 로딩 시점에 Y 라벨 생성 및 피처 분리를 즉시 수행합니다.
     """
     files = glob.glob(os.path.join(data_dir, "*.parquet"))
+    master = load_security_master(universe_file) if universe_file else None
+    if master is not None:
+        overlap_start = start_date or master["ListingDate"].min()
+        overlap_end = end_date or pd.Timestamp.now().normalize()
+        allowed_codes = set(intervals_overlapping(master, overlap_start, overlap_end)["Code"])
+        files = [
+            path
+            for path in files
+            if os.path.basename(path).split(".")[0].upper().zfill(6) in allowed_codes
+        ]
 
     if tickers == "KOSPI_TOP200":
         raise ValueError(
@@ -184,6 +200,8 @@ def load_parquet_data(
 
             temp_df["Date"] = pd.to_datetime(temp_df["Date"])
             temp_df = temp_df.sort_values("Date").reset_index(drop=True)
+            if master is not None:
+                temp_df = filter_point_in_time_rows(temp_df, master)
             if start_date is not None:
                 temp_df = temp_df[temp_df["Date"] >= pd.to_datetime(start_date)]
 
@@ -258,6 +276,15 @@ def load_parquet_data(
                     "Sigma",
                     "Y_Label",
                     "Trading_Halt",
+                    "Amount",
+                    "RawClose",
+                    "RawVolume",
+                    "AdjustmentFactor",
+                    "VWAP",
+                    "ListingDate",
+                    "DelistingDate",
+                    "UniverseSnapshotDate",
+                    "InUniverse",
                 ]
                 if not keep_date:
                     exclude_cols.append("Date")

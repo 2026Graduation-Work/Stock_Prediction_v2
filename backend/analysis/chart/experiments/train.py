@@ -14,6 +14,7 @@ import yaml
 from experiment_utils import (
     cache_dir,
     find_processed_dir,
+    find_universe_file,
     generate_dataset_hash,
     generate_predictions_hash,
     label_params_from_config,
@@ -235,6 +236,7 @@ def _load_validation_df(
     tickers_cfg,
     label_params: dict,
     feature_cols: list[str],
+    universe_file: str | None = None,
 ) -> pd.DataFrame:
     val_df = load_parquet_data(
         processed_dir,
@@ -244,6 +246,7 @@ def _load_validation_df(
         label_params=label_params,
         label_observation_end=label_observation_end,
         training=False,
+        universe_file=universe_file,
     )
     val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols
     return val_df[[c for c in val_cols if c in val_df.columns]].copy()
@@ -306,6 +309,7 @@ def main(config_path):
 
     # 데이터 경로 자동 탐색
     processed_dir = find_processed_dir(config, __file__)
+    universe_file = find_universe_file(config, __file__)
     print(f"[*] 데이터 소스 디렉토리: {processed_dir}")
     if not os.path.exists(processed_dir) or not os.listdir(processed_dir):
         print(
@@ -359,6 +363,7 @@ def main(config_path):
                 tickers_cfg,
                 label_params,
                 feature_cols,
+                universe_file,
             )
             validation_metrics = _evaluate_validation(
                 config, split_info, idx, model_wrapper, val_df, feature_cols
@@ -441,6 +446,7 @@ def main(config_path):
                         label_observation_end=train_label_observation_end,
                         training=True,
                         keep_date=False,
+                        universe_file=universe_file,
                     )
 
                     exclude_cols = ["Y_Label", "Date", "Code"]
@@ -469,6 +475,7 @@ def main(config_path):
                         label_params=label_params,
                         label_observation_end=validation_label_observation_end,
                         training=False,
+                        universe_file=universe_file,
                     )
 
                     val_cols = ["Date", "Code", "Y_Label", "Close", "Trading_Halt"] + feature_cols
@@ -511,6 +518,7 @@ def main(config_path):
                     tickers_cfg,
                     label_params,
                     feature_cols,
+                    universe_file,
                 )
 
             if not skip_validation:
@@ -543,6 +551,7 @@ def main(config_path):
                 test_end,
                 columns_only=feature_cols + ["Date", "Code"],
                 tickers=tickers_cfg,
+                universe_file=universe_file,
             )
             X_test = test_df[feature_cols]
 
