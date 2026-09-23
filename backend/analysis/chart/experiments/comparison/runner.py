@@ -365,7 +365,12 @@ def _delta_table(metrics: pd.DataFrame) -> pd.DataFrame:
 
 
 def _build_backtest_config(
-    config: dict[str, Any], profile: str, variant: str, profile_config: dict[str, Any]
+    config: dict[str, Any],
+    profile: str,
+    variant: str,
+    profile_config: dict[str, Any],
+    *,
+    config_dir: Path | None = None,
 ) -> dict[str, Any]:
     """공용 run_backtest.py가 직접 읽을 수 있는 profile/variant config를 만듭니다."""
     data = profile_config["data"]
@@ -392,13 +397,19 @@ def _build_backtest_config(
         **config.get("backtest", {}),
         "max_holding_days": horizon,
     }
+    price_dir = str(data["baseline_price_dir"])
+    universe_file = data.get("universe_file")
+    if config_dir is not None:
+        price_dir = str(_resolve_path(price_dir, config_dir))
+        if universe_file:
+            universe_file = str(_resolve_path(universe_file, config_dir))
     return {
         "experiment_name": f"{experiment_prefix}_{profile}_{variant.lower()}",
         "description": f"A/B comparison canonical backtest: {profile} variant {variant}",
         "data": {
             "tickers": data.get("tickers", []),
-            "universe_file": data.get("universe_file"),
-            "price_dir": str(data["baseline_price_dir"]),
+            "universe_file": universe_file,
+            "price_dir": price_dir,
             "version": data.get("version", f"comparison_{profile}"),
             "start_date": str(data["train_start"]),
             "end_date": str(data["test_end"]),
@@ -490,10 +501,11 @@ def run_comparison(
             )
             predictions.to_parquet(prediction_path, index=False)
             backtest_config = _build_backtest_config(
-                config, profile, variant, profile_config
-            )
-            backtest_config["data"]["price_dir"] = str(
-                _resolve_path(profile_config["data"]["baseline_price_dir"], config_dir)
+                config,
+                profile,
+                variant,
+                profile_config,
+                config_dir=config_dir,
             )
             backtest_config_path = backtest_config_dir / f"{profile}_{variant.lower()}.yaml"
             with backtest_config_path.open("w", encoding="utf-8") as file:

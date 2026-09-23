@@ -7,6 +7,7 @@ from point_in_time_universe import (
     filter_point_in_time_rows,
     intervals_overlapping,
     load_security_master,
+    membership_interval_ids,
 )
 from tqdm import tqdm
 
@@ -119,6 +120,41 @@ def apply_dynamic_sigma_barrier_labeling(
     return y_label_series
 
 
+def _apply_barrier_labeling_by_interval(
+    frame: pd.DataFrame, label_params: dict, master: pd.DataFrame | None
+) -> pd.Series:
+    """동일 코드의 재사용 구간을 넘지 않도록 구간별 라벨을 계산한다."""
+    if master is None:
+        interval_ids = pd.Series(0, index=frame.index, dtype="Int64")
+    else:
+        interval_ids = membership_interval_ids(frame, master)
+        if interval_ids.isna().any():
+            raise ValueError("PIT 필터 뒤에도 상장 구간을 찾을 수 없는 행이 있습니다.")
+
+    result = pd.Series(np.nan, index=frame.index, dtype=float)
+    label_type = label_params.get("type", "fixed")
+    horizon = label_params["horizon"]
+    for interval_id in interval_ids.dropna().unique():
+        mask = interval_ids.eq(interval_id)
+        part = frame.loc[mask]
+        if label_type == "dynamic_sigma":
+            labels = apply_dynamic_sigma_barrier_labeling(
+                part,
+                horizon,
+                label_params.get("up_mult", 1.5),
+                label_params.get("down_mult", 1.2),
+            )
+        else:
+            labels = apply_fixed_barrier_labeling(
+                part,
+                horizon,
+                label_params.get("tp", 3.5),
+                label_params.get("sl", 2.0),
+            )
+        result.loc[part.index] = labels
+    return result
+
+
 def load_parquet_data(
     data_dir: str,
     start_date: str = None,
@@ -173,6 +209,7 @@ def load_parquet_data(
     print(f"총 {len(files)}개 종목 데이터 로드 중... (날짜 필터: {start_date} ~ {end_date})")
 
     df_list = []
+    failures = []
     for f in tqdm(files, desc="데이터 파일 로드 중", mininterval=0.5):
         try:
             if columns_only is not None:
@@ -237,20 +274,9 @@ def load_parquet_data(
 
             # [실시간 고속 Y 라벨링] 로딩 시점에 종목별로 즉시 라벨 생성 (OOM 원천 방지)
             if label_params is not None:
-                label_type = label_params.get("type", "fixed")
-                horizon = label_params["horizon"]
-
-                if label_type == "dynamic_sigma":
-                    up_mult = label_params.get("up_mult", 1.5)
-                    down_mult = label_params.get("down_mult", 1.2)
-                    y_label_series = apply_dynamic_sigma_barrier_labeling(
-                        temp_df, horizon, up_mult, down_mult
-                    )
-                else:
-                    tp = label_params.get("tp", 3.5)
-                    sl = label_params.get("sl", 2.0)
-                    y_label_series = apply_fixed_barrier_labeling(temp_df, horizon, tp, sl)
-
+                y_label_series = _apply_barrier_labeling_by_interval(
+                    temp_df, label_params, master
+                )
                 temp_df["Y_Label"] = y_label_series.map({-1: 0, 0: 1, 1: 2})
                 temp_df = temp_df.dropna(subset=["Y_Label"])
                 temp_df["Y_Label"] = temp_df["Y_Label"].astype(int)
@@ -300,6 +326,12 @@ def load_parquet_data(
             df_list.append(temp_df)
         except Exception as e:
             print(f"Error loading {f}: {e}")
+            failures.append((f, str(e)))
+
+    if failures:
+        raise RuntimeError(
+            f"데이터 파일 로드/검증 실패 {len(failures)}개: {failures[:5]}"
+        )
 
     if not df_list:
         raise ValueError(f"해당 기간({start_date} ~ {end_date})에 로드된 데이터가 없습니다.")

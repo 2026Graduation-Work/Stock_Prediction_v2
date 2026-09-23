@@ -114,26 +114,39 @@ def intervals_overlapping(
     return normalized.loc[mask].reset_index(drop=True)
 
 
-def membership_mask(rows: pd.DataFrame, master: pd.DataFrame) -> pd.Series:
-    """Date/Code 행이 해당 날짜의 상장 구간 안에 있는지 판정한다."""
+def membership_interval_ids(rows: pd.DataFrame, master: pd.DataFrame) -> pd.Series:
+    """각 Date/Code 행이 속한 상장 구간 ID를 반환한다.
+
+    같은 단축코드가 재사용된 경우에도 서로 다른 상장 구간을 구분할 수 있도록
+    master의 정규화된 행 번호를 nullable integer로 반환한다. 비상장 행은 NA다.
+    """
     if not {"Date", "Code"}.issubset(rows.columns):
         raise UniverseContractError("membership 판정에는 Date와 Code가 필요합니다.")
-    normalized = _validated(master)
+    normalized = _validated(master).reset_index(drop=True)
+    intervals = normalized[["Code", "ListingDate", "DelistingDate"]].reset_index(
+        names="_interval_id"
+    )
     source = rows[["Date", "Code"]].copy()
     source["_row_id"] = range(len(source))
     source["Date"] = pd.to_datetime(source["Date"]).dt.tz_localize(None).dt.normalize()
     source["Code"] = normalize_code(source["Code"])
-    joined = source.merge(
-        normalized[["Code", "ListingDate", "DelistingDate"]], on="Code", how="left"
-    )
+    joined = source.merge(intervals, on="Code", how="left")
     eligible = joined["Date"].ge(joined["ListingDate"]) & (
         joined["DelistingDate"].isna()
         | joined["Date"].lt(joined["DelistingDate"])
     )
-    matched = joined.loc[eligible].groupby("_row_id").size()
-    if (matched > 1).any():
+    matched = joined.loc[eligible, ["_row_id", "_interval_id"]]
+    if matched["_row_id"].duplicated().any():
         raise UniverseContractError("한 Date/Code가 여러 상장 구간에 동시에 속합니다.")
-    return pd.Series(source["_row_id"].isin(matched.index).to_numpy(), index=rows.index)
+    result = pd.Series(pd.array([pd.NA] * len(source), dtype="Int64"), index=rows.index)
+    if not matched.empty:
+        result.iloc[matched["_row_id"].to_numpy()] = matched["_interval_id"].to_numpy()
+    return result
+
+
+def membership_mask(rows: pd.DataFrame, master: pd.DataFrame) -> pd.Series:
+    """Date/Code 행이 해당 날짜의 상장 구간 안에 있는지 판정한다."""
+    return membership_interval_ids(rows, master).notna()
 
 
 def filter_point_in_time_rows(rows: pd.DataFrame, master: pd.DataFrame) -> pd.DataFrame:
