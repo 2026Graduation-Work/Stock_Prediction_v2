@@ -1,83 +1,66 @@
 import { MARKET_CONDITION_META } from "@/lib/display";
+import SourceChip from "./source-chip";
 import type { MarketIndexQuote, MarketStatus } from "@/lib/types";
 
+// 헤더 아래 시장 브리핑: 지수 3개(등락 적/청) + 한 문장. 점수 숫자는 두지 않는다.
+const SHOWN = new Set(["KOSPI", "KOSDAQ", "KOSPI200"]);
+
 function formatValue(quote: MarketIndexQuote): string {
-  const fractionDigits = Number.isInteger(quote.value) ? 0 : 2;
-  return quote.value.toLocaleString("ko-KR", {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-  });
+  return quote.value.toLocaleString("ko-KR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function QuoteCell({ quote }: { quote: MarketIndexQuote }) {
-  const positive = quote.change > 0;
-  const negative = quote.change < 0;
-  const color = positive ? "#c2413b" : negative ? "#2f5fd0" : "#667085";
-  const arrow = positive ? "▲" : negative ? "▼" : "";
-
+function Quote({ quote }: { quote: MarketIndexQuote }) {
+  const color =
+    quote.change > 0 ? "var(--color-up)" : quote.change < 0 ? "var(--color-down)" : "var(--color-muted)";
+  const arrow = quote.change > 0 ? "▲" : quote.change < 0 ? "▼" : "";
   return (
-    <div className="flex h-9 min-w-[112px] flex-col justify-center border-l border-line-soft px-3 first:border-l-0">
-      <span className="text-[10px] font-semibold text-muted">{quote.label}</span>
-      <div className="flex items-baseline gap-1.5 whitespace-nowrap">
-        <span className="text-[13px] font-extrabold tabular-nums">{formatValue(quote)}</span>
-        <span className="text-[9.5px] font-bold tabular-nums" style={{ color }}>
-          {arrow} {Math.abs(quote.changePercent).toFixed(2)}%
-        </span>
-      </div>
-    </div>
+    <span className="flex flex-none items-baseline gap-1.5 whitespace-nowrap">
+      <span className="text-xs text-muted">{quote.label}</span>
+      <span className="text-sm font-medium tabular-nums">{formatValue(quote)}</span>
+      <span className="text-xs tabular-nums" style={{ color }}>
+        {arrow}
+        {Math.abs(quote.changePercent).toFixed(2)}%
+      </span>
+    </span>
   );
 }
 
-function Score({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="hidden items-baseline gap-1.5 whitespace-nowrap lg:flex">
-      <span className="text-[10px] text-faint">{label}</span>
-      <span className="text-xs font-extrabold tabular-nums">{value}</span>
-    </div>
-  );
-}
+// 백분위(0~100) → 구간 말. 산식: frontend/scripts/build_demo_snapshot.py
+const level = (score: number) => (score < 100 / 3 ? "낮음" : score < 200 / 3 ? "보통" : "높음");
 
 export default function MarketStatusBar({ status }: { status: MarketStatus }) {
   const meta = MARKET_CONDITION_META[status.condition];
+  const real = status.provenance.kind === "real";
+  const quotes = status.indexQuotes.filter(({ symbol }) => SHOWN.has(symbol));
 
   return (
-    <section aria-label="시장 지수와 시장 상태" className="border-t border-line bg-field">
-      <div className="mx-auto grid h-[50px] w-full max-w-[1440px] grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-6 lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:px-8">
-        <div className="hidden min-w-[110px] flex-col lg:flex">
-          <span className="flex items-center gap-1.5 text-[10px] font-semibold text-muted">
-            시장 브리핑
-            {status.source === "mock" && (
-              <span className="rounded-[3px] bg-brand-soft px-1 py-0.5 text-[8.5px] font-extrabold text-brand">
-                샘플
-              </span>
-            )}
-          </span>
-          <span className="text-[11px] font-bold tabular-nums">
-            {status.date.replaceAll("-", ".")} 기준
-          </span>
-        </div>
-
-        <div className="flex min-w-0 items-center overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-          {status.indexQuotes.length > 0 ? (
-            status.indexQuotes.map((quote) => <QuoteCell key={quote.symbol} quote={quote} />)
-          ) : (
-            <span className="px-3 text-xs text-faint">지수 데이터 미등록</span>
-          )}
-        </div>
-
-        <div className="flex h-8 items-center gap-3 border-l border-line pl-3">
-          <Score label="변동성" value={status.volatilityScore} />
-          <Score label="거래량" value={status.volumeScore} />
-          <span
-            className="inline-flex h-6 items-center rounded-[4px] px-2.5 text-[10.5px] font-extrabold"
-            style={{ backgroundColor: meta.bg, color: meta.color }}
-          >
-            {meta.label}
-          </span>
-          <span className="hidden max-w-[250px] truncate text-[10.5px] text-body xl:inline">
-            {meta.comment}
-          </span>
-        </div>
+    <section aria-label="시장 브리핑" className="border-t border-line/60">
+      <div className="mx-auto flex min-h-10 w-full max-w-[1200px] items-center gap-5 overflow-x-auto px-4 py-2 [scrollbar-width:none] sm:px-6 lg:px-8 [&::-webkit-scrollbar]:hidden">
+        <span className="flex-none text-xs text-muted tabular-nums">시장 · {status.date.slice(5).replace("-", ".")}</span>
+        {quotes.length > 0 ? (
+          quotes.map((quote) => <Quote key={quote.symbol} quote={quote} />)
+        ) : (
+          <span className="text-xs text-muted">지수 데이터가 아직 없어요</span>
+        )}
+        {real ? (
+          <details className="relative flex-none lg:ml-auto">
+            <summary className="cursor-pointer list-none whitespace-nowrap text-xs text-body">
+              시장 흔들림 <strong className="font-medium text-ink">{level(status.volatilityScore)}</strong> · 거래{" "}
+              <strong className="font-medium text-ink">{level(status.volumeScore)}</strong>
+              <span className="ml-1 text-muted underline underline-offset-2">자세히</span>
+            </summary>
+            <div className="fixed left-4 right-4 top-28 z-50 rounded-md bg-white p-4 text-xs leading-5 text-body shadow-modal sm:left-auto sm:right-8 sm:w-80">
+              <p className="m-0">
+                흔들림: KOSPI 최근 20거래일 가격 흔들림이 지난 1년 중 아래에서 {status.volatilityScore}% 위치예요.
+              </p>
+              <p className="m-0 mt-1">거래: 최근 20거래일 평균 거래대금이 지난 1년 중 아래에서 {status.volumeScore}% 위치예요.</p>
+              <p className="m-0 mt-2 text-muted">3등분해 낮음·보통·높음으로 불러요. {meta.comment}.</p>
+            </div>
+          </details>
+        ) : (
+          <span className="flex-none whitespace-nowrap text-xs text-body lg:ml-auto">{meta.comment}</span>
+        )}
+        <SourceChip provenance={status.provenance} />
       </div>
     </section>
   );

@@ -1,13 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import StockDetailView from "./stock-detail";
 import { useOnboarding } from "./onboarding-provider";
+import { summaryFromProfilingOutput } from "@/lib/profiling-rules";
 import type { StockInsights } from "@/lib/providers";
 import {
   getAuthenticatedStockDetailData,
   type StockDetailData,
 } from "@/lib/queries";
+import {
+  getSavedProfileSnapshot,
+  getServerProfileSnapshot,
+  parseSavedProfile,
+  subscribeToSavedProfile,
+} from "@/lib/save-profile";
 
 interface AuthenticatedDetailResult {
   userId: string;
@@ -63,7 +70,19 @@ export default function StockDetailBoundary({
     authenticatedResult.code === code
       ? authenticatedResult
       : null;
-  const data = currentResult?.data ?? initialData;
+  const fetched = currentResult?.data ?? initialData;
+  // 데모 모드에서도 이 브라우저에서 마친 설문 결과가 있으면 대시보드와 같은 8축을 쓴다.
+  const savedProfile = parseSavedProfile(
+    useSyncExternalStore(subscribeToSavedProfile, getSavedProfileSnapshot, getServerProfileSnapshot),
+  );
+  const data =
+    fetched.source === "mock" && savedProfile?.style_axes
+      ? {
+          ...fetched,
+          styleAxes: savedProfile.style_axes,
+          profile: summaryFromProfilingOutput(savedProfile, fetched.profile),
+        }
+      : fetched;
   const error = currentResult?.error ?? "";
   const loading =
     onboardingState.mode === "supabase" && !currentResult?.data && !error;

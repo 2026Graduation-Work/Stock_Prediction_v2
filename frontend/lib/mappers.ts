@@ -1,5 +1,8 @@
-import { AVOIDED_ASSET_LABELS } from "./profiling-rules";
+import { AVOIDED_ASSET_LABELS, summaryFromStyleAxes } from "./profiling-rules";
+import { CLOSING_PRICE } from "./closing-prices.ts";
+import { costBasis } from "./holdings-rules.ts";
 import type {
+  DataProvenance,
   HorizonAgreement,
   HorizonDirection,
   InvestorProfileSummary,
@@ -13,6 +16,7 @@ import type {
   RiskGrade,
   SignalLight,
   StockDetail,
+  StyleAxes,
 } from "./types";
 
 export interface UserRow {
@@ -77,7 +81,7 @@ export interface PredictionFeatureRow {
 export interface PortfolioHoldingRow {
   stock_code: string;
   quantity: number;
-  avg_buy_price: number;
+  avg_buy_price: number | null; // 0004부터 비워 둘 수 있음
   display_order: number;
 }
 
@@ -130,10 +134,14 @@ const FINANCIAL_FEATURE_TOKENS = [
   "debt",
 ];
 
+// Supabase 테이블은 지금 supabase/seed.sql 데모 시드로만 채워진다(백엔드 적재 경로 없음).
+// 실데이터 적재가 생기면 행에 출처 컬럼을 두고 여기서 읽는다. 그 전까지는 예시로 표시한다.
+const SUPABASE_DEMO: DataProvenance = { kind: "mock", source: "데모 시드" };
+
 export function mapMarketStatus(row: MarketStatusRow): MarketStatus {
   return {
     date: row.status_date,
-    source: "supabase",
+    provenance: { ...SUPABASE_DEMO, asOf: row.status_date },
     condition: includes(MARKET_CONDITIONS, row.condition) ? row.condition : "caution",
     volatilityScore: row.volatility_score,
     volumeScore: row.volume_score,
@@ -171,6 +179,7 @@ export function mapRecommendedStock(
     },
     riskFlags: toRiskFlags(stock.risk_flags),
     ...(prediction.caution ? { caution: prediction.caution } : {}),
+    provenance: { ...SUPABASE_DEMO, asOf: prediction.prediction_date },
   };
 }
 
@@ -214,30 +223,13 @@ export function mapPredictionReasons(
 export function mapProfileSummary(
   user: UserRow,
   profile: IpsProfileRow,
+  styleAxes: StyleAxes | null = null,
 ): InvestorProfileSummary {
-  const horizon =
-    profile.horizon_score >= 67
-      ? "short"
-      : profile.horizon_score >= 34
-        ? "mid"
-        : "long";
-  const stable = profile.profile_type === "stable";
-  const personaLabel = stable
-    ? horizon === "long"
-      ? "신중한 장기 투자자"
-      : "신중한 중장기 투자자"
-    : "적극적인 기회 탐색형 투자자";
-
-  return {
+  return summaryFromStyleAxes(styleAxes, {
     displayName: user.display_name,
     avatarLabel: user.avatar_label,
-    profileTypeLabel: stable ? "안정추구형" : "수익추구형",
-    personaLabel,
-    riskTolerance: profile.risk_score,
-    sentimentSensitivity: profile.fomo_score,
-    horizon,
     surveyedAt: profile.surveyed_at.slice(0, 7).replace("-", "."),
-  };
+  });
 }
 
 export function mapPortfolioHolding(
@@ -253,7 +245,8 @@ export function mapPortfolioHolding(
         ? prediction.signal_light
         : "neutral",
     quantity: holding.quantity,
-    avgBuyPrice: holding.avg_buy_price,
+    ...weightPrice(holding),
+    provenance: SUPABASE_DEMO,
   };
 }
 
@@ -345,4 +338,10 @@ function featureSource(feature: string): {
 
 function includes<T extends string>(values: readonly T[], value: unknown): value is T {
   return typeof value === "string" && values.includes(value as T);
+}
+
+// 평균 매입가가 비어 있으면 기준일 종가로 비중을 센다(화면에 "현재가 기준"으로 표시).
+function weightPrice(holding: PortfolioHoldingRow): Pick<PortfolioHolding, "avgBuyPrice" | "priceBasis"> {
+  const { price, basis } = costBasis(holding.avg_buy_price, CLOSING_PRICE[holding.stock_code]);
+  return { avgBuyPrice: price, priceBasis: basis };
 }

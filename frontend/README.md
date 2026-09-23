@@ -1,3 +1,5 @@
+> ⚠️ 이 문서의 "역할·범위·화이트박스 4패턴"은 2026-06 초기 기획이다. 현재 화면 구조는 루트 [README.md](../README.md), 화면 규칙은 [DESIGN.md](DESIGN.md)를 본다.
+
 # 🔵 Frontend Block — 대시보드 / API / 인프라
 
 담당: 성우

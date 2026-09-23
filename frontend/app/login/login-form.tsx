@@ -3,146 +3,179 @@
 import { useState, type FormEvent } from "react";
 import { useOnboarding } from "@/app/components/onboarding-provider";
 import {
-  getAuthMode,
   requestMagicLink,
+  signInWithPassword,
+  signUpWithPassword,
   startDemoSession,
 } from "@/lib/auth";
+import { isSupabaseConfigured } from "@/lib/supabase";
+
+type AccountTab = "signin" | "signup";
 
 export default function LoginForm() {
   const { refresh } = useOnboarding();
-  const mode = getAuthMode();
+  // 이메일 계정 기능은 Supabase 환경변수가 있을 때만. 데모 계정은 항상 쓸 수 있다.
+  const accountAvailable = isSupabaseConfigured();
+  const [tab, setTab] = useState<AccountTab>("signin");
+  const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const [sent, setSent] = useState(false);
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
 
-  async function submitEmail(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function run(task: () => Promise<void>) {
     setSubmitting(true);
     setError("");
+    setNotice("");
     try {
-      await requestMagicLink(email.trim());
-      setSent(true);
-    } catch (submitError) {
-      setError(
-        submitError instanceof Error
-          ? submitError.message
-          : "로그인 링크를 보내지 못했습니다.",
-      );
+      await task();
+    } catch (taskError) {
+      setError(taskError instanceof Error ? taskError.message : "요청을 처리하지 못했습니다.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function startDemo() {
-    setSubmitting(true);
-    setError("");
-    try {
-      startDemoSession();
+  function submitAccount(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void run(async () => {
+      if (tab === "signin") {
+        await signInWithPassword(email.trim(), password);
+        await refresh(true);
+        return;
+      }
+      const { needsEmailConfirmation } = await signUpWithPassword(email.trim(), password);
+      if (needsEmailConfirmation) {
+        setNotice(`${email.trim()}로 확인 메일을 보냈어요. 메일의 링크를 누르면 로그인됩니다.`);
+        return;
+      }
       await refresh(true);
-    } catch (startError) {
-      setError(
-        startError instanceof Error
-          ? startError.message
-          : "데모 로그인을 시작하지 못했습니다.",
-      );
-      setSubmitting(false);
-    }
+    });
   }
 
+  function sendMagicLink() {
+    void run(async () => {
+      await requestMagicLink(email.trim());
+      setNotice(`${email.trim()}로 로그인 링크를 보냈어요. 메일의 링크를 열면 이어집니다.`);
+    });
+  }
+
+  function startDemo() {
+    void run(async () => {
+      startDemoSession();
+      await refresh(true);
+    });
+  }
+
+  const field =
+    "h-11 w-full rounded-md bg-field px-3.5 text-sm font-normal text-ink outline-none focus:bg-white focus:ring-2 focus:ring-brand/30";
+
   return (
-    <div className="min-h-screen bg-page">
-      <header className="border-b border-line bg-white">
-        <div className="mx-auto flex h-16 w-full max-w-[1080px] items-center gap-2.5 px-5 sm:px-8">
-          <span className="grid size-8 place-items-center rounded-lg bg-brand text-sm font-extrabold text-white">
-            S
-          </span>
-          <span className="text-[17px] font-extrabold text-ink">시그널랩</span>
-        </div>
-      </header>
-
-      <main className="mx-auto grid min-h-[calc(100vh-65px)] w-full max-w-[1080px] place-items-center px-5 py-10 sm:px-8">
-        <section className="w-full max-w-[440px] rounded-lg border border-line bg-white px-6 py-8 shadow-[0_12px_34px_rgba(27,36,52,0.07)] sm:px-9 sm:py-10">
-          <span className="text-xs font-extrabold text-brand">SIGN IN</span>
-          <h1 className="mt-2 text-[28px] font-extrabold text-ink">
-            시그널랩 로그인
+    <main className="grid min-h-dvh place-items-center bg-page px-4 py-10">
+      <section className="surface flex w-full max-w-[400px] flex-col gap-6 px-6 py-9 sm:px-9">
+        <div className="flex flex-col gap-2 text-center">
+          <h1 className="text-3xl font-semibold">
+            <span className="text-brand">시그널랩</span> 로그인
           </h1>
-          <p className="mt-2 text-sm leading-6 text-muted">
-            나의 투자 성향과 근거가 연결된 신호를 확인합니다.
-          </p>
+          <p className="m-0 text-sm text-body">종목을 판단할 근거를 쉽게 보여 드려요.</p>
+        </div>
 
-          {mode === "supabase" ? (
-            sent ? (
-              <div className="mt-8 rounded-lg border border-[#b8dfd4] bg-[#f1faf7] p-4">
-                <p className="text-sm font-bold text-[#126b58]">이메일을 확인해 주세요</p>
-                <p className="mt-1 text-sm leading-6 text-body">
-                  {email}로 보낸 로그인 링크를 열면 자동으로 이어집니다.
-                </p>
+        {!accountAvailable ? (
+          <p className="m-0 rounded-md bg-field px-4 py-3 text-xs text-muted">
+            이 배포에는 계정 기능이 아직 연결되지 않았어요. 아래 데모로 모든 화면을 둘러볼 수 있어요.
+          </p>
+        ) : !emailOpen ? (
+          <button type="button" onClick={() => setEmailOpen(true)} className="btn-primary w-full">
+            이메일로 시작
+          </button>
+        ) : (
+          <div className="flex flex-col gap-4">
+            <h2 className="sr-only">이메일로 시작</h2>
+            <div role="tablist" aria-label="계정" className="segmented grid grid-cols-2">
+              {(
+                [
+                  ["signin", "로그인"],
+                  ["signup", "처음이에요"],
+                ] as const
+              ).map(([id, label]) => (
                 <button
+                  key={id}
                   type="button"
-                  onClick={() => setSent(false)}
-                  className="mt-3 text-xs font-bold text-brand hover:text-brand-deep"
+                  role="tab"
+                  aria-selected={tab === id}
+                  onClick={() => {
+                    setTab(id);
+                    setError("");
+                    setNotice("");
+                  }}
                 >
-                  다른 이메일 사용
+                  {label}
                 </button>
-              </div>
-            ) : (
-              <form onSubmit={submitEmail} className="mt-8">
-                <label htmlFor="email" className="text-sm font-bold text-ink">
-                  이메일
-                </label>
+              ))}
+            </div>
+            <form onSubmit={submitAccount} className="flex flex-col gap-3">
+              <label className="flex flex-col gap-1.5 text-xs text-muted">
+                이메일
                 <input
-                  id="email"
                   type="email"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
                   placeholder="name@example.com"
                   autoComplete="email"
                   required
-                  className="mt-2 h-11 w-full rounded-lg border border-edge bg-field px-3.5 text-sm text-ink outline-none placeholder:text-faint focus:border-brand focus:bg-white"
+                  autoFocus
+                  className={field}
                 />
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="mt-4 h-11 w-full rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
-                >
-                  {submitting ? "전송 중" : "로그인 링크 받기"}
-                </button>
-              </form>
-            )
-          ) : (
-            <div className="mt-8">
-              <div className="rounded-lg border border-line bg-field px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <span className="size-2 rounded-full bg-[#16856b]" />
-                  <span className="text-sm font-bold text-ink">데모 환경</span>
-                </div>
-                <p className="mt-1.5 text-xs leading-5 text-muted">
-                  로그인과 설문 결과는 이 브라우저에만 저장됩니다.
-                </p>
-              </div>
+              </label>
+              <label className="flex flex-col gap-1.5 text-xs text-muted">
+                비밀번호
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                  placeholder={tab === "signup" ? "6자 이상" : ""}
+                  autoComplete={tab === "signup" ? "new-password" : "current-password"}
+                  minLength={6}
+                  required
+                  className={field}
+                />
+              </label>
+              <button type="submit" disabled={submitting} className="btn-primary w-full">
+                {submitting ? "처리 중" : tab === "signin" ? "로그인" : "가입하고 시작"}
+              </button>
               <button
                 type="button"
-                onClick={() => void startDemo()}
-                disabled={submitting}
-                className="mt-4 h-11 w-full rounded-lg bg-brand px-5 text-sm font-bold text-white hover:bg-brand-deep disabled:cursor-not-allowed disabled:bg-ghost"
+                onClick={sendMagicLink}
+                disabled={submitting || !email.trim()}
+                className="btn-text self-center text-xs disabled:cursor-not-allowed disabled:text-muted"
               >
-                {submitting ? "시작 중" : "김민지 데모로 시작"}
+                비밀번호 없이 로그인 링크 받기
               </button>
-            </div>
-          )}
+            </form>
+          </div>
+        )}
 
-          {error && (
-            <p role="alert" className="mt-4 text-sm font-semibold text-[#b42318]">
-              {error}
-            </p>
-          )}
-
-          <p className="mt-8 border-t border-line-soft pt-5 text-xs leading-5 text-faint">
-            처음 로그인한 사용자는 투자 성향 설문을 완료한 뒤 대시보드로 이동합니다.
+        {notice && (
+          <p role="status" className="m-0 rounded-md bg-field px-4 py-3 text-sm text-body">
+            {notice}
           </p>
-        </section>
-      </main>
-    </div>
+        )}
+        {error && (
+          <p role="alert" className="m-0 text-sm text-danger">
+            {error}
+          </p>
+        )}
+
+        <div className="flex flex-col gap-2">
+          <button type="button" onClick={startDemo} disabled={submitting} className="btn-secondary w-full">
+            데모로 둘러보기
+          </button>
+          <p className="m-0 text-center text-xs text-muted">
+            가입 없이 예시 사용자(김민지)로 둘러봐요. 수치는 예시예요.
+          </p>
+        </div>
+      </section>
+    </main>
   );
 }

@@ -2,7 +2,7 @@
 // 대상 종목은 삼성전자(005930)·현대차(005380)이고, 그 외 종목은 null을 돌려준다.
 
 import type { NudgeMarket } from "../profiling/nudges";
-import type { PortfolioHolding, RiskGrade, StockDetail } from "../types";
+import type { DataProvenance, PortfolioHolding, RiskGrade, StockDetail } from "../types";
 import {
   CONTRIBUTION_FIXTURE,
   FINANCIAL_FIXTURE,
@@ -12,13 +12,15 @@ import {
   businessDaysEndingAt,
 } from "./fixtures.ts";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
+import { PRICE_PROVENANCE, STOCK_SNAPSHOT } from "./demo-snapshot.ts";
 
-// 억원. + 순매수, - 순매도. 날짜 오름차순.
+// 억원. + 순매수, - 순매도. 날짜 오름차순. 네 주체의 합은 0이다(KRX 투자자 분류).
 export interface SupplyDemandDay {
   date: string;
   retail: number;
   foreign: number;
-  institution: number;
+  institution: number; // 기관합계
+  otherCorp: number; // 기타법인
 }
 export type SupplyDemandProvider = (code: string) => Promise<SupplyDemandDay[] | null>;
 
@@ -48,10 +50,12 @@ export interface ContributionSignalInput {
   label: string;
   category: ContributionCategory;
   weight: number;
+  direction?: 1 | -1; // 신호를 미는 쪽. +1 오르는 쪽(기본), -1 내리는 쪽
   description: string;
 }
-export interface ContributionSignal extends Omit<ContributionSignalInput, "weight"> {
+export interface ContributionSignal extends Omit<ContributionSignalInput, "weight" | "direction"> {
   share: number; // 0~100, 종목 안에서 합 100
+  direction: 1 | -1;
 }
 export type ContributionProvider = (code: string) => Promise<ContributionSignal[] | null>;
 
@@ -84,7 +88,11 @@ export const contributionProvider: ContributionProvider = async (code) => {
   if (!inputs) return null;
   const total = inputs.reduce((sum, { weight }) => sum + Math.abs(weight), 0);
   return inputs
-    .map(({ weight, ...signal }) => ({ ...signal, share: (Math.abs(weight) / total) * 100 }))
+    .map(({ weight, direction = 1, ...signal }) => ({
+      ...signal,
+      direction,
+      share: (Math.abs(weight) / total) * 100,
+    }))
     .sort((left, right) => right.share - left.share);
 };
 
@@ -93,12 +101,24 @@ export const financialProvider: FinancialProvider = async (code) =>
 
 export type HoldingWeight = Pick<PortfolioHolding, "code" | "quantity" | "avgBuyPrice">;
 
+// 가격·거래량으로 본 분위기 한 줄(psychology_market_v1). 구간 말 + 풀이.
+export interface PsychologyLine {
+  word: string;
+  explain: string;
+  axis: number; // psych_greed_fear_axis -1(움츠러듦)~+1(들뜸). 숫자는 계산 근거에만
+  provenance: DataProvenance;
+}
+
 export interface StockInsights {
+  psychology: PsychologyLine | null;
   supply: SupplyDemandDay[] | null;
   sentiment: SentimentData | null;
   contributions: ContributionSignal[] | null;
   financial: FinancialSnapshot | null;
+  provenance: Record<"supply" | "sentiment" | "contributions" | "financial", DataProvenance>;
 }
+
+const FIXTURE: DataProvenance = { kind: "fixture", source: "픽스처" };
 
 export async function loadStockInsights(code: string): Promise<StockInsights> {
   const [supply, sentiment, contributions, financial] = await Promise.all([
@@ -107,7 +127,35 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
     contributionProvider(code),
     financialProvider(code),
   ]);
-  return { supply, sentiment, contributions, financial };
+  const psychology = STOCK_SNAPSHOT[code]?.psychology;
+  return {
+    psychology: psychology
+      ? {
+          word: psychology.word,
+          explain: "최근 20일 오름세와 석 달 평균 거래 가격 대비 위치로 본 분위기예요",
+          axis: psychology.axis,
+          provenance: PRICE_PROVENANCE,
+        }
+      : null,
+    supply,
+    sentiment,
+    contributions,
+    financial,
+    provenance: {
+      supply: FIXTURE,
+      sentiment:
+        sentiment?.source === "real"
+          ? { kind: "real", source: "BigKinds · KR-FinBERT", asOf: sentiment.days.at(-1)?.date }
+          : FIXTURE,
+      contributions: FIXTURE,
+      financial: FIXTURE,
+    },
+  };
+}
+
+// 여러 입력에서 파생된 수치(넛지 등)는 입력이 모두 실데이터일 때만 실데이터다.
+export function combinedProvenance(...inputs: DataProvenance[]): DataProvenance {
+  return inputs.every(({ kind }) => kind === "real") ? inputs[0] : FIXTURE;
 }
 
 export interface Period {
@@ -119,6 +167,9 @@ export interface Period {
 export function pricePeriod(detail: StockDetail): Period | null {
   const count = detail.priceHistory?.length ?? 0;
   if (count < 2) return null;
+  if (detail.priceDates?.length === count) {
+    return { start: detail.priceDates[0], end: detail.priceDates[count - 1] };
+  }
   const dates = businessDaysEndingAt(detail.asOf, count);
   return { start: dates[0], end: dates[dates.length - 1] };
 }

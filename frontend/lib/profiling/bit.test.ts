@@ -234,3 +234,16 @@ test("최대 2개, 우선순위 N02 > N05 > N11 > N04 > N01 > id 순, 같은 축
     ["N01", "N06"],
   );
 });
+
+test("다른 성향으로 보기: 프리셋은 해당 유형으로 분류되고 분류 외 축은 그대로 둔다", async () => {
+  const { BIT_TYPES, presetStyleAxes } = await import("./bit.ts");
+  for (const type of BIT_TYPES) {
+    const preset = presetStyleAxes(investorStyleAxes, type);
+    const result = classifyBit(preset);
+    assert.equal(result.type, type);
+    assert.equal(result.lowConfidence, false);
+    for (const axisId of BIAS_PROFILE_AXES) {
+      assert.equal(result.ratios[axisId], classifyBit(investorStyleAxes).ratios[axisId]);
+    }
+  }
+});

@@ -19,7 +19,7 @@ for (const code of CODES) {
   test(`${code}: 4개 Provider가 값을 반환한다`, async () => {
     const supply = await supplyDemandProvider(code);
     assert.equal(supply?.length, 20);
-    assert.equal(supply?.at(-1)?.date, "2025-10-02");
+    assert.equal(supply?.at(-1)?.date, "2025-12-30"); // 데모 기준일
     assert.deepEqual(
       supply?.map(({ date }) => date),
       [...(supply ?? [])].map(({ date }) => date).sort(),
@@ -46,13 +46,47 @@ for (const code of CODES) {
 }
 
 test("대상 외 종목은 null", async () => {
-  const insights = await loadStockInsights("068270");
-  assert.deepEqual(insights, {
-    supply: null,
-    sentiment: null,
-    contributions: null,
-    financial: null,
+  const { supply, sentiment, contributions, financial } = await loadStockInsights("068270");
+  assert.deepEqual(
+    { supply, sentiment, contributions, financial },
+    { supply: null, sentiment: null, contributions: null, financial: null },
+  );
+});
+
+for (const code of CODES) {
+  test(`${code}: 수급 네 주체(개인·외국인·기관합계·기타법인) 순매수 합은 매일 0`, async () => {
+    const supply = (await supplyDemandProvider(code)) ?? [];
+    assert.ok(supply.length > 0);
+    for (const day of supply) {
+      assert.equal(day.retail + day.foreign + day.institution + day.otherCorp, 0, day.date);
+    }
   });
+}
+
+test("출처: 실데이터는 삼성전자 감성뿐이고 나머지는 픽스처", async () => {
+  const samsung = await loadStockInsights("005930");
+  assert.deepEqual(samsung.provenance.sentiment, {
+    kind: "real",
+    source: "BigKinds · KR-FinBERT",
+    asOf: samsung.sentiment?.days.at(-1)?.date,
+  });
+  for (const key of ["supply", "contributions", "financial"] as const) {
+    assert.equal(samsung.provenance[key].kind, "fixture", key);
+  }
+  const hyundai = await loadStockInsights("005380");
+  assert.equal(hyundai.provenance.sentiment.kind, "fixture");
+});
+
+test("가격 흐름 분위기: 데모 4종목은 실데이터 스냅샷에서 구간 말을 갖는다", async () => {
+  for (const code of ["005930", "005380", "035720", "068270"]) {
+    const { psychology } = await loadStockInsights(code);
+    assert.ok(psychology, code);
+    assert.equal(psychology.provenance.kind, "real");
+    assert.equal(psychology.provenance.asOf, "2025-12-30");
+    assert.ok(psychology.axis >= -1 && psychology.axis <= 1);
+    assert.ok(["많이 들뜸", "조금 들뜸", "차분함", "조금 움츠러듦", "많이 움츠러듦"].includes(psychology.word));
+  }
+  assert.equal((await loadStockInsights("000660")).psychology, null);
 });
 
 function minjiWith(overrides: Record<string, number>): StyleAxes {
@@ -84,6 +118,6 @@ test("김민지 + 삼성전자: information_reliance를 0.3으로 올리면 수�
 });
 
 // urgency +0.44 × 감성 창 마지막 날 |Δ| >= p90(실제 날짜 구간) → N07.
-// N04(변동성 백분위 0.48)·N05(3개월 고점 대비 0%)는 시장 조건이 거짓이라 발화하지 않는다.
+// N04(변동성 백분위 0.48)·N05(3개월 고점 대비, 실데이터 시세)는 시장 조건이 거짓이라 발화하지 않는다.
 // sentiment-fixture.ts가 다시 생성되면 재확인한다.
 const EXPECTED_MINJI_SAMSUNG: string[] = ["N07"];

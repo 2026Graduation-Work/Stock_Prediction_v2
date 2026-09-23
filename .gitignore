@@ -67,8 +67,9 @@ venv/
 *:Zone.Identifier
 
 # ---------- AI 코딩 도구 ----------
-# Claude Code
-.claude/
+# Claude Code — 개인 설정은 무시하고, 검토한 디자인 스킬(AGENTS.md 허용 목록)만 추적한다
+.claude/*
+!.claude/skills/
 
 # ---------- 데이터 및 로컬 설정 (Data & Config) ----------
 **/data/
@@ -105,6 +106,10 @@ backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/experiments/configs/universes/
 !backend/analysis/chart/experiments/configs/universes/kospi_all_2024-12-30.csv
 
+# 심리 피처 정의 문서의 형식 확인용 소규모 샘플만 추적한다.
+# 실제 피처 데이터(data/external, data/feature_store)는 계속 제외한다.
+!backend/analysis/chart/experiments/features/samples/psychology_market_v1_sample.csv
+
 # 차트 분석 블록의 샘플 데이터 및 배포 모델 추적 허용 (협업용 가이드)
 # 상위 디렉토리가 ignore되면 하위 negation이 무효라 디렉토리부터 unignore한다.
 !backend/analysis/chart/data/
@@ -113,3 +118,21 @@ backend/analysis/chart/experiments/configs/*
 !backend/analysis/chart/data/ticker_metadata.csv
 backend/analysis/chart/data/raw/corp_code_mapping.json
 !backend/analysis/chart/core/models/
+
+# ---------- backend/analysis/text (value_pipeline) ----------
+# OpenDartReader 회사코드 캐시 (실행 시 자동 생성)
+docs_cache/
+# value_pipeline CLI 산출물은 기본 저장 위치가 out/ 이며, out/은 위 Node 섹션의
+# `out/` 패턴(임의 깊이 매칭)으로 이미 무시된다. 디렉터리 전체(*.json)를 덮으면
+# tracked 파일·*.example.json 계약 파일까지 가려지므로 넓은 패턴을 쓰지 않는다.
+
+# ---------- 뉴스 원본 (공개 레포 금지) ----------
+# BigKinds Excel·가공 코퍼스는 기사 본문·URL을 담고 있어 Git에 올리지 않는다
+# (docs/decisions/bigkinds-acquisition.md). 위 `**/data/`가 이미 덮지만,
+# 누가 data/를 unignore하더라도 원본이 새지 않도록 경로를 명시한다.
+/data/
+**/NewsResult_*.xlsx
+**/news_corpus*.csv
+backend/analysis/text/data/raw/
+# LLM 캐시는 기사(네이버 검색 결과 포함)를 입력으로 만든 요약이라 함께 제외한다.
+backend/analysis/text/value_pipeline/llm_cache/

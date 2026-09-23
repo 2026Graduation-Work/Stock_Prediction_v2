@@ -1,75 +1,33 @@
-// SSOT는 backend/profiling/입니다. 규칙 변경 시 Python 상수 테이블과 동기화합니다.
+// 설문 응답 → schema profiling_output v1.1 변환. 8축 채점은 lib/profiling/style-scoring.ts가 정본이다.
+// 결정론이며 LLM을 쓰지 않는다. 종목을 거르는 값은 avoided_assets(사용자가 직접 고른 항목)뿐이다.
 
+import { BIT_LABEL, BIT_SUMMARY, classifyBit } from "./profiling/bit.ts";
 import type {
   ActionIntent,
-  ProfileType,
+  InvestorProfileSummary,
   ProfilingOutput,
   RiskFlag,
   StyleAxes,
   StyleAxisId,
 } from "./types";
+import {
+  confidencePerAxis,
+  detectContradictions,
+  reduceToLegacyFields,
+  scoreStyleAxes,
+  STYLE_AXIS_IDS,
+  type StyleAnswers,
+} from "./profiling/style-scoring.ts";
 
-// style_questions.AXIS_IDS와 같은 순서.
-export const STYLE_AXIS_IDS: readonly StyleAxisId[] = [
-  "market_participation",
-  "loss_tolerance",
-  "turnover",
-  "concentration",
-  "rule_adherence",
-  "information_reliance",
-  "urgency",
-  "drawdown_reaction",
-];
+export { STYLE_AXIS_IDS };
 
-export const PROFILE_TYPE_THRESHOLD = 60;
-
-export const RISK_ANSWER_MAP = {
-  Q1_A: { riskScore: 15, panicSellTendency: 0.85 },
-  Q1_B: { riskScore: 35, panicSellTendency: 0.65 },
-  Q1_C: { riskScore: 75, panicSellTendency: 0.2 },
-} as const;
-
-export const HORIZON_ANSWER_MAP = {
-  Q2_A: {
-    horizonScore: 80,
-    timeHorizonMonths: 12,
-    liquidityNeedRatio: 0.7,
-    modelHorizon: "H5",
-  },
-  Q2_B: {
-    horizonScore: 50,
-    timeHorizonMonths: 48,
-    liquidityNeedRatio: 0.25,
-    modelHorizon: "H10",
-  },
-  Q2_C: {
-    horizonScore: 20,
-    timeHorizonMonths: 120,
-    liquidityNeedRatio: 0.1,
-    modelHorizon: "H20",
-  },
-} as const;
-
-export const FOMO_ANSWER_MAP = {
-  Q3_A: { fomoScore: 72, herdingScore: 0.38 },
-  Q3_B: { fomoScore: 40, herdingScore: 0.3 },
-  Q3_C: { fomoScore: 15, herdingScore: 0.2 },
-} as const;
-
-export const INFORMATION_SOURCE_BASE = { selfConfidence: 0.3 } as const;
-export const INFORMATION_SOURCE_MAP = {
-  Q4_A: { herdingDelta: 0.2, selfConfidenceDelta: 0 },
-  Q4_B: { herdingDelta: 0.15, selfConfidenceDelta: 0 },
-  Q4_C: { herdingDelta: 0, selfConfidenceDelta: 0.2 },
-  Q4_D: { herdingDelta: 0, selfConfidenceDelta: 0.4 },
-} as const;
-
-export const EXPERIENCE_ANSWER_MAP = {
-  Q5_A: 0.3,
-  Q5_B: 1,
-  Q5_C: 3.5,
-  Q5_D: 7,
-} as const;
+export const EXPERIENCE_CHOICES = [
+  { id: "under_6m", label: "6개월 미만", years: 0.3 },
+  { id: "6m_2y", label: "6개월~2년", years: 1 },
+  { id: "2y_5y", label: "2~5년", years: 3.5 },
+  { id: "over_5y", label: "5년 이상", years: 7 },
+] as const;
+export type ExperienceChoice = (typeof EXPERIENCE_CHOICES)[number]["id"];
 
 export const AVOIDED_ASSET_LABELS: Record<RiskFlag, string> = {
   spac: "SPAC",
@@ -89,47 +47,33 @@ export const AVOIDED_ASSET_DESCRIPTIONS: Record<RiskFlag, string> = {
   preferred_stock: "의결권 대신 배당을 우선 받는 주식으로 보통주와 가격 흐름이 다를 수 있어요.",
 };
 
-export const HORIZON_MODEL_RULES = [
-  { minimum: 67, modelHorizon: "H5", style: "aggressive" },
-  { minimum: 34, modelHorizon: "H10", style: "neutral" },
-  { minimum: 0, modelHorizon: "H20", style: "conservative" },
+// 8축에 원천 문항이 없는 v1.0 필드. 구 설문의 투자 기간 → 유동성 필요도 표를 기간 구간으로 이어 쓴다.
+const LIQUIDITY_BY_MONTHS = [
+  { maxMonths: 12, ratio: 0.7 },
+  { maxMonths: 60, ratio: 0.25 },
+  { maxMonths: Infinity, ratio: 0.1 },
 ] as const;
-
-const CONFIDENCE_PER_FIELD = {
-  risk_tolerance: 0.92,
-  time_horizon_months: 0.95,
-  liquidity_need_ratio: 0.88,
-  fomo_index: 0.78,
-  panic_sell_tendency: 0.7,
-  herding_score: 0.85,
-  self_confidence: 0.6,
-  overheating_caution: 0.55,
-};
+const TARGET_RETURN_ANNUAL = 0.08;
+const CURRENT_MARKET_ANXIETY_INITIAL = 0.5; // text 블록이 채운다
+const OVERHEATING_CAUTION_INITIAL = 0.61; // chart·text 블록이 채운다
+const OVERHEATING_CAUTION_CONFIDENCE = 0.55;
 
 const FREE_TEXT_SIGNAL_RULES = [
-  {
-    field: "fomo_index",
-    keywords: ["남들 다 버는데", "뒤처지는", "놓칠까"],
-    value: 0.8,
-  },
-  {
-    field: "panic_sell_tendency",
-    keywords: ["마이너스", "손실", "잠을 못"],
-    value: 0.75,
-  },
+  { field: "fomo_index", keywords: ["남들 다 버는데", "뒤처지는", "놓칠까"], value: 0.8 },
+  { field: "panic_sell_tendency", keywords: ["마이너스", "손실", "잠을 못"], value: 0.75 },
 ] as const;
 
 export interface SurveyAnswers {
   user_id: string;
   session_id: string;
   timestamp: string;
-  Q1: keyof typeof RISK_ANSWER_MAP;
-  Q2: keyof typeof HORIZON_ANSWER_MAP;
-  Q3: keyof typeof FOMO_ANSWER_MAP;
-  Q4: (keyof typeof INFORMATION_SOURCE_MAP)[];
-  Q5: keyof typeof EXPERIENCE_ANSWER_MAP;
-  Q6: RiskFlag[];
-  Q7?: string;
+  style: StyleAnswers; // 리커트 응답(mode의 문항)
+  mode?: "short" | "quick"; // 기본 quick. short = 온보딩 16문항
+  experience: ExperienceChoice;
+  avoided_assets: RiskFlag[];
+  free_text?: string;
+  // 결과 확인 단계에서 사용자가 직접 옮긴 축. 있으면 채점값 대신 이 ratio를 쓴다.
+  adjusted_axes?: Partial<Record<StyleAxisId, number>>;
   preferred_sectors?: string[];
   portfolio?: ProfilingOutput["portfolio"];
   investment_amount_krw?: number;
@@ -137,59 +81,99 @@ export interface SurveyAnswers {
   target_ticker?: string;
   market_regime_hint?: string;
   benchmark_index?: string;
-  style_axes?: StyleAxes; // 채점된 8축. 설문 UI는 아직 8축 리커트를 받지 않는다
 }
 
-export function profileTypeForRiskScore(riskScore: number): ProfileType {
-  assertScore(riskScore, "riskScore");
-  return riskScore >= PROFILE_TYPE_THRESHOLD ? "aggressive" : "stable";
+// ── 3축 요약: 대시보드 성향 카드와 결과 화면이 같은 8축에서 읽는다 ─────
+// 위험 감수 = mean(loss_tolerance, concentration), 흔들림 민감도 = mean(urgency,
+// drawdown_reaction, information_reliance), 투자 기간 = turnover. 값은 ratio를 0~100으로 옮긴 것이다.
+export interface ThreeAxisSummary {
+  riskTaking: number; // 0 원금 보전·분산 ~ 100 수익 기회·집중
+  sensitivity: number; // 0 흔들림 적음 ~ 100 흔들림 큼
+  horizonScore: number; // 0 장기 보유 ~ 100 단기 매매
+  horizon: "short" | "mid" | "long";
 }
 
-export function horizonCodeForScore(horizonScore: number) {
-  assertScore(horizonScore, "horizonScore");
-  const rule = HORIZON_MODEL_RULES.find(({ minimum }) => horizonScore >= minimum);
-  if (!rule) throw new Error("horizon rules must cover 0-100");
-  return rule.modelHorizon;
+const toScore = (ratio: number) => Math.round(((ratio + 1) / 2) * 100);
+const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
+
+function horizonForScore(horizonScore: number): ThreeAxisSummary["horizon"] {
+  return horizonScore >= 67 ? "short" : horizonScore >= 34 ? "mid" : "long";
 }
 
-export function horizonScoreForMonths(months: number) {
-  const match = Object.values(HORIZON_ANSWER_MAP).find(
-    ({ timeHorizonMonths }) => timeHorizonMonths === months,
-  );
-  if (!match) throw new Error(`지원하지 않는 투자 기간입니다: ${months}`);
-  return match.horizonScore;
+export function threeAxisSummary(styleAxes: StyleAxes): ThreeAxisSummary {
+  const ratio = (id: StyleAxisId) => styleAxes.axes.find(({ axis_id }) => axis_id === id)!.ratio;
+  const horizonScore = toScore(ratio("turnover"));
+  return {
+    riskTaking: toScore(mean([ratio("loss_tolerance"), ratio("concentration")])),
+    sensitivity: toScore(
+      mean([ratio("urgency"), ratio("drawdown_reaction"), ratio("information_reliance")]),
+    ),
+    horizonScore,
+    horizon: horizonForScore(horizonScore),
+  };
+}
+
+// 성향 카드 표시값. 유형명은 BIT만 쓴다(금융회사 투자자 등급명과 겹치는 이름을 쓰지 않는다).
+// 8축이 없는 프로필(v1.0)은 유형을 단정하지 않는다.
+export function summaryFromStyleAxes(
+  styleAxes: StyleAxes | null | undefined,
+  identity: Pick<InvestorProfileSummary, "displayName" | "avatarLabel" | "surveyedAt">,
+): InvestorProfileSummary {
+  if (!styleAxes) {
+    return {
+      ...identity,
+      profileTypeLabel: "8축 진단 전",
+      personaLabel: "설문을 다시 하면 유형이 나와요",
+      riskTolerance: 50,
+      sentimentSensitivity: 50,
+      horizon: "mid",
+    };
+  }
+  const bit = classifyBit(styleAxes);
+  const summary = threeAxisSummary(styleAxes);
+  return {
+    ...identity,
+    profileTypeLabel: bit.lowConfidence ? "유형 확인 중" : BIT_LABEL[bit.type],
+    personaLabel: bit.lowConfidence ? "응답이 엇갈려 유형을 단정하지 않았어요" : BIT_SUMMARY[bit.type],
+    riskTolerance: summary.riskTaking,
+    sentimentSensitivity: summary.sensitivity,
+    horizon: summary.horizon,
+  };
+}
+
+export function summaryFromProfilingOutput(
+  output: ProfilingOutput,
+  identity: Pick<InvestorProfileSummary, "displayName" | "avatarLabel">,
+): InvestorProfileSummary {
+  const completedAt = new Date(output.timestamp);
+  const surveyedAt = Number.isNaN(completedAt.getTime())
+    ? ""
+    : `${completedAt.getFullYear()}.${String(completedAt.getMonth() + 1).padStart(2, "0")}`;
+  return summaryFromStyleAxes(output.style_axes, { ...identity, surveyedAt });
+}
+
+// 결과 확인 단계의 수동 조정을 반영한다. 신뢰도·응답 수는 채점값 그대로 둔다.
+export function applyAdjustments(
+  styleAxes: StyleAxes,
+  adjusted: Partial<Record<StyleAxisId, number>> = {},
+): StyleAxes {
+  return {
+    ...styleAxes,
+    axes: styleAxes.axes.map((axis) => ({ ...axis, ratio: adjusted[axis.axis_id] ?? axis.ratio })),
+  };
 }
 
 export function convertSurveyAnswers(input: unknown): ProfilingOutput {
   const answers = parseSurveyAnswers(input);
-  const risk = requireChoice(RISK_ANSWER_MAP, answers.Q1, "Q1");
-  const horizon = requireChoice(HORIZON_ANSWER_MAP, answers.Q2, "Q2");
-  const fomo = requireChoice(FOMO_ANSWER_MAP, answers.Q3, "Q3");
-  const experience = requireChoice(EXPERIENCE_ANSWER_MAP, answers.Q5, "Q5");
-  if (!answers.Q4.length) throw new Error("Q4는 한 개 이상 선택해야 합니다.");
-  assertChoices(INFORMATION_SOURCE_MAP, answers.Q4, "Q4");
-  assertChoices(AVOIDED_ASSET_LABELS, answers.Q6, "Q6");
-  if (horizonCodeForScore(horizon.horizonScore) !== horizon.modelHorizon) {
-    throw new Error("Q2 시간지평 규칙이 일치하지 않습니다.");
-  }
-
-  const informationScores = answers.Q4.reduce<{
-    herding: number;
-    confidence: number;
-  }>(
-    (scores, choice) => ({
-      herding:
-        scores.herding + INFORMATION_SOURCE_MAP[choice].herdingDelta,
-      confidence:
-        scores.confidence +
-        INFORMATION_SOURCE_MAP[choice].selfConfidenceDelta,
-    }),
-    {
-      herding: fomo.herdingScore,
-      confidence: INFORMATION_SOURCE_BASE.selfConfidence,
-    },
+  const styleAxes = applyAdjustments(
+    scoreStyleAxes(answers.style, answers.mode === "short" ? "short" : "quick"),
+    answers.adjusted_axes,
   );
-  const rawText = answers.Q7?.trim() ?? "";
+  const legacy = reduceToLegacyFields(styleAxes);
+  const axis = (id: StyleAxisId) => styleAxes.axes.find(({ axis_id }) => axis_id === id)!;
+  const experience = EXPERIENCE_CHOICES.find(({ id }) => id === answers.experience)!;
+
+  const rawText = answers.free_text?.trim() ?? "";
   const extractedSignals: Record<string, number> = {};
   for (const rule of FREE_TEXT_SIGNAL_RULES) {
     if (rule.keywords.some((keyword) => rawText.includes(keyword))) {
@@ -202,23 +186,28 @@ export function convertSurveyAnswers(input: unknown): ProfilingOutput {
     session_id: requireText(answers.session_id, "session_id"),
     timestamp: requireText(answers.timestamp, "timestamp"),
     investor_profile: {
-      risk_tolerance: risk.riskScore / 100,
-      time_horizon_months: horizon.timeHorizonMonths,
-      liquidity_need_ratio: horizon.liquidityNeedRatio,
-      target_return_annual: 0.08,
-      investment_experience_years: experience,
-      profile_type: profileTypeForRiskScore(risk.riskScore),
+      risk_tolerance: legacy.risk_tolerance,
+      time_horizon_months: legacy.time_horizon_months,
+      time_horizon_days: legacy.time_horizon_days,
+      liquidity_need_ratio: LIQUIDITY_BY_MONTHS.find(
+        ({ maxMonths }) => legacy.time_horizon_months <= maxMonths,
+      )!.ratio,
+      target_return_annual: TARGET_RETURN_ANNUAL,
+      investment_experience_years: experience.years,
+      // risk_tolerance 0.6 이상이면 aggressive 모델(chart model_type과 매칭)
+      profile_type: legacy.risk_tolerance >= 0.6 ? "aggressive" : "stable",
     },
     psychological_state: {
-      fomo_index: fomo.fomoScore / 100,
-      panic_sell_tendency: risk.panicSellTendency,
-      herding_score: clamp(informationScores.herding),
-      self_confidence: clamp(informationScores.confidence),
-      current_market_anxiety: 0.5,
-      overheating_caution: 0.61,
+      fomo_index: legacy.fomo_index,
+      panic_sell_tendency: legacy.panic_sell_tendency,
+      herding_score: legacy.herding_score,
+      // 본인 판단 ↔ 시장·타인 추종 축의 반대편. 구 설문의 정보 출처 문항을 대신한다.
+      self_confidence: round6((1 - axis("information_reliance").ratio) / 2),
+      current_market_anxiety: CURRENT_MARKET_ANXIETY_INITIAL,
+      overheating_caution: OVERHEATING_CAUTION_INITIAL,
     },
     constraints: {
-      avoided_assets: [...new Set(answers.Q6)],
+      avoided_assets: [...new Set(answers.avoided_assets)],
       preferred_sectors: [...(answers.preferred_sectors ?? [])],
     },
     portfolio: answers.portfolio ?? { holdings: [], watchlist: [] },
@@ -227,23 +216,26 @@ export function convertSurveyAnswers(input: unknown): ProfilingOutput {
       extracted_signals: extractedSignals,
       conflict_with_survey: false,
     },
-    confidence_per_field: { ...CONFIDENCE_PER_FIELD },
-    ...(answers.style_axes ? { style_axes: answers.style_axes } : {}),
+    confidence_per_field: {
+      ...confidencePerAxis(styleAxes),
+      time_horizon_months: axis("turnover").confidence,
+      liquidity_need_ratio: axis("turnover").confidence,
+      self_confidence: axis("information_reliance").confidence,
+      overheating_caution: OVERHEATING_CAUTION_CONFIDENCE,
+    },
+    style_axes: styleAxes,
+    contradictions: detectContradictions(styleAxes),
     context: {
       investment_amount_krw: answers.investment_amount_krw ?? 0,
       action_intent: answers.action_intent ?? "buy_consideration",
       ...(answers.target_ticker ? { target_ticker: answers.target_ticker } : {}),
-      ...(answers.market_regime_hint
-        ? { market_regime_hint: answers.market_regime_hint }
-        : {}),
-      ...(answers.benchmark_index
-        ? { benchmark_index: answers.benchmark_index }
-        : {}),
+      ...(answers.market_regime_hint ? { market_regime_hint: answers.market_regime_hint } : {}),
+      ...(answers.benchmark_index ? { benchmark_index: answers.benchmark_index } : {}),
     },
     meta: {
-      schema_version: answers.style_axes ? "1.1.0" : "1.0.0",
+      schema_version: "1.1.0",
       source: "profiling_block",
-      confidence: 0.81,
+      confidence: round6(mean(styleAxes.axes.map(({ confidence }) => confidence))),
     },
   };
 }
@@ -255,22 +247,30 @@ function parseSurveyAnswers(input: unknown): SurveyAnswers {
   if (Number.isNaN(Date.parse(timestamp))) {
     throw new Error("timestamp는 ISO 8601 날짜여야 합니다.");
   }
+  if (!isRecord(input.style)) throw new Error("8축 문항 응답(style)이 필요합니다.");
+  if (!EXPERIENCE_CHOICES.some(({ id }) => id === input.experience)) {
+    throw new Error("투자 경험 응답이 올바르지 않습니다.");
+  }
+  const avoided = input.avoided_assets ?? [];
+  if (!Array.isArray(avoided) || avoided.some((flag) => !(flag in AVOIDED_ASSET_LABELS))) {
+    throw new Error("제외할 종목 유형 응답이 올바르지 않습니다.");
+  }
+
+  if (input.mode !== undefined && input.mode !== "short" && input.mode !== "quick") {
+    throw new Error("진단 모드(mode)는 short 또는 quick이어야 합니다.");
+  }
 
   return {
     user_id: requireText(input.user_id, "user_id"),
     session_id: requireText(input.session_id, "session_id"),
     timestamp,
-    Q1: parseChoice(RISK_ANSWER_MAP, input.Q1, "Q1"),
-    Q2: parseChoice(HORIZON_ANSWER_MAP, input.Q2, "Q2"),
-    Q3: parseChoice(FOMO_ANSWER_MAP, input.Q3, "Q3"),
-    Q4: parseChoiceArray(INFORMATION_SOURCE_MAP, input.Q4, "Q4", false),
-    Q5: parseChoice(EXPERIENCE_ANSWER_MAP, input.Q5, "Q5"),
-    Q6: parseChoiceArray(AVOIDED_ASSET_LABELS, input.Q6 ?? [], "Q6", true),
-    Q7: optionalText(input.Q7, "Q7"),
-    preferred_sectors: parseStringArray(
-      input.preferred_sectors ?? [],
-      "preferred_sectors",
-    ),
+    style: input.style as StyleAnswers,
+    mode: input.mode as SurveyAnswers["mode"],
+    experience: input.experience as ExperienceChoice,
+    avoided_assets: avoided as RiskFlag[],
+    free_text: optionalText(input.free_text, "free_text"),
+    adjusted_axes: parseAdjustedAxes(input.adjusted_axes),
+    preferred_sectors: parseStringArray(input.preferred_sectors ?? [], "preferred_sectors"),
     portfolio: parsePortfolio(input.portfolio),
     investment_amount_krw: optionalNonNegativeInteger(
       input.investment_amount_krw,
@@ -278,13 +278,22 @@ function parseSurveyAnswers(input: unknown): SurveyAnswers {
     ),
     action_intent: parseActionIntent(input.action_intent),
     target_ticker: optionalText(input.target_ticker, "target_ticker"),
-    market_regime_hint: optionalText(
-      input.market_regime_hint,
-      "market_regime_hint",
-    ),
+    market_regime_hint: optionalText(input.market_regime_hint, "market_regime_hint"),
     benchmark_index: optionalText(input.benchmark_index, "benchmark_index"),
-    style_axes: parseStyleAxes(input.style_axes),
   };
+}
+
+function parseAdjustedAxes(value: unknown): SurveyAnswers["adjusted_axes"] {
+  if (value === undefined) return undefined;
+  if (
+    !isRecord(value) ||
+    Object.entries(value).some(
+      ([id, ratio]) => !STYLE_AXIS_IDS.includes(id as StyleAxisId) || !inRange(ratio, -1, 1),
+    )
+  ) {
+    throw new Error("adjusted_axes는 축 id별 -1~1 값이어야 합니다.");
+  }
+  return value as SurveyAnswers["adjusted_axes"];
 }
 
 // schema v1.1 style_axes 계약 검사: 8축 전부, ratio -1~1, confidence 0~1.
@@ -312,43 +321,12 @@ export function isStyleAxes(value: unknown): value is StyleAxes {
   );
 }
 
-function parseStyleAxes(value: unknown): StyleAxes | undefined {
-  if (value === undefined) return undefined;
-  if (!isStyleAxes(value)) {
-    throw new Error("style_axes는 8축 schema v1.1 형식이어야 합니다.");
-  }
-  return value;
-}
-
 function inRange(value: unknown, min: number, max: number) {
   return typeof value === "number" && value >= min && value <= max;
 }
 
-function parseChoice<T extends object>(
-  mapping: T,
-  choice: unknown,
-  question: string,
-): keyof T {
-  if (typeof choice !== "string" || !(choice in mapping)) {
-    throw new Error(`${question} 응답이 올바르지 않습니다.`);
-  }
-  return choice as keyof T;
-}
-
-function parseChoiceArray<T extends object>(
-  mapping: T,
-  value: unknown,
-  question: string,
-  allowEmpty: boolean,
-): (keyof T)[] {
-  if (!Array.isArray(value) || (!allowEmpty && value.length === 0)) {
-    throw new Error(
-      allowEmpty
-        ? `${question} 응답은 배열이어야 합니다.`
-        : `${question}는 한 개 이상 선택해야 합니다.`,
-    );
-  }
-  return value.map((choice) => parseChoice(mapping, choice, question));
+function round6(value: number) {
+  return Math.round(value * 1_000_000) / 1_000_000 + 0;
 }
 
 function parseStringArray(value: unknown, field: string): string[] {
@@ -423,37 +401,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function requireChoice<T extends object, K extends keyof T>(
-  mapping: T,
-  choice: K,
-  question: string,
-): T[K] {
-  if (!(choice in mapping)) throw new Error(`${question} 응답이 올바르지 않습니다.`);
-  return mapping[choice];
-}
 
-function assertChoices<T extends object>(
-  mapping: T,
-  choices: PropertyKey[],
-  question: string,
-) {
-  if (choices.some((choice) => !(choice in mapping))) {
-    throw new Error(`${question} 응답에 지원하지 않는 항목이 있습니다.`);
-  }
-}
 
 function requireText(value: unknown, field: string) {
   if (typeof value !== "string") throw new Error(`${field} 값은 문자열이어야 합니다.`);
   const normalized = value.trim();
   if (!normalized) throw new Error(`${field} 값이 필요합니다.`);
   return normalized;
-}
-
-function assertScore(value: number, field: string) {
-  if (value < 0 || value > 100) throw new Error(`${field}는 0~100이어야 합니다.`);
-}
-
-function clamp(value: number) {
-  const clamped = Math.min(1, Math.max(0, value));
-  return Math.round(clamped * 1_000_000) / 1_000_000;
 }

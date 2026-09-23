@@ -3,8 +3,7 @@
 import {
   Bar,
   BarChart,
-  CartesianGrid,
-  Legend,
+  LabelList,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -23,6 +22,7 @@ import {
   type DeltaOutcome,
   type MetricDefinition,
 } from "@/lib/performance-display";
+import { CHART } from "@/lib/chart-colors";
 import type {
   ComparisonDeltaRow,
   ComparisonMetricRow,
@@ -47,40 +47,20 @@ const CONTROL_CONDITIONS = [
   "공용 평가함수",
 ];
 
-const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; cell: string; label: string }> = {
-  improved: {
-    text: "text-[#1e7d4f]",
-    cell: "bg-[#eef6f1]",
-    label: "개선",
-  },
-  worsened: {
-    text: "text-[#b03a34]",
-    cell: "bg-[#fbe9e8]",
-    label: "저하",
-  },
-  unchanged: {
-    text: "text-muted",
-    cell: "bg-field",
-    label: "동일",
-  },
-  neutral: {
-    text: "text-body",
-    cell: "bg-field",
-    label: "증감",
-  },
-  unavailable: {
-    text: "text-faint",
-    cell: "bg-field",
-    label: "미산출",
-  },
+// 개선·저하는 색이 아니라 ▲▼(값이 커졌나 작아졌나)와 단어로 읽힌다.
+// 가격 방향색(적·청)과 섞이지 않게 무채색으로 두고, 좋아졌는지는 단어가 말한다(Brier는 ▼ 개선).
+const OUTCOME_STYLE: Record<DeltaOutcome, { text: string; label: string }> = {
+  improved: { text: "text-ink", label: "개선" },
+  worsened: { text: "text-ink", label: "저하" },
+  unchanged: { text: "text-muted", label: "동일" },
+  neutral: { text: "text-muted", label: "증감" },
+  unavailable: { text: "text-muted", label: "미산출" },
 };
 
-const CHART_SERIES = [
-  { key: "stableA", label: "안정형 A", fill: "#98a2b3" },
-  { key: "stableB", label: "안정형 B", fill: "#2f5fd0" },
-  { key: "aggressiveA", label: "공격형 A", fill: "#c58a52" },
-  { key: "aggressiveB", label: "공격형 B", fill: "#1e7d4f" },
-] as const;
+const deltaMark = (value: number | null) => (value === null || value === 0 ? "" : value > 0 ? "▲" : "▼");
+
+// A/B 두 막대만 명암으로 나누고, 안정형·공격형은 차트를 따로 그려 위치로 구분한다.
+const VARIANT_FILL = { A: CHART.line, B: CHART.priceLine } as const;
 
 export default function PerformanceDashboard({
   data,
@@ -89,104 +69,118 @@ export default function PerformanceDashboard({
   profile,
   marketStatus,
 }: PerformanceDashboardProps) {
+  const headline = findMetricRow(data.four_run_metrics, "stable", "B");
+  const auc = headline?.auc ?? null;
+  const allDeltas = data.comparison_deltas.filter(({ sample }) => sample === "all");
+
   return (
     <div className="min-h-screen w-full">
-      <SiteHeader
-        profile={profile}
-        marketStatus={marketStatus}
-        activePage="performance"
-        sectionLabel="모델 성능 비교"
-      />
+      <SiteHeader profile={profile} marketStatus={marketStatus} activePage="performance" />
 
-      <section className="border-b border-line bg-white">
-        <div className="mx-auto box-border w-full max-w-[1440px] px-6 py-6 lg:px-8">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {isSample && (
-              <span className="rounded-md border border-[#e6c96b] bg-[#fff8df] px-2.5 py-1 text-[11px] font-extrabold text-[#8a6500]">
-                샘플 데이터
-              </span>
-            )}
-            <span className="text-xs font-semibold text-muted">연구 질문</span>
-          </div>
-          <h1 className="mt-2 text-[26px] font-extrabold leading-tight">
-            심리 지수를 반영하면 예측이 나아지는가?
+      <main className="mx-auto box-border flex w-full max-w-[960px] flex-col gap-8 px-4 pb-12 pt-8 sm:px-8">
+        <section aria-labelledby="scorecard-title" className="flex flex-col gap-1.5 px-1">
+          <span className="eyebrow">모델 성적표 · 안정형 모델 B(심리 지표 포함) 기준</span>
+          <h1 id="scorecard-title" className="text-3xl font-semibold tabular-nums">
+            판별력(AUC) {auc === null ? "미산출" : auc.toFixed(2)} · 0.5는 동전 던지기 수준
           </h1>
-          <p className="mt-2 max-w-[920px] text-sm leading-6 text-body">
-            Baseline(A)은 차트 피처만, Treatment(B)는 같은 피처에 합성 심리지수와 뉴스
-            감성을 추가합니다. 두 모델 사이에서 바뀌는 조건은 피처 세트뿐입니다.
+          <p className="m-0 text-sm text-body">
+            A는 가격 지표만, B는 같은 지표에 가격·거래량 심리 지표와 뉴스 분위기를 더한 모델이에요. 바뀌는 조건은 지표 묶음뿐이에요.
           </p>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {CONTROL_CONDITIONS.map((condition) => (
-              <span
-                key={condition}
-                className="rounded-md border border-edge bg-field px-2.5 py-1.5 text-xs font-bold text-body"
-              >
-                {condition}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      <main className="mx-auto box-border flex w-full max-w-[1440px] flex-col gap-8 px-6 py-7 lg:px-8">
-        <section aria-labelledby="four-run-title">
-          <SectionHeading
-            id="four-run-title"
-            title="4런 전체 구간 비교"
-            description="안정형·공격형 각각 A/B를 같은 표본에서 평가"
-          />
-          <div className="mt-3 overflow-x-auto rounded-lg border border-line bg-white">
-            <FourRunTable
-              rows={data.four_run_metrics}
-              deltas={data.comparison_deltas.filter(({ sample }) => sample === "all")}
-            />
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 px-1 text-[11px] text-faint">
-            <span>AUC·적중률·Sharpe·MDD·누적수익률: 값이 클수록 우수</span>
-            <span>Brier·ECE: 값이 작을수록 우수</span>
-            <span>거래 수: 우열 없이 규모만 비교</span>
-          </div>
+          {isSample && <p className="m-0 text-xs text-muted">예시 데이터 · 실제 실험 결과가 들어오면 바뀌어요</p>}
         </section>
 
-        <section aria-labelledby="subsample-title">
-          <SectionHeading
-            id="subsample-title"
-            title="급변 구간 서브샘플"
-            description="변동성 상위 20% 날짜를 분리해 심리 피처 효과를 재평가"
-            marker="핵심 분석"
-          />
-          <div className="mt-3 grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <SamplePanel
-              title="전체 구간에서의 A vs B"
-              subtitle="테스트 기간의 모든 관측치"
-              sample="all"
-              rows={data.four_run_metrics}
-              deltas={data.comparison_deltas}
-            />
-            <SamplePanel
-              title="급변 구간에서의 A vs B"
-              subtitle="일별 시장 변동성 상위 20%"
-              sample="volatile_top_20pct"
-              rows={data.volatile_subsample_metrics}
-              deltas={data.comparison_deltas}
-            />
+        <section aria-labelledby="ab-summary-title" className="flex flex-col gap-3">
+          <h2 id="ab-summary-title" className="px-1 text-xl font-semibold">
+            심리 지표를 더하면 나아지나요?
+          </h2>
+          <div className="surface overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-left">
+              <thead>
+                <tr className="text-xs text-muted">
+                  <th className="px-5 py-3 font-medium">지표</th>
+                  <th className="px-3 py-3 font-medium">안정형 A → B</th>
+                  <th className="px-3 py-3 font-medium">공격형 A → B</th>
+                </tr>
+              </thead>
+              <tbody>
+                {METRICS.filter(({ direction }) => direction !== "neutral").map((metric) => (
+                  <tr key={metric.key} className="border-t border-line-soft">
+                    <th className="px-5 py-3 text-sm font-medium text-ink">
+                      {metric.label}
+                      <span className="block text-2xs font-normal text-muted">
+                        {metric.direction === "higher" ? "클수록 좋아요" : "작을수록 좋아요"}
+                      </span>
+                    </th>
+                    {(["stable", "aggressive"] as const).map((comparisonProfile) => (
+                      <PairCell
+                        key={comparisonProfile}
+                        metric={metric}
+                        profile={comparisonProfile}
+                        sample="all"
+                        rows={data.four_run_metrics}
+                        deltas={allDeltas}
+                      />
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+          <p className="m-0 px-1 text-2xs text-muted">같은 종목·기간·시드·평가 함수로 비교했어요 · 테스트 기간 전체</p>
         </section>
 
-        <section
-          aria-labelledby="conclusion-title"
-          className="border-l-4 border-brand bg-white px-5 py-5"
-        >
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h2 id="conclusion-title" className="text-base font-extrabold">
-              연구 결론
-            </h2>
-            <span className="rounded-md bg-track px-2 py-1 text-[10.5px] font-bold text-muted">
-              {isSample ? "실제 결과 반영 전" : "러너 결과 반영"}
+        <details className="disclosure surface p-6">
+          <summary>
+            <span className="flex flex-col gap-0.5">
+              <span className="text-lg font-semibold">자세히 보기</span>
+              <span className="text-xs text-muted">연구 결론 · 4런 전체 표 · 시장이 크게 흔들린 날만 따로 본 결과</span>
             </span>
+          </summary>
+          <div className="mt-6 flex flex-col gap-8">
+            <section aria-labelledby="conclusion-title" className="flex flex-col gap-2">
+              <h3 id="conclusion-title" className="text-base font-semibold">
+                연구 결론 <span className="text-xs font-normal text-muted">{isSample ? "실제 결과 반영 전" : "실험 결과 반영"}</span>
+              </h3>
+              <p className="m-0 text-sm leading-6 text-body">{conclusion}</p>
+              <p className="m-0 flex flex-wrap gap-2">
+                {CONTROL_CONDITIONS.map((condition) => (
+                  <span key={condition} className="text-xs text-muted">
+                    {condition}
+                  </span>
+                ))}
+              </p>
+            </section>
+            <section aria-labelledby="four-run-title" className="flex flex-col gap-3">
+              <SectionHeading id="four-run-title" title="4런 전체 구간 비교" description="안정형·공격형 각각 A/B를 같은 표본에서 평가" />
+              <div className="overflow-x-auto rounded-md bg-field">
+                <FourRunTable rows={data.four_run_metrics} deltas={allDeltas} />
+              </div>
+            </section>
+            <section aria-labelledby="subsample-title" className="flex flex-col gap-3">
+              <SectionHeading
+                id="subsample-title"
+                title="시장이 크게 흔들린 날만 따로 보기"
+                description="일별 시장 변동성 상위 20% 날짜"
+              />
+              <div className="grid grid-cols-1 gap-4">
+                <SamplePanel
+                  title="전체 구간에서의 A vs B"
+                  subtitle="테스트 기간의 모든 관측치"
+                  sample="all"
+                  rows={data.four_run_metrics}
+                  deltas={data.comparison_deltas}
+                />
+                <SamplePanel
+                  title="흔들린 날에서의 A vs B"
+                  subtitle="일별 시장 변동성 상위 20%"
+                  sample="volatile_top_20pct"
+                  rows={data.volatile_subsample_metrics}
+                  deltas={data.comparison_deltas}
+                />
+              </div>
+            </section>
           </div>
-          <p className="mt-2 text-sm leading-6 text-body">{conclusion}</p>
-        </section>
+        </details>
       </main>
 
       <DisclaimerFooter fixed={false} />
@@ -194,45 +188,21 @@ export default function PerformanceDashboard({
   );
 }
 
-function SectionHeading({
-  id,
-  title,
-  description,
-  marker,
-}: {
-  id: string;
-  title: string;
-  description: string;
-  marker?: string;
-}) {
+function SectionHeading({ id, title, description }: { id: string; title: string; description: string }) {
   return (
-    <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 px-0.5">
-      {marker && (
-        <span className="rounded-md bg-brand-soft px-2 py-1 text-[10.5px] font-extrabold text-brand">
-          {marker}
-        </span>
-      )}
-      <h2 id={id} className="text-lg font-extrabold">
+    <div className="flex flex-col gap-0.5">
+      <h3 id={id} className="text-base font-semibold">
         {title}
-      </h2>
-      <span className="text-xs text-faint">{description}</span>
+      </h3>
+      <span className="text-xs text-muted">{description}</span>
     </div>
   );
 }
 
+// 지표 설명은 "?" 동그라미 대신 표 머리글의 title(마우스 올리면 보임)로 둔다.
 function MetricInfoBadge({ description }: { description?: string }) {
   if (!description) return null;
-  return (
-    <span
-      title={description}
-      tabIndex={0}
-      role="img"
-      aria-label={description}
-      className="inline-flex size-3.5 flex-none cursor-help items-center justify-center rounded-full border border-edge bg-white text-[9px] font-bold leading-none text-faint"
-    >
-      ?
-    </span>
-  );
+  return <span className="sr-only">{description}</span>;
 }
 
 function FourRunTable({
@@ -245,7 +215,7 @@ function FourRunTable({
   return (
     <table className="min-w-[940px] w-full table-fixed border-collapse text-left">
       <thead>
-        <tr className="border-b border-line bg-field text-[11px] font-bold text-muted">
+        <tr className="border-b border-line bg-field text-2xs font-medium text-muted">
           <th rowSpan={2} className="w-[160px] border-r border-line px-4 py-3">
             실험 런
           </th>
@@ -256,7 +226,7 @@ function FourRunTable({
             Trading 지표
           </th>
         </tr>
-        <tr className="border-b border-line bg-field text-[11px] font-bold text-body">
+        <tr className="border-b border-line bg-field text-2xs font-medium text-body">
           {METRICS.map((metric, index) => (
             <th
               key={metric.key}
@@ -283,18 +253,18 @@ function FourRunTable({
             >
               <th className="border-r border-line px-4 py-3.5">
                 <div className="flex items-center gap-2">
-                  <span className="font-extrabold">{PROFILE_LABEL[row.profile]}</span>
+                  <span className="font-semibold">{PROFILE_LABEL[row.profile]}</span>
                   <span
-                    className={`grid size-6 place-items-center rounded-md text-[11px] font-extrabold ${
+                    className={`grid size-6 place-items-center rounded-md text-2xs font-semibold ${
                       row.variant === "B"
-                        ? "bg-brand text-white"
+                        ? "bg-ink text-white"
                         : "border border-edge bg-field text-body"
                     }`}
                   >
                     {row.variant}
                   </span>
                 </div>
-                <div className="mt-1 text-[10.5px] font-medium text-faint">
+                <div className="mt-1 text-2xs font-medium text-muted">
                   {row.feature_set === "baseline" ? "차트 피처" : "차트 + 심리 피처"} · {row.feature_count}개
                 </div>
               </th>
@@ -306,14 +276,14 @@ function FourRunTable({
                     key={metric.key}
                     className={`px-2 py-3 text-right tabular-nums ${
                       index === ML_METRICS.length - 1 ? "border-r border-line" : ""
-                    } ${outcome ? OUTCOME_STYLE[outcome].cell : ""}`}
+                    } `}
                   >
-                    <div className="text-[13px] font-bold text-ink">
+                    <div className="text-sm font-medium text-ink">
                       {formatMetricValue(row[metric.key], metric)}
                     </div>
                     {row.variant === "B" && (
-                      <div className={`mt-0.5 text-[10.5px] font-bold ${OUTCOME_STYLE[outcome!].text}`}>
-                        Δ {formatDeltaValue(deltaValue, metric)} · {OUTCOME_STYLE[outcome!].label}
+                      <div className={`mt-0.5 text-2xs font-medium ${OUTCOME_STYLE[outcome!].text}`}>
+                        {deltaMark(deltaValue)} {formatDeltaValue(deltaValue, metric)} · {OUTCOME_STYLE[outcome!].label}
                       </div>
                     )}
                   </td>
@@ -340,84 +310,63 @@ function SamplePanel({
   rows: ComparisonMetricRow[];
   deltas: ComparisonDeltaRow[];
 }) {
-  const chartData = ML_METRICS.map((metric) => ({
-    metric: metric.shortLabel,
-    stableA: metricValue(rows, "stable", "A", metric),
-    stableB: metricValue(rows, "stable", "B", metric),
-    aggressiveA: metricValue(rows, "aggressive", "A", metric),
-    aggressiveB: metricValue(rows, "aggressive", "B", metric),
-  }));
+  const chartData = (profile: ComparisonProfile) =>
+    ML_METRICS.map((metric) => ({
+      metric: metric.shortLabel,
+      A: metricValue(rows, profile, "A", metric),
+      B: metricValue(rows, profile, "B", metric),
+    }));
 
   return (
-    <article className="min-w-0 rounded-lg border border-line bg-white">
-      <div className="border-b border-line px-4 py-3.5">
-        <h3 className="text-sm font-extrabold">{title}</h3>
-        <p className="mt-0.5 text-[11px] text-faint">{subtitle}</p>
+    <article className="min-w-0 rounded-md bg-field">
+      <div className="px-4 py-3.5">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="mt-0.5 text-2xs text-muted">{subtitle}</p>
       </div>
 
-      <div className="px-3 pb-1 pt-3">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-[11px] font-bold text-muted">ML 지표 절대값</span>
-          <span className="text-[10px] text-faint">y축 0~1 고정</span>
-        </div>
-        <div className="mt-1 h-[230px] min-w-0">
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-            minWidth={1}
-            minHeight={1}
-            initialDimension={{ width: 560, height: 230 }}
-          >
-            <BarChart data={chartData} margin={{ top: 10, right: 4, left: -18, bottom: 0 }}>
-              <CartesianGrid stroke="#eef1f5" vertical={false} />
-              <XAxis
-                dataKey="metric"
-                tick={{ fill: "#667085", fontSize: 10 }}
-                axisLine={{ stroke: "#d5dae3" }}
-                tickLine={false}
-              />
-              <YAxis
-                domain={[0, 1]}
-                ticks={[0, 0.25, 0.5, 0.75, 1]}
-                tick={{ fill: "#98a2b3", fontSize: 9 }}
-                axisLine={false}
-                tickLine={false}
-                width={34}
-              />
-              <Tooltip
-                cursor={{ fill: "#f4f5f7" }}
-                contentStyle={{
-                  border: "1px solid #e4e7ec",
-                  borderRadius: 6,
-                  fontSize: 11,
-                }}
-                formatter={(value) => Number(value).toFixed(3)}
-              />
-              <Legend
-                iconType="square"
-                iconSize={8}
-                wrapperStyle={{ fontSize: 10 }}
-                itemSorter={null}
-              />
-              {CHART_SERIES.map((series) => (
-                <Bar
-                  key={series.key}
-                  dataKey={series.key}
-                  name={series.label}
-                  fill={series.fill}
-                  maxBarSize={18}
-                  isAnimationActive={false}
-                />
-              ))}
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+      <div className="grid grid-cols-1 gap-2 px-3 pb-1 pt-3 sm:grid-cols-2">
+        {(["stable", "aggressive"] as const).map((chartProfile) => (
+          <div key={chartProfile} className="min-w-0">
+            <span className="px-1 text-xs font-medium text-body">
+              {PROFILE_LABEL[chartProfile]} · 옅은 막대 A, 진한 막대 B
+            </span>
+            <div className="mt-1 h-[200px] min-w-0">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+                minWidth={1}
+                minHeight={1}
+                initialDimension={{ width: 280, height: 200 }}
+              >
+                <BarChart data={chartData(chartProfile)} margin={{ top: 16, right: 4, left: -18, bottom: 0 }}>
+                  <XAxis
+                    dataKey="metric"
+                    tick={{ fill: CHART.muted, fontSize: 11 }}
+                    axisLine={{ stroke: CHART.edge }}
+                    tickLine={false}
+                  />
+                  <YAxis domain={[0, 1]} ticks={[0, 0.5, 1]} tick={{ fill: CHART.muted, fontSize: 11 }} axisLine={false} tickLine={false} width={34} />
+                  <Tooltip
+                    cursor={{ fill: CHART.page }}
+                    contentStyle={{ border: `1px solid ${CHART.line}`, borderRadius: 8, fontSize: 12 }}
+                    formatter={(value) => Number(value).toFixed(3)}
+                  />
+                  {(["A", "B"] as const).map((variant) => (
+                    <Bar key={variant} dataKey={variant} name={variant} fill={VARIANT_FILL[variant]} maxBarSize={16} isAnimationActive={false}>
+                      <LabelList dataKey={variant} position="top" formatter={() => variant} style={{ fill: CHART.muted, fontSize: 11 }} />
+                    </Bar>
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        ))}
       </div>
 
       <div className="overflow-x-auto border-t border-line">
         <table className="w-full min-w-[440px] table-fixed border-collapse">
           <thead>
-            <tr className="bg-field text-[10.5px] font-bold text-muted">
+            <tr className="bg-field text-2xs font-medium text-muted">
               <th className="w-[92px] px-3 py-2 text-left">지표</th>
               <th className="px-2 py-2 text-left">안정형 A → B</th>
               <th className="px-2 py-2 text-left">공격형 A → B</th>
@@ -426,7 +375,7 @@ function SamplePanel({
           <tbody>
             {METRICS.map((metric) => (
               <tr key={metric.key} className="border-t border-line-soft">
-                <th className="px-3 py-2 text-left text-[10.5px] font-bold text-body">
+                <th className="px-3 py-2 text-left text-2xs font-medium text-body">
                   <span className="inline-flex items-center gap-1">
                     {metric.shortLabel}
                     <MetricInfoBadge description={metric.description} />
@@ -475,12 +424,12 @@ function PairCell({
 
   return (
     <td className="px-2 py-2 tabular-nums">
-      <div className="whitespace-nowrap text-[10.5px] font-semibold text-body">
+      <div className="whitespace-nowrap text-xs font-medium text-body">
         A {formatMetricValue(baselineValue, metric)} → B{" "}
         {formatMetricValue(treatmentValue, metric)}
       </div>
-      <div className={`mt-0.5 text-[10px] font-extrabold ${style.text}`}>
-        Δ {formatDeltaValue(deltaValue, metric)} · {style.label}
+      <div className={`mt-0.5 text-xs font-semibold ${style.text}`}>
+        {deltaMark(deltaValue)} {formatDeltaValue(deltaValue, metric)} · {style.label}
       </div>
     </td>
   );

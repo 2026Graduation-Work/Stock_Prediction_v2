@@ -1,37 +1,35 @@
 "use client";
 
+// 종목 상세 — "이 종목, 지금 뭘 확인하면 되지?"
+// 순서: 헤더 → 한눈에 보기 → 나에게 맞춘 체크포인트 → 판단 근거 4탭 → 더 알아보기(접힘).
+// 필수 정보는 지우지 않고 "더 알아보기"에 접는다.
+
 import { useState } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "./disclaimer-footer";
-import InsightSection, { ScreenGuideBanner, useDemoStyleAxes } from "./insight-cards";
+import EvidenceTabs, {
+  CalculationBasis,
+  Checkpoints,
+  ScreenGuideBanner,
+  SourceList,
+  useDemoStyleAxes,
+} from "./insight-cards";
+import SourceChip from "./source-chip";
 import PriceHistoryChart from "./price-history-chart";
 import ReturnHistogram from "./return-histogram";
 import SiteHeader from "./site-header";
-import { SignalDots } from "./stock-card";
 import {
-  AGREEMENT_LABEL,
-  HORIZON_META,
-  REASON_SOURCE_META,
-  RISK_FLAG_LABEL,
-  RISK_GRADE_META,
-  SIGNAL_META,
-} from "@/lib/display";
-import { pricePeriod, type HoldingWeight, type StockInsights } from "@/lib/providers";
-import type {
-  InvestorProfileSummary,
-  MarketStatus,
-  StockDetail,
-  StyleAxes,
-} from "@/lib/types";
-
-// 수익률 밴드 바: 0%가 바 중앙(50%), 수익률 1%p당 5% 이동 (stock-card와 동일 규칙)
-const BAND_SCALE = 5;
-const RANK_BADGE_BG = ["#2f5fd0", "#5c82db", "#8aa5e6"];
-const HORIZON_DAYS = { h5: 5, h10: 10, h20: 20 } as const;
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(Math.max(value, min), max);
-}
+  AGREEMENT_ANSWER,
+  bandSentence,
+  DIRECTION_WORD,
+  HORIZON_LABEL,
+  riskLevel,
+  TERM,
+  topPercentLabel,
+} from "@/lib/copy-glossary";
+import { HORIZON_META, RISK_FLAG_LABEL, SIGNAL_META } from "@/lib/display";
+import type { HoldingWeight, StockInsights } from "@/lib/providers";
+import type { InvestorProfileSummary, MarketStatus, StockDetail, StyleAxes } from "@/lib/types";
 
 function formatPercent(value: number) {
   return `${value > 0 ? "+" : ""}${value.toFixed(1)}%`;
@@ -41,28 +39,18 @@ function formatDate(iso: string) {
   return iso.replaceAll("-", ".");
 }
 
-function Card({
-  children,
-  emphasized = false,
-  className = "",
-}: {
-  children: React.ReactNode;
-  emphasized?: boolean;
-  className?: string;
-}) {
-  const border = emphasized ? "border-2 border-[#dbe4f6]" : "border border-line";
+function RiskMeter({ grade }: { grade: StockDetail["riskGrade"] }) {
+  const { word, filled } = riskLevel(grade);
   return (
-    <section className={`rounded-[14px] bg-white px-7 py-[22px] ${border} ${className}`}>
-      {children}
-    </section>
-  );
-}
-
-function EvidenceUnavailable({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid min-h-[132px] place-items-center rounded-lg border border-dashed border-edge bg-field px-6 py-8 text-center text-sm leading-6 text-muted">
-      <p className="m-0 max-w-[680px]">{children}</p>
-    </div>
+    <span className="inline-flex items-center gap-2 text-sm text-body">
+      위험도 <strong className="font-semibold text-ink">{word}</strong>
+      <span className="flex gap-0.5" aria-hidden>
+        {Array.from({ length: 5 }, (_, index) => (
+          <span key={index} className={`h-2 w-3 rounded-[2px] ${index < filled ? "bg-ink" : "bg-track"}`} />
+        ))}
+      </span>
+      <span className="sr-only">5칸 중 {filled}칸</span>
+    </span>
   );
 }
 
@@ -88,7 +76,6 @@ export default function StockDetailView({
   styleAxes,
   holdings,
   insights,
-  source,
   loading = false,
   dataError = "",
   onRetry,
@@ -98,17 +85,10 @@ export default function StockDetailView({
   const [choice, setChoice] = useState<"watch" | "reduce" | "drop" | null>(null);
 
   const signal = SIGNAL_META[detail.signalLight];
-  const grade = RISK_GRADE_META[detail.riskGrade];
-  const topPercent = Math.round((1 - detail.rankPercentile) * 100);
+  const horizon = detail.returnHorizon ?? "h10";
   const ciPercent = Math.round(detail.returnBand.ciLevel * 100);
-  const bandLeft = clamp(50 + detail.returnBand.low * BAND_SCALE, 2, 94);
-  const bandRight = clamp(50 + detail.returnBand.high * BAND_SCALE, bandLeft + 2, 98);
-  const asOfLabel = formatDate(detail.asOf).slice(5); // MM.DD
   const priceHistory = detail.priceHistory ?? [];
-  const priceDataPeriod = pricePeriod(detail);
   const realizedReturns = detail.realizedReturns ?? [];
-  const returnHorizon = detail.returnHorizon ?? "h10";
-  const returnHorizonDays = HORIZON_DAYS[returnHorizon];
   const hasCurrentPrice =
     typeof detail.currentPrice === "number" &&
     Number.isFinite(detail.currentPrice) &&
@@ -116,452 +96,226 @@ export default function StockDetailView({
     Number.isFinite(detail.changePercent);
   const changePercent = detail.changePercent ?? 0;
   const changeColor =
-    changePercent > 0 ? "#c93b34" : changePercent < 0 ? "#2f5fd0" : "#667085";
+    changePercent > 0 ? "var(--color-up)" : changePercent < 0 ? "var(--color-down)" : "var(--color-muted)";
   const changeArrow = changePercent > 0 ? "▲" : changePercent < 0 ? "▼" : "";
   const safeMaxRiskTier =
-    Number.isInteger(maxRiskTier) && maxRiskTier >= 1 && maxRiskTier <= 5
-      ? maxRiskTier
-      : 4;
-  const allowedRiskLabel =
-    safeMaxRiskTier === 5 ? "5등급" : `${safeMaxRiskTier}~5등급`;
-  const belowTolerance = detail.riskGrade < safeMaxRiskTier;
-  const hasAiAdvice = Boolean(detail.aiAdvice?.trim());
-  const horizons = [
-    ["단기 H5 · 5거래일", detail.horizonAgreement.h5],
-    ["중기 H10 · 10거래일", detail.horizonAgreement.h10],
-    ["장기 H20 · 20거래일", detail.horizonAgreement.h20],
-  ] as const;
+    Number.isInteger(maxRiskTier) && maxRiskTier >= 1 && maxRiskTier <= 5 ? maxRiskTier : 4;
+  // 성향에서 나온 허용 범위(소프트 틸트)보다 위험한 종목이면 체크포인트에 한 줄 더한다. 종목을 거르지 않는다.
+  const riskNote =
+    detail.riskGrade < safeMaxRiskTier
+      ? `이 종목의 위험도는 ${riskLevel(detail.riskGrade).word}이에요. 설문에서 답한 위험 감수 정도(${profile.riskTolerance})보다 가격이 크게 흔들릴 수 있어요.`
+      : null;
+  const horizons = (["h5", "h10", "h20"] as const).map((key) => [key, detail.horizonAgreement[key]] as const);
   const choiceLabels = {
-    watch: "관심 종목 추가",
-    reduce: "비중 축소 검토",
+    watch: "관심 종목에 두기",
+    reduce: "비중을 다시 볼 종목",
     drop: "관심 해제",
   } as const;
 
   return (
     <div className="w-full">
-      <SiteHeader
-        query={query}
-        onQueryChange={setQuery}
-        profile={profile}
-        marketStatus={marketStatus}
-      />
+      <SiteHeader query={query} onQueryChange={setQuery} profile={profile} marketStatus={marketStatus} />
 
-      <div className="mx-auto box-border flex w-full max-w-[1104px] flex-col gap-4 px-8 pb-6 pt-5">
-        <Link href="/" className="self-start text-[13px] text-muted hover:text-brand">
-          ← 대시보드로 돌아가기
+      <main className="mx-auto box-border flex w-full max-w-[960px] flex-col gap-8 px-4 pb-12 pt-5 sm:px-8">
+        <Link href="/" className="btn-text self-start text-xs">
+          ‹ 대시보드
         </Link>
 
         {loading && (
-          <div className="rounded-lg border border-edge bg-field px-4 py-3 text-sm font-semibold text-body">
-            로그인한 사용자의 성향별 예측과 근거를 불러오는 중입니다.
-          </div>
+          <p role="status" className="m-0 text-sm text-muted">
+            내 성향에 맞춘 신호와 근거를 불러오는 중이에요.
+          </p>
         )}
-
         {dataError && (
-          <div
-            role="alert"
-            className="flex flex-col gap-3 rounded-lg border border-[#e8c76a] bg-[#fff9e8] px-4 py-3 sm:flex-row sm:items-center"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-bold text-[#795b08]">
-                실제 상세 데이터를 불러오지 못해 샘플 데이터를 표시합니다.
-              </p>
-              <p className="mt-1 break-words text-xs text-[#806d39]">{dataError}</p>
-            </div>
+          <div role="alert" className="surface flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center">
+            <p className="m-0 min-w-0 text-sm text-body">
+              내 데이터를 불러오지 못해 예시 화면을 보여 드려요.
+              <span className="mt-1 block break-words text-xs text-muted">{dataError}</span>
+            </p>
             {onRetry && (
-              <button
-                type="button"
-                onClick={onRetry}
-                className="h-9 flex-none rounded-lg border border-[#d5b85e] bg-white px-4 text-xs font-bold text-[#795b08] hover:bg-[#fffdf5] sm:ml-auto"
-              >
+              <button type="button" onClick={onRetry} className="btn-secondary flex-none sm:ml-auto">
                 다시 시도
               </button>
             )}
           </div>
         )}
 
-        {source === "supabase" &&
-          (priceHistory.length < 2 || realizedReturns.length === 0) && (
-            <div className="rounded-lg border border-[#b9c9e8] bg-brand-soft px-4 py-3 text-sm text-[#31558f]">
-              예측·신뢰도·Top 근거는 Supabase 조회값입니다. 저장 계약이 없는 시세 이력과
-              수익률 분포 원본은 샘플로 대체하지 않고 비워 둡니다.
-            </div>
-          )}
-
-        {/* 종목 헤더 — 데이터 기준일과 예측 생성일은 하나의 날짜로 통일 */}
-        <Card className="flex flex-wrap items-center gap-x-3.5 gap-y-2">
+        {/* 1. 헤더 */}
+        <section aria-labelledby="stock-name" className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3 px-1">
           <div className="flex flex-col gap-1.5">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl font-extrabold tracking-tight">{detail.name}</h1>
-              <span className="text-sm text-faint">
-                {detail.code} · {detail.market}
-              </span>
-              <span
-                className="inline-flex h-[22px] items-center rounded-md px-2 text-[11.5px] font-bold"
-                style={{ backgroundColor: grade.bg, color: grade.text }}
-              >
-                위험등급 {detail.riskGrade} · {grade.label}
-              </span>
-              {detail.riskFlags.map((flag) => (
-                <span
-                  key={flag}
-                  className="inline-flex h-[22px] items-center rounded-md bg-[#fdf1e3] px-2 text-[11.5px] font-bold text-[#b45814]"
-                >
-                  {RISK_FLAG_LABEL[flag]}
+            <span className="eyebrow tabular-nums">
+              {detail.code} · {detail.market}
+              {detail.riskFlags.length > 0 && ` · ${detail.riskFlags.map((flag) => RISK_FLAG_LABEL[flag]).join(" · ")}`}
+            </span>
+            <h1 id="stock-name" className="text-3xl font-semibold">
+              {detail.name}
+            </h1>
+            <RiskMeter grade={detail.riskGrade} />
+          </div>
+          <div className="flex flex-col items-start gap-0.5 sm:items-end">
+            {hasCurrentPrice ? (
+              <>
+                <span className="text-4xl font-semibold tabular-nums">
+                  {detail.currentPrice?.toLocaleString("ko-KR")}원
                 </span>
-              ))}
-              <span
-                className={`inline-flex h-[22px] items-center rounded-md px-2 text-[11.5px] font-bold ${
-                  source === "supabase"
-                    ? "bg-brand-soft text-brand"
-                    : "border border-[#e6c96b] bg-[#fff8df] text-[#8a6500]"
-                }`}
-              >
-                {source === "supabase" ? "Supabase 예측" : "샘플 데이터"}
-              </span>
-            </div>
-            <span className="text-[12.5px] text-faint">
-              데이터·예측 기준일 {formatDate(detail.asOf)} · 장 마감 후 생성
-            </span>
-          </div>
-          {hasCurrentPrice ? (
-            <div className="ml-auto flex items-baseline gap-2.5">
-              <span className="text-[26px] font-extrabold tabular-nums">
-                {detail.currentPrice?.toLocaleString("ko-KR")}원
-              </span>
-              <span className="text-base font-bold tabular-nums" style={{ color: changeColor }}>
-                {changeArrow} {formatPercent(changePercent)}
-              </span>
-            </div>
-          ) : (
-            <span className="ml-auto text-sm font-semibold text-muted">시세 데이터 미연결</span>
-          )}
-        </Card>
-
-        {/* 성향 기반 인사이트: 첫 칸은 넛지, 이후 BIT 유형별 순서 */}
-        <InsightSection
-          detail={detail}
-          insights={insights}
-          holdings={holdings}
-          demo={demo}
-          source={source}
-        />
-
-        {/* 핵심 신호 */}
-        <Card className="grid grid-cols-2 gap-7 xl:grid-cols-4">
-          <div className="flex flex-col gap-2.5">
-            <span className="text-xs text-muted">신호등</span>
-            <SignalDots active={detail.signalLight} />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[17px] font-extrabold" style={{ color: signal.text }}>
-                {signal.label}
-              </span>
-              <span className="text-xs text-faint">신호 강도 상위 {topPercent}%</span>
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
-            <span className="text-xs text-muted">위험 계층</span>
-            <span
-              className="inline-flex h-[30px] items-center self-start rounded-lg px-3.5 text-[15px] font-extrabold"
-              style={{ backgroundColor: grade.bg, color: grade.text }}
-            >
-              {detail.riskGrade}등급 · {grade.label}
-            </span>
-            <div className="grid w-[110px] grid-cols-5 gap-[3px]">
-              {([1, 2, 3, 4, 5] as const).map((tier) => (
-                <span
-                  key={tier}
-                  className="h-[5px] rounded-[3px]"
-                  style={{
-                    backgroundColor: tier <= detail.riskGrade ? grade.text : "#eef1f5",
-                    opacity: tier === detail.riskGrade ? 1 : tier < detail.riskGrade ? 0.35 : 1,
-                  }}
-                />
-              ))}
-            </div>
-            <span className="text-[11.5px] text-faint">1=매우 위험 ~ 5=매우 안전</span>
-          </div>
-
-          <div className="flex flex-col gap-2.5 xl:border-l xl:border-line-soft xl:pl-7">
-            <span className="text-xs text-muted">
-              예상 수익률 밴드 <span className="text-ghost">· {ciPercent}% 신뢰구간</span>
-            </span>
-            <div className="relative mt-1.5 h-2.5 rounded-[5px] bg-track">
-              <span className="absolute left-1/2 top-[-4px] h-[18px] w-px bg-[#c2cad6]" />
-              <span
-                className="absolute h-2.5 rounded-[5px]"
-                style={{
-                  left: `${bandLeft}%`,
-                  width: `${bandRight - bandLeft}%`,
-                  background: `linear-gradient(90deg, ${signal.bandFrom}, ${signal.bandTo})`,
-                }}
-              />
-            </div>
-            <span className="text-[19px] font-extrabold tabular-nums">
-              {formatPercent(detail.returnBand.low)} ~ {formatPercent(detail.returnBand.high)}
-            </span>
-            <span className="text-[11.5px] text-faint">
-              과거 유사 신호 구간의 실현 수익률 분포
-            </span>
-          </div>
-
-          <div className="flex flex-col gap-2.5 border-l border-line-soft pl-7">
-            <span className="text-xs text-muted">신뢰도</span>
-            <span className="text-[19px] font-extrabold">
-              적중률 {Math.round(detail.hitRate * 100)}%
-            </span>
-            <span className="text-[12.5px] text-body">이 확률 구간의 과거 적중률</span>
-            <span className="text-xs text-faint">과거 유사 사례 {detail.similarCaseCount}건</span>
-          </div>
-        </Card>
-
-        {/* 실현 수익률 분포 — 화이트박스 핵심 근거라 가장 눈에 띄게(강조 테두리) 배치 */}
-        <Card emphasized className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-base font-extrabold">
-              과거 유사 신호 {detail.similarCaseCount}건의 실현 수익률 분포
-            </span>
-            <span className="text-xs text-faint">
-              이 신호가 과거에 실제로 낸 결과 · 향후 {returnHorizonDays}거래일(
-              {returnHorizon.toUpperCase()}) 기준
-            </span>
-            <span className="ml-auto inline-flex h-[22px] items-center rounded-md bg-brand-soft px-2 text-[11.5px] font-bold text-brand">
-              {realizedReturns.length > 0 ? "예측 밴드의 출처" : "분포 원본 미연결"}
-            </span>
-          </div>
-          {realizedReturns.length > 0 ? (
-            <>
-              <ReturnHistogram
-                bins={realizedReturns}
-                band={detail.returnBand}
-                caseCount={detail.similarCaseCount}
-                signal={signal}
-              />
-              <span className="text-[11.5px] text-faint">
-                예상 수익률 밴드 {formatPercent(detail.returnBand.low)} ~{" "}
-                {formatPercent(detail.returnBand.high)}는 이 분포의 {ciPercent}% 구간입니다 · 미래
-                가격 경로가 아닌 {returnHorizon.toUpperCase()} 시점의 분포 범위입니다
-              </span>
-            </>
-          ) : (
-            <EvidenceUnavailable>
-              수익률 밴드와 유사 사례 수는 조회됐지만 분포 bin 원본은 DB에 저장되어 있지
-              않습니다. 원본 저장 계약이 확정되면 히스토그램을 표시합니다.
-            </EvidenceUnavailable>
-          )}
-        </Card>
-
-        {/* 주가 흐름 — 과거 실선만, 미래 영역은 수익률 세로 구간 하나 */}
-        <Card className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="text-[15px] font-extrabold">주가 흐름</span>
-            <span className="text-xs text-faint">
-              최근 60거래일 · 실제 주가만 표시
-              {priceDataPeriod &&
-                ` · 시세 데이터: ${priceDataPeriod.start} ~ ${priceDataPeriod.end} (${source === "mock" ? "샘플" : "실데이터"})`}
-            </span>
-            {priceHistory.length >= 2 && (
-              <div className="ml-auto flex items-center gap-3.5 text-xs text-muted">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="h-0.5 w-3.5 bg-brand" />
-                  실제 주가
+                <span className="text-base font-medium tabular-nums" style={{ color: changeColor }}>
+                  {changeArrow} {formatPercent(changePercent)}
+                  <span className="ml-1.5 text-xs font-normal text-muted">
+                    전일 대비 · {formatDate(detail.asOf)} 기준
+                  </span>
                 </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span
-                    className="box-border h-2.5 w-[7px] rounded-full border"
-                    style={{ backgroundColor: `${signal.dot}29`, borderColor: signal.dot }}
-                  />
-                  {returnHorizon.toUpperCase()} 분포 범위
-                </span>
-              </div>
+              </>
+            ) : (
+              <span className="text-sm text-muted">시세 데이터가 아직 없어요</span>
             )}
           </div>
+        </section>
+
+        {/* 2. 한눈에 보기 */}
+        <section aria-labelledby="glance-title" className="surface flex flex-col gap-4 p-6">
+          <div className="flex flex-col gap-1">
+            <span className="eyebrow">한눈에 보기</span>
+            <h2 id="glance-title" className="text-xl font-semibold">
+              모델 신호 <span style={{ color: signal.ink }}>{signal.label}</span>
+              <span className="block text-sm font-normal text-muted sm:ml-2 sm:inline">{topPercentLabel(detail.rankPercentile)}</span>
+            </h2>
+            <p className="m-0 text-sm text-body">
+              {bandSentence(horizon, detail.returnBand.ciLevel)}:{" "}
+              <strong className="font-semibold tabular-nums text-ink">
+                {formatPercent(detail.returnBand.low)} ~ {formatPercent(detail.returnBand.high)}
+              </strong>
+            </p>
+          </div>
           {priceHistory.length >= 2 ? (
-            <>
-              <PriceHistoryChart
-                prices={priceHistory}
-                band={detail.returnBand}
-                signal={signal}
-                asOfLabel={asOfLabel}
-              />
-              <span className="text-[11.5px] text-faint">
-                미래 가격 곡선은 그리지 않습니다 · 오른쪽 세로 구간은{" "}
-                {returnHorizon.toUpperCase()} 시점 예상 수익률 범위({ciPercent}%)로, 위 분포
-                히스토그램에서 나온 값입니다
-              </span>
-            </>
+            <PriceHistoryChart
+              prices={priceHistory}
+              band={detail.returnBand}
+              signal={signal}
+              asOfLabel={formatDate(detail.asOf).slice(5)}
+              horizonLabel={HORIZON_LABEL[horizon]}
+            />
           ) : (
-            <EvidenceUnavailable>
-              최근 60거래일 종가가 DB에 저장되어 있지 않아 주가 흐름을 표시하지 않습니다.
-            </EvidenceUnavailable>
+            <p className="m-0 rounded-md bg-field px-4 py-8 text-center text-sm text-muted">
+              최근 주가 기록이 아직 없어 흐름을 그리지 않았어요.
+            </p>
           )}
-        </Card>
+          <p className="m-0 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted">
+            <span>지난 3개월 주가와 {HORIZON_LABEL[horizon]} 범위만 그려요. 미래 가격 곡선은 그리지 않아요.</span>
+            <span>주가: <SourceChip provenance={detail.priceProvenance ?? detail.provenance} /></span>
+            <span>신호·범위: <SourceChip provenance={detail.provenance} /></span>
+          </p>
+        </section>
 
-        {/* 기간별 신호 일치 */}
-        <Card className="flex flex-wrap items-center gap-x-5 gap-y-3">
-          <span className="min-w-[150px] text-[15px] font-extrabold">기간별 신호 일치</span>
-          <div className="flex flex-wrap items-center gap-2">
-            {horizons.map(([label, direction]) => {
-              const meta = HORIZON_META[direction];
-              return (
-                <span
-                  key={label}
-                  className="inline-flex h-[30px] items-center gap-1.5 rounded-lg px-3 text-[13px] font-bold"
-                  style={{ backgroundColor: meta.bg, color: meta.text }}
-                >
-                  {label} {meta.arrow}
-                </span>
-              );
-            })}
-          </div>
-          <div className="hidden w-px self-stretch bg-line-soft sm:block" />
-          <span className="text-sm text-body">
-            <strong className="text-ink">{AGREEMENT_LABEL[detail.horizonAgreement.agreement]}</strong>
-          </span>
-        </Card>
+        {/* 3. 나에게 맞춘 체크포인트 */}
+        <Checkpoints demo={demo} detail={detail} insights={insights} holdings={holdings} extra={riskNote} />
 
-        {/* 예측 근거 Top 3 */}
-        <Card emphasized className="flex flex-col gap-4">
-          <div className="flex items-baseline gap-2.5">
-            <span className="text-base font-extrabold">
-              모델이 이 신호를 낸 이유{" "}
-              <span className="text-brand">
-                {detail.reasons.length > 0 ? `Top ${detail.reasons.length}` : "근거 없음"}
-              </span>
+        {/* 4. 판단 근거 4가지 */}
+        <EvidenceTabs detail={detail} insights={insights} demo={demo} />
+
+        {/* 5. 더 알아보기 */}
+        <details className="disclosure surface p-6">
+          <summary>
+            <span className="flex flex-col gap-0.5">
+              <span className="text-lg font-semibold">더 알아보기</span>
+              <span className="text-xs text-muted">수익률 분포 · 기간별 비교 · 계산 근거 · 데이터 출처</span>
             </span>
-            <span className="text-xs text-faint">화이트박스 모델 · 기여도 순</span>
-          </div>
-          {detail.reasons.length > 0 ? (
-            <div className="flex flex-col gap-3">
-              {detail.reasons.map((reason, i) => {
-                const source = REASON_SOURCE_META[reason.source];
-                return (
-                  <div
-                    key={`${reason.source}:${reason.title}:${i}`}
-                    className="flex flex-wrap items-center gap-x-3.5 gap-y-2 rounded-[10px] bg-field px-4 py-3.5"
+          </summary>
+          <div className="mt-6 flex flex-col gap-8">
+            <section aria-labelledby="more-distribution" className="flex flex-col gap-3">
+              <h3 id="more-distribution" className="text-base font-semibold">
+                과거 비슷한 신호 {detail.similarCaseCount}건의 실제 수익률
+              </h3>
+              {realizedReturns.length > 0 ? (
+                <>
+                  <ReturnHistogram
+                    bins={realizedReturns}
+                    band={detail.returnBand}
+                    caseCount={detail.similarCaseCount}
+                    signal={signal}
+                    horizonLabel={HORIZON_LABEL[horizon]}
+                  />
+                  <p className="m-0 text-xs text-muted">
+                    위 범위는 이 분포의 가운데 {ciPercent}%예요. 미래 가격 경로가 아니라 {HORIZON_LABEL[horizon]} 시점의 분포예요.
+                  </p>
+                </>
+              ) : (
+                <p className="m-0 text-sm text-muted">분포 원본이 아직 저장되지 않아 그림은 생략했어요.</p>
+              )}
+            </section>
+
+            <section aria-labelledby="more-horizons" className="flex flex-col gap-3">
+              <h3 id="more-horizons" className="text-base font-semibold">
+                {TERM.horizonAgreement}
+              </h3>
+              <p className="m-0 text-sm text-body">{AGREEMENT_ANSWER[detail.horizonAgreement.agreement]}</p>
+              <ul className="m-0 grid list-none grid-cols-3 gap-3 p-0">
+                {horizons.map(([key, direction]) => (
+                  <li key={key} className="flex flex-col gap-0.5 rounded-md bg-field px-4 py-3">
+                    <span className="text-xs text-muted">{HORIZON_LABEL[key]}</span>
+                    <span className="text-sm font-semibold" style={{ color: HORIZON_META[direction].ink }}>
+                      {HORIZON_META[direction].arrow} {DIRECTION_WORD[direction]}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="m-0 text-xs text-muted tabular-nums">
+                과거 비슷한 신호 {detail.similarCaseCount}건 중 {Math.round(detail.hitRate * 100)}%가 실제로 올랐어요.
+              </p>
+            </section>
+
+            {detail.aiAdvice?.trim() && (
+              <section aria-labelledby="more-ai" className="flex flex-col gap-2">
+                <h3 id="more-ai" className="text-base font-semibold">
+                  숫자를 풀어 쓴 설명 <span className="text-xs font-normal text-muted">AI 작성 · 매매 조언 아님</span>
+                </h3>
+                <p className="m-0 text-sm leading-relaxed text-body">{detail.aiAdvice}</p>
+              </section>
+            )}
+
+            <section aria-labelledby="more-basis" className="flex flex-col gap-3">
+              <h3 id="more-basis" className="text-base font-semibold">
+                계산 근거
+              </h3>
+              <CalculationBasis demo={demo} detail={detail} insights={insights} holdings={holdings} />
+            </section>
+
+            <section aria-labelledby="more-sources" className="flex flex-col gap-3">
+              <h3 id="more-sources" className="text-base font-semibold">
+                데이터 출처
+              </h3>
+              <SourceList detail={detail} insights={insights} />
+            </section>
+
+            <section aria-labelledby="more-note" className="flex flex-col gap-3">
+              <h3 id="more-note" className="text-base font-semibold">
+                내 판단 메모
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {(Object.keys(choiceLabels) as (keyof typeof choiceLabels)[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    aria-pressed={choice === key}
+                    onClick={() => setChoice(key)}
+                    className={`min-h-10 rounded-md px-4 text-sm font-medium ${
+                      choice === key ? "bg-brand-soft text-brand" : "bg-track text-body hover:bg-line"
+                    }`}
                   >
-                    <span
-                      className="grid size-[26px] flex-none place-items-center rounded-lg text-[13px] font-extrabold text-white"
-                      style={{ backgroundColor: RANK_BADGE_BG[i] }}
-                    >
-                      {i + 1}
-                    </span>
-                    <div className="flex min-w-0 flex-1 flex-col gap-[3px]">
-                      <span className="text-[14.5px] font-bold">{reason.title}</span>
-                      <span className="text-xs text-faint">{reason.detail}</span>
-                    </div>
-                    <span
-                      className="inline-flex h-6 flex-none items-center rounded-md px-2.5 text-[11.5px] font-bold"
-                      style={{ backgroundColor: source.bg, color: source.text }}
-                    >
-                      출처: {reason.sourceLabel}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <EvidenceUnavailable>
-              이 예측에 연결된 근거 데이터가 없어 Top 근거를 표시할 수 없습니다.
-            </EvidenceUnavailable>
-          )}
-        </Card>
-
-        {/* 리스크 고지: 사용자 성향 수치와 연결하되 행동은 제안하지 않는다 */}
-        <Card className="flex flex-col gap-3.5">
-          <div className="flex items-center gap-2.5">
-            <span className="text-[15px] font-extrabold">리스크 고지</span>
-            {detail.riskFlags.map((flag) => (
-              <span
-                key={flag}
-                className="inline-flex h-[22px] items-center rounded-md bg-[#fdf1e3] px-2 text-[11.5px] font-bold text-[#b45814]"
-              >
-                {RISK_FLAG_LABEL[flag]}
-              </span>
-            ))}
-            <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
-              {detail.market}
-            </span>
+                    {choiceLabels[key]}
+                  </button>
+                ))}
+              </div>
+              <p className="m-0 text-xs text-muted" role="status">
+                {choice
+                  ? `'${choiceLabels[choice]}'로 이 화면에만 메모했어요. 실제 주문은 실행되지 않아요.`
+                  : "최종 판단은 직접 해요. 여기서 고른 메모로 주문이 나가지 않아요."}
+              </p>
+            </section>
           </div>
-          {belowTolerance ? (
-            <div className="flex gap-3 rounded-[10px] border border-[#f0e2bd] bg-[#fdf6e8] px-4 py-3.5">
-              <span className="mt-px grid size-[18px] flex-none place-items-center rounded-full bg-[#d9a514] text-[11px] font-extrabold text-white">
-                !
-              </span>
-              <span className="text-[13.5px] leading-relaxed text-[#7a6210]">
-                {profile.displayName}님의 위험 감수 성향({profile.riskTolerance})보다 변동성이 큰
-                종목입니다. 위험 {detail.riskGrade}등급({grade.label})으로, 현재 성향 기준 허용
-                범위({allowedRiskLabel}) 밖에 있습니다.
-              </span>
-            </div>
-          ) : (
-            <div className="flex gap-3 rounded-[10px] border border-line bg-field px-4 py-3.5">
-              <span className="mt-px grid size-[18px] flex-none place-items-center rounded-full bg-faint text-[11px] font-extrabold text-white">
-                i
-              </span>
-              <span className="text-[13.5px] leading-relaxed text-body">
-                위험 {detail.riskGrade}등급({grade.label}) 종목으로, {profile.displayName}님의{" "}
-                {profile.profileTypeLabel} 성향(위험 감수 {profile.riskTolerance}) 기준 허용
-                범위({allowedRiskLabel}) 안에 있습니다.
-              </span>
-            </div>
-          )}
-        </Card>
+        </details>
 
-        {/* AI 신호 해설 — LLM은 수치 번역만. 행동 제안은 아래 HITL 3버튼이 담당 */}
-        {hasAiAdvice && (
-          <Card className="flex flex-col gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="text-[15px] font-extrabold">AI 신호 해설</span>
-              <span className="inline-flex h-[22px] items-center rounded-md bg-track px-2 text-[11.5px] font-bold text-muted">
-                설명 전용 · 매매 조언 아님
-              </span>
-            </div>
-            <p className="m-0 text-[14.5px] leading-[1.7] text-[#38404e]">
-              {detail.aiAdvice}
-            </p>
-            <p className="m-0 text-xs leading-5 text-muted">
-              AI가 생성한 설명은 부정확할 수 있습니다. 근거 수치와 출처를 확인한 뒤 최종 판단해
-              주세요.
-            </p>
-          </Card>
-        )}
-
-        {/* 대응 선택지 (HITL) */}
-        <Card className="flex flex-col gap-3">
-          <span className="text-xs text-faint">
-            서비스는 참고 정보를 제공하며, 최종 판단은 투자자 본인이 합니다 · 실제 주문이 실행되지
-            않습니다
-          </span>
-          <div className="flex flex-wrap gap-2.5">
-            {(Object.keys(choiceLabels) as (keyof typeof choiceLabels)[]).map((key) => {
-              const selected = choice === key;
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => setChoice(key)}
-                  className={`h-11 whitespace-nowrap rounded-[10px] border px-5 text-sm font-bold transition-colors hover:border-brand ${
-                    selected
-                      ? "border-brand bg-brand-soft text-brand"
-                      : "border-edge bg-white text-[#38404e]"
-                  }`}
-                >
-                  {choiceLabels[key]}
-                </button>
-              );
-            })}
-          </div>
-          {choice && (
-            <span className="text-[13px] font-semibold text-brand">
-              &lsquo;{choiceLabels[choice]}&rsquo;가 참고용으로 기록되었습니다. 실제 주문은
-              실행되지 않습니다.
-            </span>
-          )}
-        </Card>
         <ScreenGuideBanner bit={demo.bit} />
-      </div>
+      </main>
 
       <DisclaimerFooter fixed={false} />
     </div>

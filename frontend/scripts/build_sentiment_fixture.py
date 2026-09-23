@@ -239,7 +239,7 @@ def main() -> None:
                 f"// N07 임계: 일별 감성 변화량 |Δ| {len(changes)}개의 상위 10% 분위수(p90, inclusive 보간) = {p90}",
                 f"// 20일 창: {window[0]['date']} ~ {last['date']}. |Δ| >= p90인 가장 늦은 날로 끝나게 실제 날짜 구간을 골랐다.",
                 f"//   마지막 날 |Δ| = {delta(window, len(window) - 1):.4f} ({previous['date']} {previous['score']:+.4f} → {last['date']} {last['score']:+.4f})",
-                "// 코퍼스 기간이 화면의 예측 기준일(2025-10-02)보다 뒤다. 기간 정렬은 실데이터 연동 때 맞춘다.",
+                "// 데모 기준일(2025-12-30)은 코퍼스 기간 안이라 주가 기간(최근 60거래일)과 겹친다.",
                 "",
                 'import type { SentimentSeries } from "./index";',
                 "",

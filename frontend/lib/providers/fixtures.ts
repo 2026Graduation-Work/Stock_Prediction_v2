@@ -10,7 +10,7 @@ import type {
 } from "./index";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
 
-const PREDICTION_AS_OF = "2025-10-02"; // mock-data.ts 상세 화면 기준일
+const PREDICTION_AS_OF = "2025-12-30"; // 데모 기준일(실데이터 스냅샷과 같은 날)
 
 // mulberry32. 시드가 같으면 항상 같은 수열이다.
 function seeded(seed: number) {
@@ -26,9 +26,9 @@ function seeded(seed: number) {
 
 const signedUnit = (random: () => number) => random() * 2 - 1;
 
-// ponytail: 평일 휴장일은 mock 시세·수급 구간(2025-07 ~ 10-02)에 걸린 날만 둔다.
+// ponytail: 평일 휴장일은 예시 수급 구간(2025-12 20영업일)에 걸린 날만 둔다.
 // 실데이터 연동 시 날짜를 데이터에서 받으므로 이 표는 지운다.
-const KRX_WEEKDAY_HOLIDAYS = new Set(["2025-08-15"]);
+const KRX_WEEKDAY_HOLIDAYS = new Set(["2025-12-25"]);
 
 export function businessDaysEndingAt(end: string, count: number): string[] {
   const days: string[] = [];
@@ -43,19 +43,27 @@ export function businessDaysEndingAt(end: string, count: number): string[] {
 }
 
 // 억원 단위. 개인은 외국인·기관의 반대편에 서는 경향을 흉내 낸다.
+// KRX 투자자 분류상 개인 + 외국인 + 기관합계 + 기타법인 = 0이므로 기타법인은 나머지로 맞춘다.
+// 개인이 외국인·기관을 받아 내고 남는 작은 차이(규모의 ±10% 이내)가 기타법인 몫이 된다.
 function supplySeries(
   seed: number,
   scale: number,
-  latest: Omit<SupplyDemandDay, "date">,
+  latest: Omit<SupplyDemandDay, "date" | "otherCorp">,
 ): SupplyDemandDay[] {
   const random = seeded(seed);
   const dates = businessDaysEndingAt(PREDICTION_AS_OF, 20);
   return dates.map((date, index) => {
-    if (index === dates.length - 1) return { date, ...latest };
-    const foreign = Math.round(signedUnit(random) * scale);
-    const institution = Math.round(signedUnit(random) * scale * 0.6);
-    const retail = -(foreign + institution) + Math.round(signedUnit(random) * scale * 0.1);
-    return { date, retail, foreign, institution };
+    const day =
+      index === dates.length - 1
+        ? latest
+        : (() => {
+            const foreign = Math.round(signedUnit(random) * scale);
+            const institution = Math.round(signedUnit(random) * scale * 0.6);
+            const retail =
+              -(foreign + institution) + Math.round(signedUnit(random) * scale * 0.1);
+            return { retail, foreign, institution };
+          })();
+    return { date, ...day, otherCorp: -(day.retail + day.foreign + day.institution) };
   });
 }
 
@@ -83,6 +91,11 @@ export const HYUNDAI_SENTIMENT: SentimentSeries = {
 };
 
 // 원점수 weight는 부호 없는 크기. provider가 합 100으로 정규화한다.
+// direction은 그 근거가 신호를 어느 쪽으로 밀었는지(+1 오르는 쪽, -1 내리는 쪽)다.
+// 수급 근거는 위 SUPPLY_FIXTURE 20일 합계의 부호에서 계산하고, 나머지는 예시 신호(긍정)와 같은 쪽으로 둔다.
+const flowDirection = (code: string, key: "foreign" | "institution"): 1 | -1 =>
+  SUPPLY_FIXTURE[code].reduce((sum, day) => sum + day[key], 0) >= 0 ? 1 : -1;
+
 // description은 신호의 정의만 적는다. 다른 카드 수치와 어긋나는 사실 주장을 넣지 않는다.
 export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
   "005930": [
@@ -112,6 +125,7 @@ export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
       label: "외국인 20일 누적 순매수",
       category: "supply",
       weight: 15,
+      direction: flowDirection("005930", "foreign"),
       description: "최근 20영업일 외국인 순매수 합계의 크기와 부호를 봅니다.",
     },
     {
@@ -135,6 +149,7 @@ export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
       label: "기관 20일 누적 순매수",
       category: "supply",
       weight: 22,
+      direction: flowDirection("005380", "institution"),
       description: "최근 20영업일 기관 순매수 합계의 크기와 부호를 봅니다.",
     },
     {

@@ -1,4 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { CLOSING_PRICE } from "./closing-prices.ts";
+import { snapshotPrice } from "./providers/demo-snapshot.ts";
+import { costBasis } from "./holdings-rules.ts";
 import {
   avoidanceNotice,
   holdingAlerts,
@@ -12,7 +15,6 @@ import {
 import {
   mapAvoidedAssetLabels,
   mapExcludedStocks,
-  mapMarketStatus,
   mapPortfolioHolding,
   mapProfileSummary,
   mapRecommendedStock,
@@ -21,7 +23,6 @@ import {
   type AvoidedAssetRow,
   type ExcludedStock,
   type IpsProfileRow,
-  type MarketStatusRow,
   type PortfolioHoldingRow,
   type PredictionDetailRow,
   type PredictionFeatureRow,
@@ -30,6 +31,7 @@ import {
   type UserRow,
 } from "./mappers";
 import { isStyleAxes } from "./profiling-rules";
+import { passesHardConstraints } from "./recommendation-filter";
 import type { HoldingWeight } from "./providers";
 import { getSupabaseClient } from "./supabase";
 import type {
@@ -40,8 +42,6 @@ import type {
   StockDetail,
   StyleAxes,
 } from "./types";
-
-export const DEMO_USER_ID = "u_minji_001";
 
 export interface ProfileQueryResult {
   profile: InvestorProfileSummary;
@@ -73,12 +73,11 @@ export interface StockDetailData {
 
 interface ProfileSettingsRow {
   profile_type: "stable" | "aggressive";
-  max_risk_tier: number;
 }
 
 interface ProfileSettings {
   profileType: "stable" | "aggressive";
-  maxRiskTier: number;
+  userMaxRiskTier: number | null;
   avoided: Set<string>;
 }
 
@@ -96,33 +95,25 @@ const PREDICTION_FEATURE_COLUMNS =
 
 const STOCK_COLUMNS = "code,name,market,risk_grade,risk_flags";
 
-export async function getDashboardData(
-  userId = DEMO_USER_ID,
-): Promise<DashboardData> {
-  const [currentMarketStatus, stocks, currentHoldingAlerts, holdings, profileResult] =
-    await Promise.all([
-      getMarketStatus(),
-      getRecommendedStocks(userId),
-      getHoldingAlerts(userId),
-      getPortfolio(userId),
-      getProfile(userId),
-    ]);
-
+// 첫 화면(서버 렌더)은 데모 계정 데이터로 그린다. 개인 테이블은 RLS로 본인만 읽을 수 있어
+// 서버의 비로그인 조회로는 얻을 수 없다. 로그인한 사용자는 브라우저에서
+// getAuthenticatedDashboardData로 자기 데이터를 다시 불러온다.
+export function getDashboardData(): DashboardData {
   return {
-    marketStatus: currentMarketStatus,
-    stocks,
-    holdingAlerts: currentHoldingAlerts,
-    holdings,
-    profile: profileResult.profile,
-    maxRiskTier: profileResult.maxRiskTier,
-    avoidedLabels: profileResult.avoidedLabels,
-    excludedStocks: profileResult.excludedStocks,
+    marketStatus,
+    stocks: recommendedStocks,
+    holdingAlerts,
+    holdings: portfolioHoldings,
+    profile: investorProfile,
+    maxRiskTier: 4,
+    avoidedLabels: avoidanceNotice.avoidedLabels,
+    excludedStocks: avoidanceNotice.excludedStocks,
   };
 }
 
 export async function getAuthenticatedDashboardData(): Promise<DashboardData> {
   const client = getSupabaseClient();
-  if (!client) throw new Error("Supabase 환경변수가 설정되지 않았습니다.");
+  if (!client) throw new Error("계정 기능이 아직 연결되지 않았어요.");
 
   const { data: authData, error: authError } = await client.auth.getUser();
   assertQuery(authError, "로그인 사용자 확인");
@@ -137,7 +128,7 @@ export async function getAuthenticatedDashboardData(): Promise<DashboardData> {
   if (!appUser) throw new Error("연결된 서비스 사용자 정보가 없습니다.");
 
   const [currentMarketStatus, profileContext, holdingRows] = await Promise.all([
-    queryMarketStatus(client),
+    loadMarketStatus(),
     loadProfileQueryContext(client, appUser.id),
     loadHoldings(client, appUser.id),
   ]);
@@ -177,7 +168,7 @@ export async function getAuthenticatedStockDetailData(
   code: string,
 ): Promise<StockDetailData> {
   const client = getSupabaseClient();
-  if (!client) throw new Error("Supabase 환경변수가 설정되지 않았습니다.");
+  if (!client) throw new Error("계정 기능이 아직 연결되지 않았어요.");
 
   const { data: authData, error: authError } = await client.auth.getUser();
   assertQuery(authError, "로그인 사용자 확인");
@@ -194,57 +185,11 @@ export async function getAuthenticatedStockDetailData(
   return queryStockDetail(client, appUser.id, code);
 }
 
-export async function getMarketStatus(): Promise<MarketStatus> {
-  return withFallback("market status", marketStatus, queryMarketStatus);
-}
-
-export async function getRecommendedStocks(
-  userId = DEMO_USER_ID,
-): Promise<RecommendedStock[]> {
-  return withFallback("recommended stocks", recommendedStocks, (client) =>
-    queryRecommendedStocks(client, userId),
-  );
-}
-
-export async function getHoldingAlerts(
-  userId = DEMO_USER_ID,
-): Promise<RecommendedStock[]> {
-  return withFallback("holding alerts", holdingAlerts, (client) =>
-    queryHoldingAlerts(client, userId),
-  );
-}
-
-export async function getPortfolio(
-  userId = DEMO_USER_ID,
-): Promise<PortfolioHolding[]> {
-  return withFallback("portfolio", portfolioHoldings, (client) =>
-    queryPortfolio(client, userId),
-  );
-}
-
-export async function getProfile(
-  userId = DEMO_USER_ID,
-): Promise<ProfileQueryResult> {
-  const fallback: ProfileQueryResult = {
-    profile: investorProfile,
-    maxRiskTier: 4,
-    avoidedLabels: avoidanceNotice.avoidedLabels,
-    excludedStocks: avoidanceNotice.excludedStocks,
-  };
-
-  return withFallback("profile", fallback, (client) => queryProfile(client, userId));
-}
-
-async function queryMarketStatus(client: SupabaseClient): Promise<MarketStatus> {
-  const { data, error } = await client
-    .from("market_status")
-    .select("status_date,condition,volatility_score,volume_score,index_quotes")
-    .order("status_date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  assertQuery(error, "시장 상태 조회");
-  if (!data) throw new Error("시장 상태 데이터가 없습니다.");
-  return mapMarketStatus(data as MarketStatusRow);
+// 시장 브리핑은 실데이터 스냅샷(KRX 지수, providers/demo-snapshot.ts)을 쓴다.
+// DB market_status에는 손으로 쓴 시드만 있어 읽지 않는다(없는 데이터를 실데이터처럼 보이지 않게).
+// ponytail: 백엔드가 market_status를 매일 채우게 되면 여기서 DB를 다시 읽는다.
+async function loadMarketStatus(): Promise<MarketStatus> {
+  return marketStatus;
 }
 
 async function queryRecommendedStocks(
@@ -260,7 +205,7 @@ async function queryRecommendedStocks(
     .eq("is_recommended", true)
     .order("prediction_date", { ascending: false })
     .order("display_order", { ascending: true });
-  assertQuery(error, "추천 예측 조회");
+  assertQuery(error, "오늘 신호 조회");
 
   const predictions = latestDateRows((data ?? []) as PredictionRow[]);
   const stocks = await loadStocks(
@@ -271,11 +216,7 @@ async function queryRecommendedStocks(
 
   return predictions.flatMap((prediction) => {
     const stock = stockByCode.get(prediction.stock_code);
-    if (
-      !stock ||
-      stock.risk_grade < settings.maxRiskTier ||
-      toRiskFlags(stock.risk_flags).some((flag) => settings.avoided.has(flag))
-    ) {
+    if (!stock || !passesHardConstraints(stock.risk_grade, toRiskFlags(stock.risk_flags), settings)) {
       return [];
     }
     return [mapRecommendedStock(prediction, stock)];
@@ -298,7 +239,6 @@ async function queryHoldingAlerts(
     .from("predictions")
     .select(PREDICTION_COLUMNS)
     .eq("model_type", settings.profileType)
-    .eq("is_holding_alert", true)
     .in(
       "stock_code",
       holdings.map(({ stock_code }) => stock_code),
@@ -358,13 +298,6 @@ async function queryPortfolio(
   });
 }
 
-async function queryProfile(
-  client: SupabaseClient,
-  userId: string,
-): Promise<ProfileQueryResult> {
-  return (await loadProfileQueryContext(client, userId)).result;
-}
-
 async function queryStockDetail(
   client: SupabaseClient,
   userId: string,
@@ -372,7 +305,7 @@ async function queryStockDetail(
 ): Promise<StockDetailData> {
   const [holdingRows, marketResult, userResult, profileResult, stockResult] = await Promise.all([
     loadHoldings(client, userId),
-    queryMarketStatus(client),
+    loadMarketStatus(),
     client
       .from("users")
       .select("id,display_name,avatar_label")
@@ -425,19 +358,23 @@ async function queryStockDetail(
   assertQuery(featureError, "상세 화면 예측 근거 조회");
 
   return {
-    detail: mapStockDetail(
-      prediction,
-      stockResult.data as StockRow,
-      (featureData ?? []) as PredictionFeatureRow[],
+    // 시세는 DB 저장 계약이 없어 실데이터 스냅샷에서 붙인다(데모 4종목만).
+    detail: {
+      ...mapStockDetail(prediction, stockResult.data as StockRow, (featureData ?? []) as PredictionFeatureRow[]),
+      ...snapshotPrice(code),
+    },
+    profile: mapProfileSummary(
+      userResult.data as UserRow,
+      profile,
+      isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
     ),
-    profile: mapProfileSummary(userResult.data as UserRow, profile),
     marketStatus: marketResult,
     maxRiskTier: profile.max_risk_tier,
     styleAxes: isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
     holdings: holdingRows.map(({ stock_code, quantity, avg_buy_price }) => ({
       code: stock_code,
       quantity,
-      avgBuyPrice: avg_buy_price,
+      avgBuyPrice: costBasis(avg_buy_price, CLOSING_PRICE[stock_code]).price,
     })),
     source: "supabase",
   };
@@ -456,7 +393,7 @@ async function loadProfileQueryContext(
     client
       .from("ips_profiles")
       .select(
-        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score",
+        "user_id,surveyed_at,profile_type,max_risk_tier,risk_score,fomo_score,horizon_score,style_axes:profile_payload->style_axes",
       )
       .eq("user_id", userId)
       .maybeSingle(),
@@ -475,11 +412,16 @@ async function loadProfileQueryContext(
 
   const avoidedRows = (avoidedResult.data ?? []) as AvoidedAssetRow[];
   const profile = profileResult.data as IpsProfileRow;
+  const payloadStyleAxes = (profileResult.data as { style_axes?: unknown }).style_axes;
   const stocks = await loadAvoidedStocks(client, avoidedRows);
   return {
     settings: toProfileSettings(profile, avoidedRows),
     result: {
-      profile: mapProfileSummary(userResult.data as UserRow, profile),
+      profile: mapProfileSummary(
+        userResult.data as UserRow,
+        profile,
+        isStyleAxes(payloadStyleAxes) ? payloadStyleAxes : null,
+      ),
       maxRiskTier: profile.max_risk_tier,
       avoidedLabels: mapAvoidedAssetLabels(avoidedRows),
       excludedStocks: mapExcludedStocks(stocks, avoidedRows),
@@ -494,7 +436,7 @@ async function loadProfileSettings(
   const [profileResult, avoidedResult] = await Promise.all([
     client
       .from("ips_profiles")
-      .select("profile_type,max_risk_tier")
+      .select("profile_type")
       .eq("user_id", userId)
       .maybeSingle(),
     client
@@ -503,9 +445,9 @@ async function loadProfileSettings(
       .eq("user_id", userId)
       .eq("is_active", true),
   ]);
-  assertQuery(profileResult.error, "추천 설정 조회");
-  assertQuery(avoidedResult.error, "추천 회피 설정 조회");
-  if (!profileResult.data) throw new Error("추천에 사용할 IPS 프로필이 없습니다.");
+  assertQuery(profileResult.error, "성향 설정 조회");
+  assertQuery(avoidedResult.error, "제외 항목 조회");
+  if (!profileResult.data) throw new Error("투자 성향 프로필이 없습니다.");
 
   return toProfileSettings(
     profileResult.data as ProfileSettingsRow,
@@ -519,7 +461,9 @@ function toProfileSettings(
 ): ProfileSettings {
   return {
     profileType: profile.profile_type,
-    maxRiskTier: profile.max_risk_tier,
+    // ips_profiles.max_risk_tier는 profile_type에서 자동 파생된 값이다(save-profile.ts).
+    // 사용자가 직접 정하는 경로가 생기기 전까지는 종목을 거르지 않는다.
+    userMaxRiskTier: null,
     avoided: new Set(avoidedRows.map(({ asset_type }) => asset_type)),
   };
 }
@@ -580,21 +524,6 @@ function latestRowsByStock(rows: PredictionRow[]): PredictionRow[] {
     (left, right) =>
       left.display_order - right.display_order || left.stock_code.localeCompare(right.stock_code),
   );
-}
-
-async function withFallback<T>(
-  label: string,
-  fallback: T,
-  query: (client: SupabaseClient) => Promise<T>,
-): Promise<T> {
-  const client = getSupabaseClient();
-  if (!client) return fallback;
-  try {
-    return await query(client);
-  } catch (error) {
-    console.warn(`[Supabase fallback] ${label}:`, error);
-    return fallback;
-  }
 }
 
 function assertQuery(

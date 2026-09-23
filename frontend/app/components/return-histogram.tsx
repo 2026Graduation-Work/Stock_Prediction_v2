@@ -36,6 +36,7 @@ interface ReturnHistogramProps {
   band: ReturnBand;
   caseCount: number;
   signal: SignalMeta;
+  horizonLabel: string;
 }
 
 export default function ReturnHistogram({
@@ -43,6 +44,7 @@ export default function ReturnHistogram({
   band,
   caseCount,
   signal,
+  horizonLabel,
 }: ReturnHistogramProps) {
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -105,7 +107,7 @@ export default function ReturnHistogram({
           y={PAD.top - 14}
           width={x(band.high) - x(band.low)}
           height={plotH + 14}
-          fill={signal.dot}
+          style={{ fill: signal.ink }}
           opacity={0.09}
         />
         {[band.low, band.high].map((edge) => (
@@ -115,7 +117,7 @@ export default function ReturnHistogram({
             y1={PAD.top - 14}
             x2={x(edge)}
             y2={baseline}
-            stroke={signal.dot}
+            style={{ stroke: signal.ink }}
             strokeWidth={1}
             strokeDasharray="4 3"
             opacity={0.55}
@@ -125,11 +127,11 @@ export default function ReturnHistogram({
           x={(x(band.low) + x(band.high)) / 2}
           y={PAD.top - 22}
           textAnchor="middle"
-          fontSize={12.5}
-          fontWeight={700}
-          fill={signal.text}
+          fontSize={12}
+          fontWeight={600}
+          style={{ fill: signal.ink }}
         >
-          {ciPercent}% 구간 {formatSigned(band.low)} ~ {formatSigned(band.high)}
+          10번 중 {Math.round(ciPercent / 10)}번 {formatSigned(band.low)} ~ {formatSigned(band.high)}
         </text>
 
         {/* 수평 그리드 + 건수 라벨 */}
@@ -140,15 +142,15 @@ export default function ReturnHistogram({
               y1={y(count)}
               x2={VB_W - PAD.right}
               y2={y(count)}
-              stroke="#f0f2f5"
+              style={{ stroke: "var(--color-line-soft)" }}
               strokeWidth={1}
             />
-            <text x={PAD.left - 6} y={y(count) + 4} textAnchor="end" fontSize={11} fill="#98a2b3">
+            <text x={PAD.left - 6} y={y(count) + 4} textAnchor="end" fontSize={11} style={{ fill: "var(--color-muted)" }}>
               {count}
             </text>
           </g>
         ))}
-        <text x={PAD.left - 6} y={PAD.top - 22} textAnchor="end" fontSize={11} fill="#98a2b3">
+        <text x={PAD.left - 6} y={PAD.top - 22} textAnchor="end" fontSize={11} style={{ fill: "var(--color-muted)" }}>
           건수
         </text>
 
@@ -158,7 +160,7 @@ export default function ReturnHistogram({
           y1={PAD.top - 4}
           x2={x(0)}
           y2={baseline}
-          stroke="#c2cad6"
+          style={{ stroke: "var(--color-edge)" }}
           strokeWidth={1}
         />
 
@@ -171,7 +173,7 @@ export default function ReturnHistogram({
             <path
               key={bin.from}
               d={barPath(left, top, width, baseline - top, 4)}
-              fill={isInBand(bin) ? signal.dot : "#d0d7e2"}
+              style={{ fill: isInBand(bin) ? signal.ink : "var(--color-edge)" }}
               opacity={hovered === null || hovered === i ? 1 : 0.45}
             />
           );
@@ -183,14 +185,14 @@ export default function ReturnHistogram({
           y={y(bins[maxIndex].count) - 6}
           textAnchor="middle"
           fontSize={11.5}
-          fontWeight={700}
-          fill="#1b2434"
+          fontWeight={600}
+          style={{ fill: "var(--color-ink)" }}
         >
           {bins[maxIndex].count}건
         </text>
 
         {/* 베이스라인 + x축 라벨 */}
-        <line x1={PAD.left} y1={baseline} x2={VB_W - PAD.right} y2={baseline} stroke="#e4e7ec" />
+        <line x1={PAD.left} y1={baseline} x2={VB_W - PAD.right} y2={baseline} style={{ stroke: "var(--color-line)" }} />
         {labelledEdges.map((edge) => (
           <text
             key={edge}
@@ -198,13 +200,13 @@ export default function ReturnHistogram({
             y={baseline + 16}
             textAnchor="middle"
             fontSize={11}
-            fill="#98a2b3"
+            style={{ fill: "var(--color-muted)" }}
           >
             {formatSigned(edge)}
           </text>
         ))}
-        <text x={VB_W - PAD.right} y={baseline + 30} textAnchor="end" fontSize={11} fill="#98a2b3">
-          실현 수익률 (향후 10거래일)
+        <text x={VB_W - PAD.right} y={baseline + 30} textAnchor="end" fontSize={11} style={{ fill: "var(--color-muted)" }}>
+          실제 수익률 ({horizonLabel})
         </text>
 
         {/* 호버 히트 영역 (막대보다 넓게, 플롯 전체 높이) */}
@@ -224,13 +226,13 @@ export default function ReturnHistogram({
 
       {hovered !== null && (
         <div
-          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-line bg-white px-2.5 py-1.5 shadow-[0_2px_10px_rgba(16,24,40,0.1)]"
+          className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap surface px-2.5 py-1.5 shadow-lift"
           style={{
             left: `${(((x(bins[hovered].from) + x(bins[hovered].to)) / 2) / VB_W) * 100}%`,
             top: `${((y(bins[hovered].count) - 8) / VB_H) * 100}%`,
           }}
         >
-          <span className="text-xs font-bold tabular-nums">
+          <span className="text-xs font-medium tabular-nums">
             {formatSigned(bins[hovered].from)} ~ {formatSigned(bins[hovered].to)}
           </span>
           <span className="ml-1.5 text-xs text-muted">

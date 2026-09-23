@@ -12,25 +12,25 @@ export default function AccountControls({
 }) {
   const { state } = useOnboarding();
   const displayName = state.displayName?.trim() || profile.displayName;
-  const avatarLabel = Array.from(displayName)[0] ?? profile.avatarLabel;
 
   return (
-    <div className="ml-auto flex flex-none items-center gap-1.5 sm:gap-2.5">
-      <div className="hidden h-[34px] items-center gap-2 rounded-[8px] border border-line bg-field pl-2 pr-3 lg:flex">
-        <div className="grid size-[22px] place-items-center rounded-full bg-brand-soft text-[11px] font-bold text-brand">
-          {avatarLabel}
+    <div className="ml-auto flex flex-none items-center gap-3">
+      <span className="hidden whitespace-nowrap text-xs text-muted lg:inline">
+        {displayName} · {profile.profileTypeLabel}
+      </span>
+      <details className="group relative">
+        <summary className="cursor-pointer list-none whitespace-nowrap text-xs font-medium text-body hover:text-ink">
+          계정
+        </summary>
+        <div className="absolute right-0 top-7 z-50 flex w-44 flex-col overflow-hidden rounded-md bg-white py-1 shadow-modal">
+          <Link href="/survey" className="px-4 py-2.5 text-sm text-ink hover:bg-field hover:text-ink hover:no-underline">
+            내 성향 다시 진단
+          </Link>
+          <Link href="/portfolio" className="px-4 py-2.5 text-sm text-ink hover:bg-field hover:text-ink hover:no-underline">
+            보유 종목 편집
+          </Link>
         </div>
-        <span className="whitespace-nowrap text-[12px] font-semibold">
-          {displayName}
-          <span className="hidden xl:inline"> · {profile.profileTypeLabel}</span>
-        </span>
-      </div>
-      <Link
-        href="/survey"
-        className="inline-flex h-[34px] items-center whitespace-nowrap rounded-[8px] border border-edge bg-white px-3.5 text-[13px] font-semibold text-body hover:border-ghost hover:bg-field hover:no-underline"
-      >
-        설정
-      </Link>
+      </details>
       <SignOutButton />
     </div>
   );

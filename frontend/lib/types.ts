@@ -1,3 +1,5 @@
+import type { Contradiction } from "./profiling/style-scoring.ts";
+
 // schema/ v1.1에서 파생된 프론트 타입입니다. 스키마 변경 시 반드시 동기화합니다.
 // DB 컬럼 대응은 docs/erd.md.
 // chart_output.schema.json: signal_light·rank_percentile·return_band·confidence·horizon_agreement·risk_flags
@@ -23,6 +25,15 @@ export type RiskFlag =
 
 export type RiskGrade = 1 | 2 | 3 | 4 | 5; // 5 = 매우 안전, 1 = 매우 위험
 
+// 화면 수치의 출처. 수치 데이터 타입은 이 필드를 필수로 가져 SourceChip으로 표시한다.
+// real만 "실데이터"로 표기하고, fixture(손으로 정한 값·합성값)·mock(데모 시드 포함)은 "예시 데이터"다.
+export type DataKind = "real" | "fixture" | "mock";
+export interface DataProvenance {
+  kind: DataKind;
+  source: string; // 예: KRX, BigKinds · KR-FinBERT
+  asOf?: string; // 데이터 기준일 (YYYY-MM-DD)
+}
+
 export interface ReturnBand {
   low: number; // 밴드 하한(%). -1.2 = -1.2%
   high: number; // 밴드 상한(%)
@@ -44,11 +55,13 @@ export interface RecommendedStock {
   signalLight: SignalLight;
   rankPercentile: number; // 0~1, 1이 당일 신호 강도 최상위
   returnBand: ReturnBand;
-  hitRate: number; // 0~1, 과거 유사 신호 구간 적중률 (confidence.bucket_hit_rate)
+  hitRate: number; // 0~1, 과거 유사 신호 구간에서 실제로 오른 비율 (confidence.bucket_hit_rate)
   similarCaseCount: number;
   horizonAgreement: HorizonAgreementSet;
   riskFlags: RiskFlag[];
-  caution?: string; // 성향 대비 주의 문구. 있을 때만 카드 하단에 표시
+  caution?: string; // 성향 대비 주의 문구. 있을 때만 "위험도 높음" 점과 상세 체크포인트에 표시
+  reason?: string; // 목록의 한 줄 이유(모델 근거 1순위 문장). 없으면 기간별 방향 문장으로 대신한다
+  provenance: DataProvenance;
 }
 
 // 예측 근거 출처 구분
@@ -74,6 +87,8 @@ export interface StockDetail extends RecommendedStock {
   asOf: string; // 데이터·예측 기준일 (ISO). 두 날짜는 항상 동일하게 유지
   returnHorizon?: "h5" | "h10" | "h20"; // 수익률 밴드·분포의 거래일 기준
   priceHistory?: number[]; // 최근 60거래일 종가(원). 마지막 원소 = currentPrice
+  priceDates?: string[]; // priceHistory와 같은 길이의 거래일(YYYY-MM-DD). 없으면 기준일에서 거꾸로 센다
+  priceProvenance?: DataProvenance; // 시세 출처. 예측(provenance)과 다를 수 있다
   realizedReturns?: ReturnBin[]; // similarCaseCount건의 실현 수익률 분포
   reasons: PredictionReason[]; // 기여도 순 Top 3
   aiAdvice?: string; // LLM 생성 설명(수치 번역만, 행동 제안 없음)
@@ -91,7 +106,7 @@ export interface MarketIndexQuote {
 
 export interface MarketStatus {
   date: string; // ISO date (YYYY-MM-DD)
-  source: "mock" | "supabase";
+  provenance: DataProvenance;
   condition: MarketCondition;
   volatilityScore: number; // 0~100
   volumeScore: number; // 0~100
@@ -103,10 +118,10 @@ export type InvestmentHorizon = "short" | "mid" | "long";
 export interface InvestorProfileSummary {
   displayName: string;
   avatarLabel: string;
-  profileTypeLabel: string; // 예: 안정추구형 (profiling profile_type의 화면 표기)
+  profileTypeLabel: string; // BIT 유형명. 예: 추종형 (lib/profiling/bit.ts BIT_LABEL)
   personaLabel: string; // 예: 신중한 장기 투자자
-  riskTolerance: number; // 0~100
-  sentimentSensitivity: number; // 0~100
+  riskTolerance: number; // 0~100, 위험 감수 = mean(loss_tolerance, concentration)
+  sentimentSensitivity: number; // 0~100, 흔들림 민감도 = mean(urgency, drawdown_reaction, information_reliance)
   horizon: InvestmentHorizon;
   surveyedAt: string; // 예: 2026.03
 }
@@ -117,6 +132,8 @@ export interface PortfolioHolding {
   signalLight: SignalLight;
   quantity: number;
   avgBuyPrice: number;
+  priceBasis?: "avg_buy" | "close"; // close = 평균 매입가가 없어 기준일 종가로 비중을 셈("현재가 기준")
+  provenance: DataProvenance;
 }
 
 export type ProfileType = "stable" | "aggressive";
@@ -132,7 +149,7 @@ export interface ProfilingHolding {
   avg_buy_price: number;
 }
 
-// schema v1.1 style_axes. 축 id·극성은 backend/profiling/survey/style_questions.py AXES가 SSOT.
+// schema v1.1 style_axes. 축 id·극성은 lib/profiling/style-questions.json axes가 SSOT.
 // ratio: -1 = 주석 왼쪽, +1 = 주석 오른쪽.
 export type StyleAxisId =
   | "market_participation" // 시장 수익률 참여 ↔ 내 목표 우선
@@ -164,6 +181,7 @@ export interface ProfilingOutput {
   investor_profile: {
     risk_tolerance: number;
     time_horizon_months: number;
+    time_horizon_days?: number; // v1.1 optional. turnover 구간표에서 나온 1차 값
     liquidity_need_ratio: number;
     target_return_annual: number;
     investment_experience_years: number;
@@ -192,6 +210,7 @@ export interface ProfilingOutput {
   };
   confidence_per_field: Record<string, number>;
   style_axes?: StyleAxes; // v1.1 optional. 있을 때만 schema_version 1.1.0
+  contradictions?: Contradiction[]; // v1.1 optional. 축 간 상충 관측치
   context: {
     target_ticker?: string;
     investment_amount_krw: number;

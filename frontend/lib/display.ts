@@ -6,7 +6,6 @@ import type {
   HorizonDirection,
   InvestmentHorizon,
   MarketCondition,
-  ReasonSource,
   RiskFlag,
   RiskGrade,
   SignalLight,
@@ -14,59 +13,42 @@ import type {
 
 export interface SignalMeta {
   label: string;
-  dot: string; // 신호등 점 색
-  text: string; // 강조 텍스트 색
-  bandFrom: string; // 수익률 밴드 그라데이션 시작
-  bandTo: string;
-  heatBg: string; // 히트맵 타일 배경
-  heatBorder: string;
+  ink: string; // 글자·마크 색 (흰 배경 위)
+  tint: string; // 아주 옅은 배경
+  solid: string; // 흰 글자를 얹는 면 (히트맵 타일)
 }
 
+// 색은 globals.css @theme 토큰만 참조한다. 여기서 새 hex를 만들지 않는다.
 export const SIGNAL_META: Record<SignalLight, SignalMeta> = {
   strong_positive: {
     label: "강한 긍정",
-    dot: "#1e7d4f",
-    text: "#1e7d4f",
-    bandFrom: "#9cc7ab",
-    bandTo: "#1e7d4f",
-    heatBg: "#e6f1ea",
-    heatBorder: "#c9e0d2",
+    ink: "var(--color-sig-sp)",
+    tint: "var(--color-sig-sp-tint)",
+    solid: "var(--color-sig-sp-solid)",
   },
   positive: {
     label: "긍정",
-    dot: "#58a15e",
-    text: "#2f7a52",
-    bandFrom: "#c9dbd0",
-    bandTo: "#58a15e",
-    heatBg: "#eef6f1",
-    heatBorder: "#d4e8dc",
+    ink: "var(--color-sig-p)",
+    tint: "var(--color-sig-p-tint)",
+    solid: "var(--color-sig-p-solid)",
   },
   neutral: {
     label: "중립",
-    dot: "#d9a514",
-    text: "#9a7409",
-    bandFrom: "#e8d9a8",
-    bandTo: "#d9a514",
-    heatBg: "#fbf5e2",
-    heatBorder: "#ede0b7",
+    ink: "var(--color-sig-n)",
+    tint: "var(--color-sig-n-tint)",
+    solid: "var(--color-sig-n-solid)",
   },
   negative: {
     label: "부정",
-    dot: "#dd7b2e",
-    text: "#b45814",
-    bandFrom: "#f2d4b8",
-    bandTo: "#dd7b2e",
-    heatBg: "#fdf1e6",
-    heatBorder: "#f2ddc4",
+    ink: "var(--color-sig-ng)",
+    tint: "var(--color-sig-ng-tint)",
+    solid: "var(--color-sig-ng-solid)",
   },
   strong_negative: {
     label: "강한 부정",
-    dot: "#cd4b45",
-    text: "#b03a34",
-    bandFrom: "#efc4c1",
-    bandTo: "#cd4b45",
-    heatBg: "#fbe9e8",
-    heatBorder: "#f1d2d0",
+    ink: "var(--color-sig-sn)",
+    tint: "var(--color-sig-sn-tint)",
+    solid: "var(--color-sig-sn-solid)",
   },
 };
 
@@ -79,12 +61,15 @@ export const SIGNAL_ORDER: SignalLight[] = [
   "strong_negative",
 ];
 
-export const RISK_GRADE_META: Record<RiskGrade, { label: string; bg: string; text: string }> = {
-  5: { label: "매우 안전", bg: "#e3f0e9", text: "#1e7d4f" },
-  4: { label: "안전", bg: "#e9f4ee", text: "#2f7a52" },
-  3: { label: "보통", bg: "#fbf5e2", text: "#9a7409" },
-  2: { label: "위험", bg: "#fbe9e8", text: "#b03a34" },
-  1: { label: "매우 위험", bg: "#f8dcda", text: "#8f2721" },
+export const RISK_GRADE_META: Record<
+  RiskGrade,
+  { label: string; tone: "quiet" | "warn" }
+> = {
+  5: { label: "매우 안전", tone: "quiet" },
+  4: { label: "안전", tone: "quiet" },
+  3: { label: "보통", tone: "quiet" },
+  2: { label: "위험", tone: "warn" },
+  1: { label: "매우 위험", tone: "warn" },
 };
 
 // risk_flags == profiling avoided_assets 태그 체계 (schema enum과 1:1)
@@ -97,10 +82,10 @@ export const RISK_FLAG_LABEL: Record<RiskFlag, string> = {
   preferred_stock: "우선주",
 };
 
-export const HORIZON_META: Record<HorizonDirection, { arrow: string; bg: string; text: string }> = {
-  up: { arrow: "↑", bg: "#e9f4ee", text: "#2f7a52" },
-  flat: { arrow: "→", bg: "#eef1f5", text: "#667085" },
-  down: { arrow: "↓", bg: "#fdf1e6", text: "#b45814" },
+export const HORIZON_META: Record<HorizonDirection, { arrow: string; ink: string }> = {
+  up: { arrow: "↑", ink: "var(--color-sig-p)" },
+  flat: { arrow: "→", ink: "var(--color-muted)" },
+  down: { arrow: "↓", ink: "var(--color-sig-ng)" },
 };
 
 export const AGREEMENT_LABEL: Record<HorizonAgreement, string> = {
@@ -111,34 +96,23 @@ export const AGREEMENT_LABEL: Record<HorizonAgreement, string> = {
 
 export const MARKET_CONDITION_META: Record<
   MarketCondition,
-  { label: string; color: string; bg: string; comment: string }
+  { label: string; ink: string; comment: string }
 > = {
   stable: {
     label: "안정",
-    color: "#1e7d4f",
-    bg: "#e3f0e9",
-    comment: "시장이 평소 범위 안에서 움직이고 있습니다",
+    ink: "var(--color-sig-p)",
+    comment: "시장이 평소 범위 안에서 움직이고 있어요",
   },
   caution: {
     label: "주의",
-    color: "#9a7409",
-    bg: "#fbf5e2",
-    comment: "변동성이 평소보다 높은 구간입니다",
+    ink: "var(--color-sig-n)",
+    comment: "시장 흔들림이 평소보다 큰 편이에요",
   },
   high_volatility: {
     label: "경계",
-    color: "#b45814",
-    bg: "#fdf1e6",
-    comment: "단기 변동성이 평소 범위를 크게 벗어난 구간입니다",
+    ink: "var(--color-sig-ng)",
+    comment: "시장 흔들림이 평소보다 크게 커진 구간이에요",
   },
-};
-
-// 예측 근거 출처 칩: 출처 계열별로 색을 고정해 섞이지 않게 한다
-export const REASON_SOURCE_META: Record<ReasonSource, { bg: string; text: string }> = {
-  chart: { bg: "#e8eefb", text: "#2f5fd0" },
-  news: { bg: "#eee8fb", text: "#6b4fc9" },
-  financial: { bg: "#e2f1ec", text: "#14735a" },
-  profiling: { bg: "#fff3dc", text: "#946200" },
 };
 
 export const INVESTMENT_HORIZON_LABEL: Record<InvestmentHorizon, string> = {

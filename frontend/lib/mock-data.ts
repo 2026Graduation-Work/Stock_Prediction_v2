@@ -2,7 +2,10 @@
 // (수치는 디자인 프로토타입 "Main Dashboard"/"Stock Detail" 기준.
 //  데이터 기준일과 예측 생성일은 하나의 날짜로 통일한다. 팀 리뷰 결정)
 
+import { summaryFromStyleAxes } from "./profiling-rules.ts";
+import { MARKET_SNAPSHOT, SNAPSHOT_AS_OF, snapshotPrice } from "./providers/demo-snapshot.ts";
 import type {
+  DataProvenance,
   InvestorProfileSummary,
   MarketStatus,
   PortfolioHolding,
@@ -11,54 +14,11 @@ import type {
   StyleAxes,
 } from "./types";
 
-export const marketStatus: MarketStatus = {
-  date: "2025-10-02",
-  source: "mock",
-  condition: "caution",
-  volatilityScore: 61,
-  volumeScore: 48,
-  indexQuotes: [
-    {
-      symbol: "KOSPI",
-      label: "KOSPI",
-      value: 3549.21,
-      change: 93.38,
-      changePercent: 2.7,
-    },
-    {
-      symbol: "KOSDAQ",
-      label: "KOSDAQ",
-      value: 854.25,
-      change: 8.91,
-      changePercent: 1.05,
-    },
-    {
-      symbol: "KOSPI200",
-      label: "KOSPI 200",
-      value: 493.41,
-      change: 14.04,
-      changePercent: 2.93,
-    },
-    {
-      symbol: "USD/KRW",
-      label: "원/달러",
-      value: 1401.82,
-      change: -1.33,
-      changePercent: -0.09,
-    },
-  ],
-};
+// 이 파일의 수치는 모두 손으로 정한 예시다. 화면에는 "예시 데이터"로 표시된다.
+const DEMO: DataProvenance = { kind: "mock", source: "데모 데이터" };
 
-export const investorProfile: InvestorProfileSummary = {
-  displayName: "김민지",
-  avatarLabel: "민",
-  profileTypeLabel: "안정추구형",
-  personaLabel: "신중한 장기 투자자",
-  riskTolerance: 35,
-  sentimentSensitivity: 62,
-  horizon: "long",
-  surveyedAt: "2026.03",
-};
+// 시장 브리핑은 실데이터 스냅샷(KRX 지수, FinanceDataReader 캐시). 산식: scripts/build_demo_snapshot.py
+export const marketStatus: MarketStatus = MARKET_SNAPSHOT;
 
 const samsungElectronics: RecommendedStock = {
   code: "005930",
@@ -72,6 +32,8 @@ const samsungElectronics: RecommendedStock = {
   similarCaseCount: 128,
   horizonAgreement: { h5: "up", h10: "up", h20: "up", agreement: "aligned" },
   riskFlags: [],
+  reason: "20일 이동평균이 60일 이동평균을 상향 돌파", // 상세 모델 근거 1순위와 같은 문장
+  provenance: DEMO,
 };
 
 const hyundaiMotor: RecommendedStock = {
@@ -86,6 +48,8 @@ const hyundaiMotor: RecommendedStock = {
   similarCaseCount: 52,
   horizonAgreement: { h5: "up", h10: "up", h20: "up", agreement: "aligned" },
   riskFlags: [],
+  reason: "60일 모멘텀이 전체 종목 상위 5%", // 상세 모델 근거 1순위와 같은 문장
+  provenance: DEMO,
 };
 
 const celltrion: RecommendedStock = {
@@ -101,15 +65,35 @@ const celltrion: RecommendedStock = {
   horizonAgreement: { h5: "up", h10: "up", h20: "flat", agreement: "mixed" },
   riskFlags: ["high_volatility"],
   caution:
-    "위험 2등급 종목으로, 안정추구형 성향의 허용 범위(4·5등급) 밖에 있습니다.",
+    "위험 2등급 종목으로, 성향 기준 허용 범위(4·5등급) 밖에 있습니다.",
+  reason: "최근 20거래일 거래량이 평소의 2.8배", // 상세 모델 근거 1순위와 같은 문장
+  provenance: DEMO,
 };
 
-// 추천 리스트: max_risk_tier 규칙(안정추구형 = 위험 4·5등급)을 만족하는 종목만.
-// 등급 미달 보유 종목(셀트리온)은 추천이 아닌 "보유 종목 알림"으로 분리 노출.
+// supabase/seed.sql 035720 예측 행과 같은 값
+const kakao: RecommendedStock = {
+  code: "035720",
+  name: "카카오",
+  market: "KOSPI",
+  riskGrade: 3,
+  signalLight: "negative",
+  rankPercentile: 0.28,
+  returnBand: { low: -5.1, high: 1.2, ciLevel: 0.68 },
+  hitRate: 0.46,
+  similarCaseCount: 61,
+  horizonAgreement: { h5: "down", h10: "down", h20: "flat", agreement: "mixed" },
+  riskFlags: [],
+  caution:
+    "위험 3등급 종목으로, 성향 기준 허용 범위(4·5등급) 밖에 있습니다.",
+  provenance: DEMO,
+};
+
+// 추천 리스트. 위험등급은 거르지 않는다 — 성향에서 자동 파생된 max_risk_tier는
+// 소프트 틸트라 주의 문구로만 쓴다 (AGENTS.md "명시 규칙만 하드 제약").
 export const recommendedStocks: RecommendedStock[] = [samsungElectronics, hyundaiMotor];
 
-// 보유 중이라 신호를 알려주지만 추천은 아닌 종목 (성향 대비 위험등급 미달)
-export const holdingAlerts: RecommendedStock[] = [celltrion];
+// 보유 중이지만 추천 목록에 없는 종목. 보유 종목은 모두 추천 또는 이 알림 중 한 곳에 보인다.
+export const holdingAlerts: RecommendedStock[] = [celltrion, kakao];
 
 // 회피 설정(avoided_assets)으로 추천에서 제외된 종목 안내.
 // 화이트박스 원칙: 어떤 종목이 왜 빠졌는지 펼쳐서 확인 가능해야 한다.
@@ -139,6 +123,13 @@ export const investorStyleAxes: StyleAxes = {
   ],
 };
 
+// 김민지 성향 카드. 3축과 유형명은 위 8축에서 계산한다(대시보드·상세·설문 결과와 같은 규칙).
+export const investorProfile: InvestorProfileSummary = summaryFromStyleAxes(investorStyleAxes, {
+  displayName: "김민지",
+  avatarLabel: "민",
+  surveyedAt: "2026.03",
+});
+
 // supabase/seed.sql portfolio_holdings와 같은 종목·수량·평단 (N08 보유 비중 넛지가 의존)
 export const portfolioHoldings: PortfolioHolding[] = [
   {
@@ -147,6 +138,7 @@ export const portfolioHoldings: PortfolioHolding[] = [
     signalLight: "positive",
     quantity: 15,
     avgBuyPrice: 71_200,
+    provenance: DEMO,
   },
   {
     code: "035720",
@@ -154,6 +146,7 @@ export const portfolioHoldings: PortfolioHolding[] = [
     signalLight: "negative",
     quantity: 8,
     avgBuyPrice: 48_500,
+    provenance: DEMO,
   },
   {
     code: "068270",
@@ -161,6 +154,7 @@ export const portfolioHoldings: PortfolioHolding[] = [
     signalLight: "neutral",
     quantity: 3,
     avgBuyPrice: 182_000,
+    provenance: DEMO,
   },
   {
     code: "005380",
@@ -168,35 +162,18 @@ export const portfolioHoldings: PortfolioHolding[] = [
     signalLight: "strong_positive",
     quantity: 5,
     avgBuyPrice: 235_000,
+    provenance: DEMO,
   },
 ];
 
-// 결정론적 60거래일 종가 시리즈(같은 입력 → 같은 출력).
-// 웨이포인트 선형 보간에 사인 파동을 얹고, 양 끝은 웨이포인트 값과 정확히 일치시킨다.
-function priceSeries(waypoints: number[], wiggle: number, tick: number, days = 60): number[] {
-  const spans = waypoints.length - 1;
-  return Array.from({ length: days }, (_, i) => {
-    const t = (i / (days - 1)) * spans;
-    const k = Math.min(Math.floor(t), spans - 1);
-    const base = waypoints[k] + (waypoints[k + 1] - waypoints[k]) * (t - k);
-    const wave = Math.sin(i * 1.9 + waypoints[0]) + 0.6 * Math.sin(i * 0.7);
-    const damp = Math.sin((Math.PI * i) / (days - 1));
-    return Math.round((base + wave * wiggle * damp) / tick) * tick;
-  });
-}
+// 시세는 실데이터 스냅샷(네이버 금융 수정주가, 기준일 2025-12-30). 예측 수치(신호·밴드·분포·근거)는 예시다.
+const realPrice = (code: string) => ({ asOf: SNAPSHOT_AS_OF, ...snapshotPrice(code) });
 
 // 종목 상세. 진입 동선: 대시보드 카드 "근거 보기" → /stocks/[code]
 export const stockDetails: Record<string, StockDetail> = {
   [celltrion.code]: {
     ...celltrion,
-    currentPrice: 190_800,
-    changePercent: 1.2,
-    asOf: "2025-10-02",
-    priceHistory: priceSeries(
-      [176_200, 183_400, 178_900, 187_300, 183_900, 192_300, 187_400, 190_800],
-      1_400,
-      100,
-    ),
+    ...realPrice(celltrion.code),
     realizedReturns: [
       { from: -6, to: -4, count: 2 },
       { from: -4, to: -2, count: 3 },
@@ -229,18 +206,11 @@ export const stockDetails: Record<string, StockDetail> = {
       },
     ],
     aiAdvice:
-      "현재 셀트리온은 중립(노랑) 신호로, 방향성이 뚜렷하지 않은 구간입니다. 과거 유사한 신호 34건에서 실현 수익률은 -2.0%에서 +7.4% 사이에 넓게 분포했고, 이 구간의 적중률은 57%로 확신이 높은 편은 아닙니다. 김민지님은 위험 감수 성향(35)이 낮고 심리 민감도(62)가 높은 편이어서, 변동성이 큰 이 종목의 급등락은 심리적 부담이 될 수 있습니다.",
+      "셀트리온의 모델 신호는 중립으로, 방향이 뚜렷하지 않은 구간이에요. 과거 비슷한 신호 34건의 2주 뒤 수익률은 -2.0%에서 +7.4% 사이로 넓게 퍼져 있었고, 실제로 오른 경우는 57%로 한쪽으로 기울지 않았어요. 김민지님은 위험 감수(33)가 낮고 흔들림 민감도(65)가 높은 편이라, 가격 흔들림이 큰 이 종목의 오르내림이 부담이 될 수 있어요.",
   },
   [samsungElectronics.code]: {
     ...samsungElectronics,
-    currentPrice: 92_300,
-    changePercent: 0.8,
-    asOf: "2025-10-02",
-    priceHistory: priceSeries(
-      [84_300, 87_900, 86_200, 89_800, 88_400, 91_200, 90_100, 92_300],
-      600,
-      100,
-    ),
+    ...realPrice(samsungElectronics.code),
     realizedReturns: [
       { from: -4, to: -3, count: 3 },
       { from: -3, to: -2, count: 6 },
@@ -275,18 +245,11 @@ export const stockDetails: Record<string, StockDetail> = {
       },
     ],
     aiAdvice:
-      "삼성전자는 긍정(연두) 신호로, 단기(H5)·중기(H10)·장기(H20) 방향이 모두 위를 가리키고 있습니다. 과거 유사 신호 128건에서 실현 수익률은 -0.8%에서 +4.2% 사이에 분포했고, 이 구간의 적중률은 61%였습니다. 위험 4등급(안전) 종목으로 김민지님의 안정추구형 성향(위험 감수 35) 허용 범위 안에 있고, 분포 폭이 좁은 편이라 심리 민감도(62)가 높은 김민지님에게 급등락 부담이 덜한 유형입니다.",
+      "삼성전자의 모델 신호는 긍정이고, 1주·2주·4주 뒤 방향이 모두 오르는 쪽이에요. 과거 비슷한 신호 128건의 2주 뒤 수익률은 -0.8%에서 +4.2% 사이였고, 실제로 오른 경우는 61%였어요. 위험도는 낮음으로 김민지님이 답한 위험 감수(33) 범위 안에 있고, 범위가 좁은 편이라 흔들림 민감도(65)가 높은 김민지님에게 오르내림 부담이 덜한 편이에요.",
   },
   [hyundaiMotor.code]: {
     ...hyundaiMotor,
-    currentPrice: 265_000,
-    changePercent: 2.1,
-    asOf: "2025-10-02",
-    priceHistory: priceSeries(
-      [238_000, 246_000, 242_500, 252_000, 249_000, 258_000, 254_500, 265_000],
-      2_200,
-      500,
-    ),
+    ...realPrice(hyundaiMotor.code),
     realizedReturns: [
       { from: -3, to: -2, count: 1 },
       { from: -2, to: -1, count: 2 },
@@ -323,6 +286,18 @@ export const stockDetails: Record<string, StockDetail> = {
       },
     ],
     aiAdvice:
-      "현대차는 강한 긍정(초록) 신호로, 오늘 신호 강도 상위 5%에 해당합니다. 과거 유사 신호 52건의 실현 수익률은 +0.6%에서 +7.2%로 분포 하단이 0% 위에 있었고, 이 구간의 적중률은 66%였습니다. 다만 유사 사례 수가 52건으로 많지 않아, 분포 폭의 통계적 확신은 사례가 더 많은 신호보다 낮습니다. 위험 5등급(매우 안전)으로 김민지님의 위험 감수 성향(35) 기준에서 여유가 있는 종목입니다.",
+      "현대차의 모델 신호는 강한 긍정으로, 오늘 분석한 종목 중 상위 5%예요. 과거 비슷한 신호 52건의 2주 뒤 수익률은 +0.6%에서 +7.2% 사이로 아래쪽 끝도 0% 위였고, 실제로 오른 경우는 66%였어요. 다만 비슷한 사례가 52건으로 많지 않아, 사례가 더 많은 신호보다 범위를 덜 믿을 만해요. 위험도는 낮음이에요.",
   },
 };
+
+// 카카오는 예측 근거·분포 예시가 없다. 시세만 실데이터로 두고 나머지는 "없음"으로 보인다.
+stockDetails[kakao.code] = { ...kakao, ...realPrice(kakao.code), reasons: [] };
+
+// 데모 모드에서 보유 종목을 고를 때 쓰는 종목 목록.
+// 로그인 사용자는 Supabase stocks 테이블을 직접 검색한다.
+export const KNOWN_STOCKS: { code: string; name: string }[] = [
+  samsungElectronics,
+  hyundaiMotor,
+  celltrion,
+  kakao,
+].map(({ code, name }) => ({ code, name }));
