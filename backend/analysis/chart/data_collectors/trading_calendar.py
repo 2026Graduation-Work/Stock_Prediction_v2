@@ -6,7 +6,10 @@ from datetime import date, datetime
 import FinanceDataReader as fdr
 import pandas as pd
 
-TRADING_CALENDAR_CACHE_PATH = "./data/krx_trading_calendar.json"
+# 실행 위치(CWD)와 무관하게 chart/data/ 아래 한 파일을 쓴다(추론 서버 등 CWD가 다른 호출자, #107).
+TRADING_CALENDAR_CACHE_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "krx_trading_calendar.json"
+)
 _KOSPI_INDEX_TICKER = "1001"
 _TRADING_CALENDAR_SOURCE = "KOSPI index trading days"
 _TRADING_CALENDAR_PROVIDERS = {
@@ -84,8 +87,8 @@ def _save_trading_calendar_cache(
             cached_start = pd.Timestamp(cached_payload["coverage_start"]).normalize()
             cached_end = pd.Timestamp(cached_payload["coverage_end"]).normalize()
             ranges_connect = (
-                start_date <= cached_end + pd.Timedelta(days=1)
-                and end_date >= cached_start - pd.Timedelta(days=1)
+                start_date <= cached_end + pd.Timedelta(1, unit="D")
+                and end_date >= cached_start - pd.Timedelta(1, unit="D")
             )
             if cached_payload.get("source") == _TRADING_CALENDAR_SOURCE and ranges_connect:
                 coverage_start = min(start_date, cached_start)
@@ -116,11 +119,18 @@ def _save_trading_calendar_cache(
 
 
 def get_krx_trading_days(start_date: str, end_date: str) -> set[date]:
-    """KOSPI 지수 거래일을 조회하고, 실패할 때는 완전한 캐시만 사용합니다."""
+    """요청 범위를 모두 덮는 캐시가 있으면 그것을, 없으면 KOSPI 지수 거래일을 조회합니다.
+
+    지난 거래일은 바뀌지 않으므로 덮는 캐시를 먼저 쓴다. 종목별 추론처럼 반복 호출돼도
+    지수 요청은 캐시가 범위를 못 덮을 때만 나간다(#107).
+    """
     start = pd.Timestamp(start_date).normalize()
     end = pd.Timestamp(end_date).normalize()
     if start > end:
         raise ValueError("start_date는 end_date보다 늦을 수 없습니다.")
+    cached_days = _load_trading_calendar_cache(start, end)
+    if cached_days:
+        return cached_days
 
     provider_calls = (
         ("fdr", lambda: _fetch_fdr_index(start, end)),
@@ -154,13 +164,6 @@ def get_krx_trading_days(start_date: str, end_date: str) -> set[date]:
         except Exception as exc:
             provider_errors.append(f"{_TRADING_CALENDAR_PROVIDERS[provider_key]}: {exc}")
 
-    cached_days = _load_trading_calendar_cache(start, end)
-    if cached_days:
-        print(
-            "  ⚠️ KOSPI 지수 거래일 조회 실패, "
-            f"검증 범위를 충족하는 캐시 사용: {'; '.join(provider_errors)}"
-        )
-        return cached_days
     raise TradingCalendarError(
         "KOSPI 지수 거래일 조회에 실패했고 요청 범위를 덮는 캐시도 없습니다. "
         "잘못된 평일 추정을 피하기 위해 작업을 중단합니다. "
