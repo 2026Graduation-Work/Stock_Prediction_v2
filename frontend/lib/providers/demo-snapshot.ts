@@ -22,6 +22,18 @@ export interface StockSnapshot {
 
 export const STOCK_SNAPSHOT = snapshot.stocks as Record<string, StockSnapshot>;
 
+// 투자자별 순매수 수량(주), 기준일까지 최근 20영업일. 기타법인·금액은 원천에 없어 비워 둔다.
+export const SUPPLY_SNAPSHOT = snapshot.supply.stocks as Record<
+  string,
+  { date: string; retail: number; foreign: number; institution: number }[]
+>;
+
+export const SUPPLY_PROVENANCE: DataProvenance = {
+  kind: "real",
+  source: snapshot.supply.source,
+  asOf: snapshot.asOf,
+};
+
 export const MARKET_SNAPSHOT: MarketStatus = {
   date: snapshot.market.date,
   provenance: { kind: "real", source: snapshot.market.source, asOf: snapshot.market.date },

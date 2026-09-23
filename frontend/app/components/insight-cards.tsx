@@ -123,14 +123,15 @@ const SUPPLY_SERIES = [
   { key: "retail", label: "개인" },
   { key: "foreign", label: "외국인" },
   { key: "institution", label: "기관" },
-  { key: "otherCorp", label: "기타법인" },
 ] as const;
 
 const TOOLTIP_STYLE = { border: `1px solid ${CHART.line}`, borderRadius: 8, fontSize: 12 };
 
 const signed = (value: number, digits = 2) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
 const signedPercent = (ratio: number) => `${ratio > 0 ? "+" : ""}${(ratio * 100).toFixed(1)}%`;
-const eok = (value: number) => `${value > 0 ? "+" : ""}${value.toLocaleString("ko-KR")}억`;
+// 순매수 수량(주). 만 주 단위로 줄여 읽기 쉽게: +5,276,406 → +527.6만 주
+const shares = (value: number) =>
+  `${value > 0 ? "+" : value < 0 ? "-" : ""}${(Math.abs(value) / 10_000).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}만 주`;
 const shortDate = (iso: string) => iso.slice(5).replace("-", ".");
 
 // 감성 점수(-1~+1) → 구간 말. 경계는 점수 분포가 아니라 읽기 쉬운 고정 구간이다.
@@ -489,9 +490,9 @@ function SupplyPanel({ supply, provenance }: { supply: SupplyDemandDay[] | null;
                 />
               </div>
               <span className="text-right text-sm font-semibold tabular-nums" style={{ color }}>
-                {eok(total)}
+                {shares(total)}
                 <span className="block whitespace-nowrap text-2xs font-normal text-muted">
-                  {buy ? "순매수" : "순매도"} · 최근일 {eok(latest)}
+                  {buy ? "순매수" : "순매도"} · 최근일 {shares(latest)}
                 </span>
               </span>
             </li>
@@ -500,7 +501,7 @@ function SupplyPanel({ supply, provenance }: { supply: SupplyDemandDay[] | null;
       </ul>
       <p className="m-0 flex flex-wrap items-center gap-x-3 text-2xs text-muted">
         <span>
-          {supply[0].date} ~ {supply[supply.length - 1].date} · 억원
+          {supply[0].date} ~ {supply[supply.length - 1].date} · 순매수 수량(주) · 기타법인 제외
         </span>
         <SourceChip provenance={provenance} />
       </p>

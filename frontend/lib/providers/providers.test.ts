@@ -46,31 +46,36 @@ for (const code of CODES) {
 }
 
 test("대상 외 종목은 null", async () => {
-  const { supply, sentiment, contributions, financial } = await loadStockInsights("068270");
+  const { supply, sentiment, contributions, financial } = await loadStockInsights("000660");
   assert.deepEqual(
     { supply, sentiment, contributions, financial },
     { supply: null, sentiment: null, contributions: null, financial: null },
   );
 });
 
-for (const code of CODES) {
-  test(`${code}: 수급 네 주체(개인·외국인·기관합계·기타법인) 순매수 합은 매일 0`, async () => {
+test("수급: 데모 4종목은 실데이터 20영업일(기준일까지, 12-25 휴장 제외) 정수 수량", async () => {
+  for (const code of ["005930", "005380", "035720", "068270"]) {
     const supply = (await supplyDemandProvider(code)) ?? [];
-    assert.ok(supply.length > 0);
+    assert.equal(supply.length, 20, code);
+    assert.equal(supply[0].date, "2025-12-02", code);
+    assert.equal(supply.at(-1)?.date, "2025-12-30", code);
+    assert.ok(!supply.some(({ date }) => date === "2025-12-25"), code);
     for (const day of supply) {
-      assert.equal(day.retail + day.foreign + day.institution + day.otherCorp, 0, day.date);
+      for (const value of [day.retail, day.foreign, day.institution]) assert.ok(Number.isInteger(value), `${code} ${day.date}`);
     }
-  });
-}
+    const { provenance } = await loadStockInsights(code);
+    assert.deepEqual(provenance.supply, { kind: "real", source: "네이버 금융 투자자별 매매동향", asOf: "2025-12-30" });
+  }
+});
 
-test("출처: 실데이터는 삼성전자 감성뿐이고 나머지는 픽스처", async () => {
+test("출처: 감성은 삼성전자만 실데이터, 모델 근거·재무는 픽스처", async () => {
   const samsung = await loadStockInsights("005930");
   assert.deepEqual(samsung.provenance.sentiment, {
     kind: "real",
     source: "BigKinds · KR-FinBERT",
     asOf: samsung.sentiment?.days.at(-1)?.date,
   });
-  for (const key of ["supply", "contributions", "financial"] as const) {
+  for (const key of ["contributions", "financial"] as const) {
     assert.equal(samsung.provenance[key].kind, "fixture", key);
   }
   const hyundai = await loadStockInsights("005380");
@@ -113,7 +118,7 @@ test("김민지 + 삼성전자: 넛지가 1개 이상 발화한다", async () =>
 
 test("김민지 + 삼성전자: information_reliance를 0.3으로 올리면 수급 넛지 N02가 새로 발화하고 다른 축의 N07이 함께 보인다", async () => {
   assert.ok(!(await samsungNudges(investorStyleAxes)).includes("N02"));
-  // N03도 시장 조건이 참이지만 N02와 같은 information_reliance 축이라 빠진다
+  // N03(최근 5일 중 기관 순매수 4일 이상)은 실데이터에서 3일이라 시장 조건이 거짓이다
   assert.deepEqual(await samsungNudges(minjiWith({ information_reliance: 0.3 })), ["N02", "N07"]);
 });
 
