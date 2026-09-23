@@ -30,3 +30,13 @@ taste-skill의 다이얼(DESIGN_VARIANCE·MOTION_INTENSITY·VISUAL_DENSITY)은 �
 설치하지 않았다. 판단 기준으로만 **DESIGN_VARIANCE=3, MOTION_INTENSITY=2, VISUAL_DENSITY=5**를 쓴다
 (가운데 정렬·절제된 레이아웃, 호버·펼치기 정도의 모션, 대시보드치고 여유 있는 밀도).
 `high-end-visual-design`, `industrial-brutalist-ui`는 금융 대시보드와 맞지 않아 쓰지 않는다.
+
+## 검토했지만 설치하지 않은 도구 (2026-09-23)
+
+| 도구 | 판정 | 이유 |
+|---|---|---|
+| [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) | 기각 | 스타일 79종·팔레트 192종 중 고르는 도구. 우리는 스타일을 이미 정했다(DESIGN.md). 로고·이미지 생성은 범위 밖 |
+| [awesome-claude-design](https://github.com/VoltAgent/awesome-claude-design) | 아이디어만 | Apple DESIGN.md와 대조했다. 절제 원칙(강조색 하나, 카드 그림자 없음, 면으로 구분)은 이미 같다. 빠진 터치 영역 규칙만 DESIGN.md 3장에 추가 |
+| [design-md-chrome](https://github.com/bergside/design-md-chrome) | 기각 | 남의 사이트 스타일을 통째로 뽑아 오는 도구. 우리는 성균관대 색 + 자체 규칙이라 뽑아 올 대상이 없다 |
+| [design-motion-principles](https://github.com/kylezantos/design-motion-principles) | 기각 | 우리 모션은 펼치기·눌림 피드백뿐(DESIGN.md 5장). `fixing-motion-performance`로 충분 |
+| Claude Code `/design` | 사용 | 기본 기능(Pro 이상, 추가 비용 없음). 새 화면은 구현 전에 `/design`으로 시안을 여러 개 뽑아 고른다. 시안도 DESIGN.md를 따른다 |
