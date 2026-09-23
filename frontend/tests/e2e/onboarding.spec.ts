@@ -171,6 +171,9 @@ test("new user: 보유 종목 '아직 없어요' -> 대시보드 빈 상태", as
   const browserErrors = collectBrowserErrors(page);
   await startDemo(page);
   await page.getByRole("button", { name: "시작하기" }).click();
+  // 문항 화면 헤더(로고·단계·데모 응답·나가기)가 모바일 폭을 넘지 않는다
+  await expect(page.getByText("질문 1/16")).toBeVisible();
+  await assertNoHorizontalOverflow(page, 390, 844);
   await page.getByRole("button", { name: /데모 응답/ }).click();
   await page.getByRole("button", { name: "결과 확인" }).click();
   await page.getByRole("button", { name: "네, 이대로 저장" }).click();

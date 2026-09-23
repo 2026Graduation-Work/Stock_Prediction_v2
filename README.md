@@ -1,6 +1,8 @@
-# 시그널랩 (SignalLab)
+# Take a Look
 
-**초보 투자자가 종목을 판단할 근거를 쉽게 보여 주는 서비스.**
+**초보 투자자를 위한 판단 근거 서비스**
+
+행동재무학 기반 투자 판단 보조 플랫폼 · 성균관대 소프트웨어학과 2026 졸업작품.
 투자 성향을 진단해 근거를 보여 주는 순서를 사람마다 다르게 하고, 주가 예측 모델은 여러 근거 중 하나로만 씁니다.
 
 [![Web CI](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/web-ci.yml/badge.svg)](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/web-ci.yml)
@@ -116,17 +118,15 @@ docs/               설계·데이터·설정 문서 (색인: docs/README.md)
 
 ## 팀
 
-성균관대학교 소프트웨어학과 2026학년도 졸업작품
-
-| 블록 | 담당 |
-|---|---|
-| `backend/profiling` · 스키마 | 최중현 |
-| `backend/analysis/chart` | 서진세 |
-| `backend/analysis/text` | 김서환 |
-| `frontend` · 인프라 | 임성우 |
+| 이름 | 역할 | 주요 담당 |
+|---|---|---|
+| 최중현 | 팀장 · 프로젝트 매니저 | 기획·설계, 성향 진단, 웹 개발·배포 |
+| 서진세 | 차트 분석 | 차트 모델·백테스트, 시장 심리 특성·A/B 실험 |
+| 김서환 | 텍스트·재무 분석 | 뉴스 감성 분석, DART 재무 지표 |
+| 임성우 | 프론트엔드·QA | 초기 대시보드, Supabase 환경, QA |
 
 ## 라이선스
 
 [MIT](LICENSE)
 
-> 시그널랩은 투자 자문이 아닙니다. 모든 신호는 과거 데이터에 기반한 통계적 참고 정보이며, 투자 판단과 책임은 사용자에게 있습니다.
+> Take a Look은 투자 자문이 아닙니다. 모든 신호는 과거 데이터에 기반한 통계적 참고 정보이며, 투자 판단과 책임은 사용자에게 있습니다.
