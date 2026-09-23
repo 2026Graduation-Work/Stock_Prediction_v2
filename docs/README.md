@@ -14,6 +14,8 @@
 | [../frontend/DESIGN.md](../frontend/DESIGN.md) | 화면 규칙(성균관대 색·애플 톤). 값은 `frontend/app/globals.css` `@theme` |
 | [../.claude/skills/README.md](../.claude/skills/README.md) | 검토한 디자인 스킬 4종·충돌 판정표 |
 | [CONTRIBUTING.md](CONTRIBUTING.md) | 협업 규칙 |
+| [CHANGELOG.md](CHANGELOG.md) | 서비스 단위 변경 기록(서비스명 등) |
+| [brand/README.md](brand/README.md) | 로고 후보·선택 이유·사용 규칙 |
 | [../backend/analysis/text/VALUE_PIPELINE_VALIDATION.md](../backend/analysis/text/VALUE_PIPELINE_VALIDATION.md) | 가치투자 파이프라인 출력 검증 절차 |
 | [../backend/analysis/chart/experiments/features/PSYCHOLOGY_FEATURES.md](../backend/analysis/chart/experiments/features/PSYCHOLOGY_FEATURES.md) | 가격·거래량 심리 피처 정의(psychology_market_v1) |
 
