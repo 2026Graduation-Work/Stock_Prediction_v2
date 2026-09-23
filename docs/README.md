@@ -6,7 +6,7 @@
 
 | 문서 | 내용 |
 |---|---|
-| [../README.md](../README.md) | 서비스 소개·라이브 데모·구조·데이터 경계·로컬 실행 |
+| [../README.md](../README.md) | 서비스 소개·빠른 시작·구조·기여 안내 |
 | [../AGENTS.md](../AGENTS.md) | 아키텍처 원칙·표현 규칙·금지사항·디자인 스킬 허용 목록 |
 | [data-inventory.md](data-inventory.md) | 화면 수치 43행의 출처·실데이터 여부, 시장 분위기 산식 |
 | [auth-setup.md](auth-setup.md) | 계정 로그인 설정(Supabase·Vercel), 사람이 할 일 |
