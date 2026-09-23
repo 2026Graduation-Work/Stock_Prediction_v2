@@ -32,8 +32,9 @@ import HoldingsStep from "./holdings-step";
 import Wordmark from "@/components/brand/Wordmark";
 import LogoMark from "@/components/brand/LogoMark";
 import { SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
+import { STORAGE_KEYS } from "@/lib/storage-keys";
 
-const DRAFT_KEY = "signallab.survey-draft.v1";
+const DRAFT_KEY = STORAGE_KEYS.surveyDraft;
 const ADVANCE_DELAY_MS = 180; // 고른 답이 눌린 것을 보여 준 뒤 다음 문항으로
 
 type SurveyMode = "short" | "quick";

@@ -11,6 +11,7 @@ const EXCLUDED = new Set([
   "lib/copy-rules.ts", // 금지 표현 목록 자체
   "lib/providers/sentiment-fixture.ts", // 실제 기사 제목(외부 데이터)이라 우리 문구가 아니다
   "lib/profiling/bit.ts", // composite 등 분류 계산의 정의 파일(화면 문구 없음)
+  "lib/storage-keys.ts", // 옛 저장 키(signallab.*) 이전 코드 — 2027-02 이후 제거
 ]);
 
 // "계산 근거" 영역: 이 표시 사이의 줄은 개발 용어를 쓸 수 있다.
@@ -69,10 +70,12 @@ test("금지 표현 목록이 대표 문장을 잡는다", () => {
     "composite +0.2",
     "시그널랩 로그인",
     "SignalLab",
+    "signallab",
   ]) {
     assert.ok(caught(text), text);
   }
   assert.ok(!caught("과거 유사 신호 중 상승 비율 61%"));
   assert.ok(!caught("getSupabaseClient()"));
   assert.ok(!caught("const h10 = agreement.h10"));
+  assert.ok(!caught("signalLabel"));
 });

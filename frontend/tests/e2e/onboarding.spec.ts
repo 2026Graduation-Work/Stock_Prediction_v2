@@ -2,8 +2,9 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { expect, test, type Page } from "@playwright/test";
 
-const SESSION_KEY = "signallab.demo-session.v1";
-const PROFILE_KEY = "signallab.ips-profile.v1";
+const SESSION_KEY = "takealook.demo-session.v1";
+const PROFILE_KEY = "takealook.ips-profile.v1";
+const HOLDINGS_KEY = "takealook.holdings.v1";
 
 // 문항 정의(정본)를 읽어, 모든 축을 +2(축의 positive 쪽 끝)로 답하게 만든다.
 // 김민지 mock(추종형)과 다른 "적극 축적형"이 나와야 대시보드·상세가 설문 결과를 쓰는지 가려진다.
@@ -183,6 +184,45 @@ test("new user: 보유 종목 '아직 없어요' -> 대시보드 빈 상태", as
   await page.goto("/survey");
   await expect(page.getByRole("heading", { name: "Take a Look은 이렇게 도와줘요" })).toHaveCount(0);
   await expect(page.getByText("질문 1/16")).toBeVisible();
+  expect(browserErrors).toEqual([]);
+});
+
+// 2027-02 이후 제거: 옛 서비스명 저장 키(signallab.*) 이전
+test("옛 저장 키(signallab.*)로 저장된 데모 상태가 새로고침 후 새 키로 옮겨지고 유지된다", async ({ page }) => {
+  const browserErrors = collectBrowserErrors(page);
+  await startDemo(page);
+  await page.getByRole("button", { name: "시작하기" }).click();
+  await page.getByRole("button", { name: /데모 응답/ }).click();
+  await page.getByRole("button", { name: "결과 확인" }).click();
+  await page.getByRole("button", { name: "네, 이대로 저장" }).click();
+  await page.getByRole("button", { name: "다음: 보유 종목" }).click();
+  await page.getByRole("button", { name: "저장하고 시작" }).click();
+  await expect(page).toHaveURL("/");
+  const heading = await page.getByRole("heading", { level: 1 }).innerText();
+
+  // 새 키에 저장된 값을 옛 키로 되돌려 심는다(이전 전 브라우저 상태 재현)
+  const before = await page.evaluate((keys) => {
+    const values: Record<string, string | null> = {};
+    for (const key of keys) {
+      values[key] = localStorage.getItem(key);
+      localStorage.setItem(key.replace("takealook.", "signallab."), values[key] ?? "");
+      localStorage.removeItem(key);
+    }
+    return values;
+  }, [SESSION_KEY, PROFILE_KEY, HOLDINGS_KEY]);
+  expect(Object.values(before).every((value) => value !== null)).toBe(true);
+
+  await page.reload();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(heading);
+  const after = await page.evaluate(() =>
+    Object.fromEntries(
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("signallab.") || key.startsWith("takealook."))
+        .map((key) => [key, localStorage.getItem(key)]),
+    ),
+  );
+  expect(after).toEqual(before);
   expect(browserErrors).toEqual([]);
 });
 
