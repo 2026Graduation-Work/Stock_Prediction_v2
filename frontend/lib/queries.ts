@@ -187,7 +187,7 @@ export async function getAuthenticatedStockDetailData(
 
 // 시장 브리핑은 실데이터 스냅샷(KRX 지수, providers/demo-snapshot.ts)을 쓴다.
 // DB market_status에는 손으로 쓴 시드만 있어 읽지 않는다(없는 데이터를 실데이터처럼 보이지 않게).
-// ponytail: 백엔드가 market_status를 매일 채우게 되면 여기서 DB를 다시 읽는다.
+// ponytail: 백엔드가 market_status를 매일 채우게 되면 여기서 DB를 다시 읽는다(행 매퍼 mapMarketStatus는 git 기록에 있음).
 async function loadMarketStatus(): Promise<MarketStatus> {
   return marketStatus;
 }

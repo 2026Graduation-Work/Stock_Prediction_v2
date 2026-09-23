@@ -6,9 +6,6 @@ import type {
   HorizonAgreement,
   HorizonDirection,
   InvestorProfileSummary,
-  MarketCondition,
-  MarketIndexQuote,
-  MarketStatus,
   PortfolioHolding,
   PredictionReason,
   RecommendedStock,
@@ -85,14 +82,6 @@ export interface PortfolioHoldingRow {
   display_order: number;
 }
 
-export interface MarketStatusRow {
-  status_date: string;
-  condition: string;
-  volatility_score: number;
-  volume_score: number;
-  index_quotes: unknown;
-}
-
 export interface ExcludedStock {
   name: string;
   code: string;
@@ -118,7 +107,6 @@ const SIGNAL_LIGHTS: SignalLight[] = [
 
 const HORIZON_DIRECTIONS: HorizonDirection[] = ["up", "flat", "down"];
 const HORIZON_AGREEMENTS: HorizonAgreement[] = ["aligned", "mixed", "conflict"];
-const MARKET_CONDITIONS: MarketCondition[] = ["stable", "caution", "high_volatility"];
 const NEWS_FEATURE_TOKENS = ["news", "sentiment", "finbert", "headline"];
 const PROFILING_FEATURE_TOKENS = ["psychology", "psychological", "profile", "fomo"];
 const FINANCIAL_FEATURE_TOKENS = [
@@ -137,17 +125,6 @@ const FINANCIAL_FEATURE_TOKENS = [
 // Supabase 테이블은 지금 supabase/seed.sql 데모 시드로만 채워진다(백엔드 적재 경로 없음).
 // 실데이터 적재가 생기면 행에 출처 컬럼을 두고 여기서 읽는다. 그 전까지는 예시로 표시한다.
 const SUPABASE_DEMO: DataProvenance = { kind: "mock", source: "데모 시드" };
-
-export function mapMarketStatus(row: MarketStatusRow): MarketStatus {
-  return {
-    date: row.status_date,
-    provenance: { ...SUPABASE_DEMO, asOf: row.status_date },
-    condition: includes(MARKET_CONDITIONS, row.condition) ? row.condition : "caution",
-    volatilityScore: row.volatility_score,
-    volumeScore: row.volume_score,
-    indexQuotes: toMarketIndexQuotes(row.index_quotes),
-  };
-}
 
 export function mapRecommendedStock(
   prediction: PredictionRow,
@@ -248,33 +225,6 @@ export function mapPortfolioHolding(
     ...weightPrice(holding),
     provenance: SUPABASE_DEMO,
   };
-}
-
-function toMarketIndexQuotes(value: unknown): MarketIndexQuote[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.flatMap((item) => {
-    if (!item || typeof item !== "object") return [];
-    const quote = item as Record<string, unknown>;
-    if (
-      typeof quote.symbol !== "string" ||
-      typeof quote.label !== "string" ||
-      typeof quote.value !== "number" ||
-      typeof quote.change !== "number" ||
-      typeof quote.change_percent !== "number"
-    ) {
-      return [];
-    }
-    return [
-      {
-        symbol: quote.symbol,
-        label: quote.label,
-        value: quote.value,
-        change: quote.change,
-        changePercent: quote.change_percent,
-      },
-    ];
-  });
 }
 
 export function mapAvoidedAssetLabels(rows: AvoidedAssetRow[]): string[] {
