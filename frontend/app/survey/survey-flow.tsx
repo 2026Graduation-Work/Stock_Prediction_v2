@@ -285,7 +285,7 @@ export default function SurveyFlow() {
       <header className="sticky top-0 z-50 border-b border-line/70 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex min-h-14 w-full max-w-[880px] items-center gap-3 px-4 sm:px-8">
           <Link href="/" className="flex-none whitespace-nowrap text-lg hover:no-underline">
-            <Wordmark size={26} />
+            <Wordmark size={26} compact />
           </Link>
           {firstRun ? (
             <ol aria-label="시작 단계" className="m-0 flex list-none items-center gap-2 p-0 text-xs sm:gap-3">
