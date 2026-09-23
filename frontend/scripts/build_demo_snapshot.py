@@ -18,12 +18,16 @@
   - 화면 구간 말: 백분위 < 1/3 낮음, < 2/3 보통, 그 이상 높음
   - 시장 상태(condition): 변동성 백분위 < 0.6 stable, < 0.9 caution, 그 이상 high_volatility
 
+투자자별 순매수(누가 사고팔았나): 네이버 금융 종목 투자자별 매매동향(m.stock.naver.com
+  /api/stock/{code}/trend). 기준일까지 최근 20영업일, 개인·외국인·기관 순매수 **수량(주)**.
+  기타법인과 금액(원)은 이 경로에 없어 비워 둔다. pykrx(KRX)는 로그인이 필요해 쓰지 않았다.
+
 가격 흐름으로 본 분위기: backend psychology_market_v1의 요약축 psych_greed_fear_axis
   = (psych_fear_greed + psych_disposition) / 2, 범위 -1~+1. 기준일까지의 종가·거래량만 쓴다.
   구간 말: ≥0.5 많이 들뜸, ≥0.2 조금 들뜸, >-0.2 차분함, >-0.5 조금 움츠러듦, 그 외 많이 움츠러듦.
 
 실행 (저장소 루트):
-    pip install finance-datareader pandas numpy
+    pip install finance-datareader pandas numpy requests
     python frontend/scripts/build_demo_snapshot.py
 """
 
@@ -34,6 +38,7 @@ import sys
 from pathlib import Path
 
 import FinanceDataReader as fdr
+import requests
 import numpy as np
 import pandas as pd
 
@@ -50,6 +55,8 @@ LOOKBACK = 252
 OUT = ROOT / "frontend/lib/providers/demo-snapshot.json"
 
 STOCK_SOURCE = "네이버 금융 수정주가(FinanceDataReader)"
+SUPPLY_SOURCE = "네이버 금융 투자자별 매매동향"
+SUPPLY_DAYS = 20
 INDEX_SOURCE = "KRX(FinanceDataReader 캐시)"
 
 
@@ -153,6 +160,37 @@ def stock_snapshot() -> dict:
     return result
 
 
+def _quantity(text: str) -> int:
+    return int(text.replace(",", "").replace("+", ""))
+
+
+def supply_snapshot() -> dict:
+    """종목별 최근 20영업일 개인·외국인·기관 순매수 수량(주). 날짜 오름차순."""
+    next_day = (pd.Timestamp(AS_OF) + pd.Timedelta(days=1)).strftime("%Y%m%d")  # bizdate는 그날을 빼고 앞으로 준다
+    result = {}
+    for code in STOCKS:
+        response = requests.get(
+            f"https://m.stock.naver.com/api/stock/{code}/trend",
+            params={"pageSize": SUPPLY_DAYS, "bizdate": next_day},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=20,
+        )
+        response.raise_for_status()
+        rows = sorted(response.json(), key=lambda row: row["bizdate"])
+        days = [
+            {
+                "date": f"{row['bizdate'][:4]}-{row['bizdate'][4:6]}-{row['bizdate'][6:]}",
+                "retail": _quantity(row["individualPureBuyQuant"]),
+                "foreign": _quantity(row["foreignerPureBuyQuant"]),
+                "institution": _quantity(row["organPureBuyQuant"]),
+            }
+            for row in rows
+        ]
+        assert len(days) == SUPPLY_DAYS and days[-1]["date"] == AS_OF, (code, days[-1:])
+        result[code] = days
+    return {"source": SUPPLY_SOURCE, "unit": "주", "stocks": result}
+
+
 def main() -> None:
     snapshot = {
         "$comment": "frontend/scripts/build_demo_snapshot.py가 만든 파일. 손으로 고치지 않는다.",
@@ -160,6 +198,7 @@ def main() -> None:
         "stockSource": STOCK_SOURCE,
         "market": market_snapshot(),
         "stocks": stock_snapshot(),
+        "supply": supply_snapshot(),
     }
     OUT.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(f"wrote {OUT.relative_to(ROOT)}")

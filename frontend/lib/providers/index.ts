@@ -7,20 +7,18 @@ import {
   CONTRIBUTION_FIXTURE,
   FINANCIAL_FIXTURE,
   HYUNDAI_SENTIMENT,
-  SUPPLY_FIXTURE,
   VOLATILITY_PERCENTILE_FIXTURE,
   businessDaysEndingAt,
 } from "./fixtures.ts";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
-import { PRICE_PROVENANCE, STOCK_SNAPSHOT } from "./demo-snapshot.ts";
+import { PRICE_PROVENANCE, STOCK_SNAPSHOT, SUPPLY_PROVENANCE, SUPPLY_SNAPSHOT } from "./demo-snapshot.ts";
 
-// 억원. + 순매수, - 순매도. 날짜 오름차순. 네 주체의 합은 0이다(KRX 투자자 분류).
+// 순매수 수량(주). + 순매수, - 순매도. 날짜 오름차순. 기타법인은 원천(네이버 금융)에 없어 뺐다.
 export interface SupplyDemandDay {
   date: string;
   retail: number;
   foreign: number;
   institution: number; // 기관합계
-  otherCorp: number; // 기타법인
 }
 export type SupplyDemandProvider = (code: string) => Promise<SupplyDemandDay[] | null>;
 
@@ -72,9 +70,8 @@ export interface FinancialSnapshot {
 }
 export type FinancialProvider = (code: string) => Promise<FinancialSnapshot | null>;
 
-// TODO: KRX 약관 검증이 끝나면 pykrx 구현체로 교체할 자리.
 export const supplyDemandProvider: SupplyDemandProvider = async (code) =>
-  SUPPLY_FIXTURE[code] ?? null;
+  SUPPLY_SNAPSHOT[code] ?? null;
 
 const SENTIMENT_BY_CODE: Record<string, SentimentData> = {
   "005930": { ...SAMSUNG_SENTIMENT, source: "real" },
@@ -142,7 +139,7 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
     contributions,
     financial,
     provenance: {
-      supply: FIXTURE,
+      supply: supply ? SUPPLY_PROVENANCE : FIXTURE,
       sentiment:
         sentiment?.source === "real"
           ? { kind: "real", source: "BigKinds · KR-FinBERT", asOf: sentiment.days.at(-1)?.date }

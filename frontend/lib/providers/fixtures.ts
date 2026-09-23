@@ -1,13 +1,13 @@
 // FIXTURE — 실데이터 아님.
-// 삼성전자(005930)·현대차(005380) 두 종목만 둔다. 값은 시드 고정 PRNG와 손으로 정한 상수다.
+// 삼성전자(005930)·현대차(005380) 두 종목만 둔다. 값은 시드 고정 PRNG와 손으로 정한 상수다(수급은 실데이터로 옮김).
 // 실데이터 구현체로 교체하면 이 파일을 지운다.
 
 import type {
   ContributionSignalInput,
   FinancialSnapshot,
   SentimentSeries,
-  SupplyDemandDay,
 } from "./index";
+import { SUPPLY_SNAPSHOT } from "./demo-snapshot.ts";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
 
 const PREDICTION_AS_OF = "2025-12-30"; // 데모 기준일(실데이터 스냅샷과 같은 날)
@@ -42,38 +42,6 @@ export function businessDaysEndingAt(end: string, count: number): string[] {
   return days;
 }
 
-// 억원 단위. 개인은 외국인·기관의 반대편에 서는 경향을 흉내 낸다.
-// KRX 투자자 분류상 개인 + 외국인 + 기관합계 + 기타법인 = 0이므로 기타법인은 나머지로 맞춘다.
-// 개인이 외국인·기관을 받아 내고 남는 작은 차이(규모의 ±10% 이내)가 기타법인 몫이 된다.
-function supplySeries(
-  seed: number,
-  scale: number,
-  latest: Omit<SupplyDemandDay, "date" | "otherCorp">,
-): SupplyDemandDay[] {
-  const random = seeded(seed);
-  const dates = businessDaysEndingAt(PREDICTION_AS_OF, 20);
-  return dates.map((date, index) => {
-    const day =
-      index === dates.length - 1
-        ? latest
-        : (() => {
-            const foreign = Math.round(signedUnit(random) * scale);
-            const institution = Math.round(signedUnit(random) * scale * 0.6);
-            const retail =
-              -(foreign + institution) + Math.round(signedUnit(random) * scale * 0.1);
-            return { retail, foreign, institution };
-          })();
-    return { date, ...day, otherCorp: -(day.retail + day.foreign + day.institution) };
-  });
-}
-
-export const SUPPLY_FIXTURE: Record<string, SupplyDemandDay[]> = {
-  // 최근일은 개인 순매수·외국인 순매도로 고정한다(N02 시장 조건).
-  // 김민지는 information_reliance +0.16이라 이 조건만으로는 N02가 발화하지 않는다.
-  "005930": supplySeries(5930, 3000, { retail: 1840, foreign: -2130, institution: 250 }),
-  "005380": supplySeries(5380, 800, { retail: -310, foreign: 420, institution: -95 }),
-};
-
 // 현대차 감성은 합성이다. 삼성전자 실데이터와 같은 날짜 축에 PRNG 점수를 둔다.
 const hyundaiRandom = seeded(5380_2);
 export const HYUNDAI_SENTIMENT: SentimentSeries = {
@@ -92,9 +60,9 @@ export const HYUNDAI_SENTIMENT: SentimentSeries = {
 
 // 원점수 weight는 부호 없는 크기. provider가 합 100으로 정규화한다.
 // direction은 그 근거가 신호를 어느 쪽으로 밀었는지(+1 오르는 쪽, -1 내리는 쪽)다.
-// 수급 근거는 위 SUPPLY_FIXTURE 20일 합계의 부호에서 계산하고, 나머지는 예시 신호(긍정)와 같은 쪽으로 둔다.
+// 수급 근거는 실제 순매수(SUPPLY_SNAPSHOT) 20일 합계의 부호에서 계산하고, 나머지는 예시 신호(긍정)와 같은 쪽으로 둔다.
 const flowDirection = (code: string, key: "foreign" | "institution"): 1 | -1 =>
-  SUPPLY_FIXTURE[code].reduce((sum, day) => sum + day[key], 0) >= 0 ? 1 : -1;
+  SUPPLY_SNAPSHOT[code].reduce((sum, day) => sum + day[key], 0) >= 0 ? 1 : -1;
 
 // description은 신호의 정의만 적는다. 다른 카드 수치와 어긋나는 사실 주장을 넣지 않는다.
 export const CONTRIBUTION_FIXTURE: Record<string, ContributionSignalInput[]> = {
