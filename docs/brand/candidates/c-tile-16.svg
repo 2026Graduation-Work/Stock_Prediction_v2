@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
+  <!-- C안 16px 전용: 눈을 빼고 귀·머리 윤곽만. 픽셀 격자에 맞춘 좌표 -->
+  <rect width="16" height="16" rx="3.5" fill="#124532"/>
+  <path fill="#fff" d="M3 16v-6.5L3.5 4 6.5 6.5h3L12.5 4l.5 5.5V16Z"/>
+</svg>

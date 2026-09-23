@@ -17,7 +17,7 @@ import {
   subscribeToAuthChanges,
   type OnboardingState,
 } from "@/lib/auth";
-import { SERVICE_NAME } from "@/lib/brand";
+import Wordmark from "@/components/brand/Wordmark";
 
 interface OnboardingContextValue {
   state: OnboardingState;
@@ -140,9 +140,7 @@ function onboardingDestination(
 
 function BrandMark() {
   return (
-    <div className="flex items-center gap-2.5 text-ink">
-      <span className="text-xl font-semibold text-brand">{SERVICE_NAME}</span>
-    </div>
+    <Wordmark size={32} className="text-xl" />
   );
 }
 

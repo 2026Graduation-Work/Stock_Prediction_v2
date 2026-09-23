@@ -29,6 +29,8 @@ import type { ProfilingOutput, RiskFlag, StyleAxes, StyleAxisId } from "@/lib/ty
 import { useOnboarding } from "../components/onboarding-provider";
 import SignOutButton from "../components/sign-out-button";
 import HoldingsStep from "./holdings-step";
+import Wordmark from "@/components/brand/Wordmark";
+import LogoMark from "@/components/brand/LogoMark";
 import { SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
 
 const DRAFT_KEY = "signallab.survey-draft.v1";
@@ -281,8 +283,8 @@ export default function SurveyFlow() {
     <div className="min-h-dvh bg-page">
       <header className="sticky top-0 z-50 border-b border-line/70 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex min-h-14 w-full max-w-[880px] items-center gap-3 px-4 sm:px-8">
-          <Link href="/" className="flex-none whitespace-nowrap text-lg font-semibold text-brand hover:text-brand hover:no-underline">
-            {SERVICE_NAME}
+          <Link href="/" className="flex-none whitespace-nowrap text-lg hover:no-underline">
+            <Wordmark size={26} />
           </Link>
           {firstRun ? (
             <ol aria-label="시작 단계" className="m-0 flex list-none items-center gap-2 p-0 text-xs sm:gap-3">
@@ -359,6 +361,7 @@ function Welcome({ onStart }: { onStart: () => void }) {
   return (
     <section aria-labelledby="welcome-title" className="surface flex flex-col gap-8 px-6 py-10 sm:px-10">
       <div className="flex flex-col gap-2">
+        <LogoMark size={48} className="mb-2" />
         <span className="eyebrow">처음 오셨네요</span>
         <h1 id="welcome-title" className="text-3xl font-semibold">
           {SERVICE_NAME}은 이렇게 도와줘요
