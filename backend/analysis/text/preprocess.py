@@ -511,6 +511,69 @@ def load_daily_news(
     return items
 
 
+def load_news_range(
+    company_name: str,
+    date_start: str,
+    date_end: str,
+    data_dir: Path = DEFAULT_NEWS_DIR,
+    body_chars: int = 1000,
+    ticker: str = "",
+) -> list[dict]:
+    """기간 내 BigKinds 기사를 워크북별 1회만 읽어 반환한다.
+
+    ``load_daily_news``를 날짜 수만큼 반복하면 연 단위 그래프에서 같은
+    큰 Excel을 계속 복사·중복제거하게 된다. 해당 기간을 커버하는 고유
+    워크북 목록을 먼저 구한 후, 각 파일을 한 번만 파싱한다.
+    """
+    start = pd.Timestamp(date_start).normalize()
+    end = pd.Timestamp(date_end).normalize()
+    if start > end:
+        raise ValueError("date_start는 date_end보다 늦을 수 없습니다.")
+
+    paths = {
+        path
+        for day in pd.date_range(start, end, freq="D")
+        if (
+            path := find_news_workbook(
+                company_name, day.date().isoformat(), data_dir, ticker
+            )
+        )
+        is not None
+    }
+    frames: list[pd.DataFrame] = []
+    for path in sorted(paths):
+        frame = _read_workbook(path)
+        if "exclude" in frame.columns:
+            frame = frame.loc[~frame["exclude"].fillna(False)]
+        if not frame.empty:
+            frames.append(frame)
+    if not frames:
+        return []
+
+    frame = _deduplicate(pd.concat(frames, ignore_index=True))
+    frame = frame.loc[
+        (frame["date"].dt.normalize() >= start)
+        & (frame["date"].dt.normalize() <= end)
+    ].sort_values(by=["date", "news_id"], kind="stable", ignore_index=True)
+
+    items: list[dict] = []
+    for _, row in frame.iterrows():
+        title = str(row.get("title", "")).strip()
+        if not title:
+            continue
+        items.append(
+            {
+                "news_id": str(row.get("news_id", "")).strip(),
+                "title": title,
+                "summary": str(row.get("body", "")).strip()[:body_chars],
+                "url": str(row.get("url", "")).strip(),
+                "press": str(row.get("press", "")).strip(),
+                "date": row["date"].date().isoformat(),
+            }
+        )
+    return items
+
+
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="빅카인즈 엑셀을 FinBERT 입력 CSV로 변환")
     parser.add_argument("--ticker", required=True, help="모든 출력 행에 주입할 종목 코드")

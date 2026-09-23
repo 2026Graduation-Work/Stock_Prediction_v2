@@ -64,7 +64,7 @@ def main(argv: list[str] | None = None) -> int:
         f"[설정] Gemini={gemini_status}, "
         f"DART={'ON' if SETTINGS.has_dart else 'OFF'}, "
         f"News=Excel(data/) 우선"
-        f"{'→Naver API' if SETTINGS.has_naver else '→크롤'}, "
+        f"→NewsAPI.ai({'ON' if SETTINGS.has_newsapi_ai else 'OFF'}), "
         f"FinBERT={'시도' if SETTINGS.use_finbert else 'OFF'}, "
         f"LLM재생전용={'ON' if SETTINGS.llm_replay_only else 'OFF'}",
         file=sys.stderr,

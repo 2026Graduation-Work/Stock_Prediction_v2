@@ -1,7 +1,6 @@
 """데이터 수집기 (무료 소스 우선).
 
-뉴스   : 빅카인즈 엑셀(data/, preprocess) → 네이버 검색 OpenAPI(키 있으면)
-         → HTML 크롤(키 없을 때)
+뉴스   : 빅카인즈 엑셀(data/, preprocess) → NewsAPI.ai(워크북 미보유 날짜)
 시세   : FinanceDataReader                   (키 불필요)
 재무제표: OpenDartReader / Open DART API      (무료 키 필요)
 
@@ -23,6 +22,7 @@ from email.utils import parsedate_to_datetime
 from functools import lru_cache
 from pathlib import Path
 
+from . import newsapi_ai
 from .config import SETTINGS
 
 # 빅카인즈 전처리 파이프라인(preprocess.py)의 point-in-time 로더 재사용.
@@ -60,11 +60,10 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
     각 항목: {news_id, title, summary, url, press, date}.
 
     빅카인즈 엑셀(data/, preprocess)이 정본이다. 워크북을 찾았는데 그날 기사가
-    없으면 그대로 빈 리스트를 준다 — 네이버로 폴백하지 않는다.
+    없으면 그대로 빈 리스트를 준다 — 다른 소스로 폴백하지 않는다.
 
-    네이버는 과거 날짜 조회가 불안정하고(OpenAPI는 최근 1,000건까지만) news_id도
-    없어 그라운딩이 안 된다. 백테스트 행마다 소스가 다르면 피처가 비교 불가능해진다.
-    그래서 워크북이 아예 없을 때(=오늘 날짜 조회 같은 실시간 용도)만 폴백한다.
+    백테스트 행마다 소스가 다르면 피처가 비교 불가능해진다. 그래서 워크북이
+    아예 없을 때(=오늘 날짜 조회 같은 최근 뉴스 용도)만 NewsAPI.ai로 폴백한다.
 
     빅카인즈 경로는 상한 없이(limit=None) 전량을 돌려준다 — 상한은 관련성 필터
     뒤에 news_agent가 적용한다. news_id 정렬순 상위 N건은 임의 표본이기 때문이다.
@@ -82,7 +81,7 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
                 query, date, DATA_DIR, limit=None, ticker=ticker
             )
             # 워크북이 이 날짜를 커버하므로, 0건이어도 그것이 사실이다.
-            # 여기서 네이버로 폴백하면 point-in-time이 깨진다.
+            # 여기서 다른 소스로 폴백하면 point-in-time이 깨진다.
             return items, "bigkinds"
         except Exception as e:
             warnings.warn(
@@ -93,23 +92,22 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
             f"'{query}' {date}를 커버하는 빅카인즈 워크북이 {DATA_DIR}/{ticker}/ "
             f"(또는 평면 {DATA_DIR})에 없습니다. "
             f"기대 위치·파일명: {DATA_DIR}/{ticker}/{{회사명}}_{{YYYYMMDD}}-{{YYYYMMDD}}.xlsx. "
-            f"네이버로 폴백하지만 과거 날짜는 신뢰할 수 없습니다.",
+            f"NewsAPI.ai로 단일 날짜를 조회합니다.",
             stacklevel=2,
         )
 
-    if SETTINGS.has_naver:
+    if SETTINGS.has_newsapi_ai:
         try:
-            items = _fetch_naver_news_api(query, date)
+            requested_day = dt.date.fromisoformat(date)
+            query_start = (requested_day - dt.timedelta(days=1)).isoformat()
+            items = newsapi_ai.fetch_articles(
+                [query], query_start, date, page_size=100
+            )
+            items = _filter_by_date(items, date)
             if items:
-                return items, "naver_api"
-        except Exception:
-            pass
-    try:
-        items = _crawl_naver_news(query, date)
-        if items:
-            return items, "naver"
-    except Exception:
-        pass
+                return items, "newsapi_ai"
+        except newsapi_ai.NewsApiAiError as exc:
+            warnings.warn(f"NewsAPI.ai 뉴스 조회 실패: {exc}", stacklevel=2)
     sample = _load_sample(f"{ticker}_news.json") or _load_sample("default_news.json") or []
     return _filter_by_date(sample, date)[:10], "sample"
 
@@ -136,7 +134,7 @@ def collect_prior_news(
 
     Tetlock(2011)의 staleness는 '직전 10건'과의 단어 중복률이므로 날짜가 아니라
     건수 기준으로 거슬러 올라간다. 기준일 당일은 포함하지 않는다(point-in-time).
-    빅카인즈 엑셀만 지원 — 네이버 경로는 과거 조회가 불가능해 빈 리스트를 준다.
+    빅카인즈 엑셀만 지원한다. 재탕성 비교용 직전 기사는 같은 소스여야 한다.
 
     하루치를 다 모은 뒤 발행 시각 역순으로 잘라야 진짜 '직전 N건'이 된다.
     load_daily_news가 news_id(=언론사 코드) 순으로 주므로 그대로 자르면 임의 표본이다.

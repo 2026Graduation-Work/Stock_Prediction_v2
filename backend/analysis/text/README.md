@@ -10,8 +10,8 @@
 
 ## 입력 데이터
 
-- 뉴스 — 빅카인즈 수동 다운로드 엑셀(`data/<종목코드>/{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx`,
-  종목별 하위 디렉터리) 우선, 없으면 네이버 검색 OpenAPI / HTML 크롤로 폴백 (한국어)
+- 과거 뉴스 — 빅카인즈 수동 다운로드 엑셀(`data/<종목코드>/{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx`)
+- 최근 뉴스 — NewsAPI.ai 한국어 기사(`NEWSAPI_AI_KEY` 필수). 여러 종목을 1회 OR 검색으로 묶음
 - 재무제표 — DART OpenAPI (`DART_API_KEY` 필수)
 - profiling 블록의 사용자 컨텍스트 JSON
 
@@ -39,6 +39,54 @@
   넣기 전에 반드시 이 문서의 PASS/FAIL 기준을 따를 것.
 - `preprocess.py` — 빅카인즈 수동 다운로드 엑셀을 병합·정제하여 FinBERT 입력 CSV 생성.
   `load_daily_news()`는 value_pipeline이 쓰는 하루치 point-in-time 로더.
+
+## 뉴스 심리지수 2-track
+
+두 트랙은 소스와 시간 창만 다르고, 관련성 필터와 `sentiment.score_texts()`
+(KR-FinBERT 우선, 없으면 사전 폴백)를 공유한다. 이는 매수·매도 지시가 아니라
+사용자가 현재 판단을 재점검하는 근거이다.
+
+- `historical`: BigKinds 과거 기사 → 일별 평균 감성·의견 분산·기사 수 추이
+- `live`: NewsAPI.ai 최근 7일 → KST 기준 오늘/최근 7일 감성·최신 기사 시각·지연 분
+
+`.env`:
+
+```dotenv
+NEWSAPI_AI_KEY=...
+```
+
+과거 트랙 생성:
+
+```bash
+cd backend/analysis/text
+python -m value_pipeline.news_run historical \
+  --target 005930:삼성전자 --start 2022-01-01 --end 2022-12-31
+```
+
+최근 뉴스를 즉시 1회 수집(종목 수와 무관하게 API 1회):
+
+```bash
+python -m value_pipeline.news_run live \
+  --target 005930:삼성전자 --target 000660:SK하이닉스
+```
+
+1시간 주기 갱신:
+
+```bash
+python -m value_pipeline.news_run live \
+  --target 005930:삼성전자 --target 000660:SK하이닉스 \
+  --watch --interval-minutes 60
+```
+
+`live`는 보도 시각과 API 색인 지연이 있는 **1시간 갱신형(near-real-time)**이지,
+틱 단위 실시간은 아니다. 산출 JSON은 기사 본문을 저장하지 않고 `news_id`, 제목,
+언론사, URL, 시각, 사건 ID, 감성 결과만 보존한다. 기본 출력 위치는
+`out/news_tracks/`이다.
+
+여러 종목 OR 검색은 호출당 최신 100건까지만 받는다. 전체 검색 결과가 이를 넘으면
+`status=partial`, `coverage.provider_truncated=true`와 공급자 전체·반환 건수를 함께
+기록한다. 따라서 이 값은 수집 범위를 숨긴 완전한 시장 전수조사가 아니라, 표시된
+커버리지 안에서의 뉴스 분위기이다.
 
 ## 빅카인즈 뉴스 전처리
 
