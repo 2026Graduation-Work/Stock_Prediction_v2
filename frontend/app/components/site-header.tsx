@@ -2,6 +2,7 @@ import Link from "next/link";
 import AccountControls from "./account-controls";
 import MarketStatusBar from "./market-status-bar";
 import type { InvestorProfileSummary, MarketStatus } from "@/lib/types";
+import { SERVICE_NAME } from "@/lib/brand";
 
 interface SiteHeaderProps {
   profile: InvestorProfileSummary;
@@ -32,7 +33,7 @@ export default function SiteHeader({
     <header className="sticky top-0 z-50 border-b border-line/70 bg-white/80 backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto box-border flex min-h-14 w-full max-w-[1200px] flex-wrap items-center gap-x-5 gap-y-2 px-4 py-2 sm:h-14 sm:flex-nowrap sm:px-6 sm:py-0 lg:px-8">
         <Link href="/" className="flex-none text-lg font-semibold text-brand hover:text-brand hover:no-underline">
-          시그널랩
+          {SERVICE_NAME}
         </Link>
 
         <nav aria-label="주요 화면" className="flex flex-none items-center gap-4 self-stretch">

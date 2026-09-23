@@ -29,6 +29,7 @@ import type { ProfilingOutput, RiskFlag, StyleAxes, StyleAxisId } from "@/lib/ty
 import { useOnboarding } from "../components/onboarding-provider";
 import SignOutButton from "../components/sign-out-button";
 import HoldingsStep from "./holdings-step";
+import { SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
 
 const DRAFT_KEY = "signallab.survey-draft.v1";
 const ADVANCE_DELAY_MS = 180; // 고른 답이 눌린 것을 보여 준 뒤 다음 문항으로
@@ -281,7 +282,7 @@ export default function SurveyFlow() {
       <header className="sticky top-0 z-50 border-b border-line/70 bg-white/80 backdrop-blur-xl">
         <div className="mx-auto flex min-h-14 w-full max-w-[880px] items-center gap-3 px-4 sm:px-8">
           <Link href="/" className="flex-none whitespace-nowrap text-lg font-semibold text-brand hover:text-brand hover:no-underline">
-            시그널랩
+            {SERVICE_NAME}
           </Link>
           {firstRun ? (
             <ol aria-label="시작 단계" className="m-0 flex list-none items-center gap-2 p-0 text-xs sm:gap-3">
@@ -360,8 +361,9 @@ function Welcome({ onStart }: { onStart: () => void }) {
       <div className="flex flex-col gap-2">
         <span className="eyebrow">처음 오셨네요</span>
         <h1 id="welcome-title" className="text-3xl font-semibold">
-          시그널랩은 이렇게 도와줘요
+          {SERVICE_NAME}은 이렇게 도와줘요
         </h1>
+        <p className="m-0 text-sm text-body">{SERVICE_TAGLINE}</p>
       </div>
       <ol className="m-0 flex list-none flex-col gap-5 p-0">
         {steps.map(([title, body], index) => (

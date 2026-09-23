@@ -35,7 +35,7 @@ async function startDemo(page: Page): Promise<void> {
   await page.getByRole("button", { name: "데모로 둘러보기" }).click();
   await expect(page).toHaveURL(/\/survey$/);
   // 처음 온 사람: 환영 1장 + 상단 진행 표시
-  await expect(page.getByRole("heading", { name: "시그널랩은 이렇게 도와줘요" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Take a Look은 이렇게 도와줘요" })).toBeVisible();
   await expect(page.getByRole("list", { name: "시작 단계" })).toContainText("1 성향2 보유 종목3 시작");
 }
 
@@ -43,7 +43,7 @@ test("new user: 환영 -> 16문항 -> 결과 -> 보유 종목 1개 -> 대시보�
   const browserErrors = collectBrowserErrors(page);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "시그널랩 로그인" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Take a Look 로그인" })).toBeVisible();
   // 계정 로그인과 데모 계정이 항상 함께 보인다(환경변수가 없으면 계정 쪽은 안내만)
   await expect(page.getByText(/이메일로 시작|계정 기능이 아직 연결되지 않았어요/).first()).toBeVisible();
   await expect(page.getByText("데모 계정 · 예시 데이터")).toHaveCount(0);
@@ -181,7 +181,7 @@ test("new user: 보유 종목 '아직 없어요' -> 대시보드 빈 상태", as
   await expect(page.getByText("관심 가는 종목을 검색해 보세요")).toBeVisible();
   // 돌아온 사용자는 온보딩을 건너뛴다
   await page.goto("/survey");
-  await expect(page.getByRole("heading", { name: "시그널랩은 이렇게 도와줘요" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Take a Look은 이렇게 도와줘요" })).toHaveCount(0);
   await expect(page.getByText("질문 1/16")).toBeVisible();
   expect(browserErrors).toEqual([]);
 });

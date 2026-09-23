@@ -105,6 +105,9 @@ body {
   line-height: var(--text-sm--line-height);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  /* 한글은 어절 단위로 줄을 바꾼다("이/렇게"처럼 낱글자로 끊기지 않게). 긴 영문·숫자는 넘치지 않게 끊는다 */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 /* 큰 글자일수록 자간을 좁힌다 — 큰 텍스트가 벌어져 보이는 현상 보정 */
