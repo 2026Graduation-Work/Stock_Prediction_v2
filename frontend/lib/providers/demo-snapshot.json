@@ -1539,5 +1539,218 @@
         }
       ]
     }
+  },
+  "financial": {
+    "source": "DART 사업보고서",
+    "stocks": {
+      "005930": {
+        "fiscalYear": 2024,
+        "statement": "연결",
+        "receiptNo": "20250311001085",
+        "filedAt": "2025-03-11",
+        "sharesBasis": "2024-12-31 보통주",
+        "metrics": [
+          {
+            "key": "per",
+            "unit": "배",
+            "value": 20.8,
+            "basis": "주가 119,900원 ÷ 주당순이익(당기순이익 34.5조원 ÷ 발행주식수 5,969,782,550주)",
+            "note": null
+          },
+          {
+            "key": "pbr",
+            "unit": "배",
+            "value": 1.8,
+            "basis": "주가 119,900원 ÷ 주당순자산(자본총계 402.2조원 ÷ 발행주식수 5,969,782,550주)",
+            "note": null
+          },
+          {
+            "key": "roe",
+            "unit": "%",
+            "value": 8.6,
+            "basis": "당기순이익 34.5조원 ÷ 자본총계 402.2조원",
+            "note": null
+          },
+          {
+            "key": "operating_margin",
+            "unit": "%",
+            "value": 10.9,
+            "basis": "영업이익 32.7조원 ÷ 매출 300.9조원",
+            "note": null
+          },
+          {
+            "key": "debt_ratio",
+            "unit": "%",
+            "value": 27.9,
+            "basis": "부채총계 112.3조원 ÷ 자본총계 402.2조원",
+            "note": null
+          },
+          {
+            "key": "revenue_growth",
+            "unit": "%",
+            "value": 16.2,
+            "basis": "2024년 매출 300.9조원 ÷ 2023년 매출 258.9조원 − 1",
+            "note": null
+          }
+        ],
+        "issues": []
+      },
+      "005380": {
+        "fiscalYear": 2024,
+        "statement": "연결",
+        "receiptNo": "20250312001148",
+        "filedAt": "2025-03-12",
+        "sharesBasis": "2024-12-31 보통주",
+        "metrics": [
+          {
+            "key": "per",
+            "unit": "배",
+            "value": 4.7,
+            "basis": "주가 296,500원 ÷ 주당순이익(당기순이익 13.2조원 ÷ 발행주식수 209,416,191주)",
+            "note": null
+          },
+          {
+            "key": "pbr",
+            "unit": "배",
+            "value": 0.5,
+            "basis": "주가 296,500원 ÷ 주당순자산(자본총계 120.3조원 ÷ 발행주식수 209,416,191주)",
+            "note": null
+          },
+          {
+            "key": "roe",
+            "unit": "%",
+            "value": 11.0,
+            "basis": "당기순이익 13.2조원 ÷ 자본총계 120.3조원",
+            "note": null
+          },
+          {
+            "key": "operating_margin",
+            "unit": "%",
+            "value": 8.1,
+            "basis": "영업이익 14.2조원 ÷ 매출 175.2조원",
+            "note": null
+          },
+          {
+            "key": "debt_ratio",
+            "unit": "%",
+            "value": 182.5,
+            "basis": "부채총계 219.5조원 ÷ 자본총계 120.3조원",
+            "note": null
+          },
+          {
+            "key": "revenue_growth",
+            "unit": "%",
+            "value": 7.7,
+            "basis": "2024년 매출 175.2조원 ÷ 2023년 매출 162.7조원 − 1",
+            "note": null
+          }
+        ],
+        "issues": []
+      },
+      "035720": {
+        "fiscalYear": 2024,
+        "statement": "연결",
+        "receiptNo": "20250324000901",
+        "filedAt": "2025-03-24",
+        "sharesBasis": "2024-12-31 보통주",
+        "metrics": [
+          {
+            "key": "per",
+            "unit": "배",
+            "value": null,
+            "basis": "주가 60,100원 ÷ 주당순이익(당기순이익 -1,619억원 ÷ 발행주식수 443,662,117주)",
+            "note": "순손실이라 계산하지 않음"
+          },
+          {
+            "key": "pbr",
+            "unit": "배",
+            "value": 1.9,
+            "basis": "주가 60,100원 ÷ 주당순자산(자본총계 13.9조원 ÷ 발행주식수 443,662,117주)",
+            "note": null
+          },
+          {
+            "key": "roe",
+            "unit": "%",
+            "value": -1.2,
+            "basis": "당기순이익 -1,619억원 ÷ 자본총계 13.9조원",
+            "note": null
+          },
+          {
+            "key": "operating_margin",
+            "unit": "%",
+            "value": 5.8,
+            "basis": "영업이익 4,602억원 ÷ 매출 7.9조원",
+            "note": null
+          },
+          {
+            "key": "debt_ratio",
+            "unit": "%",
+            "value": 84.8,
+            "basis": "부채총계 11.8조원 ÷ 자본총계 13.9조원",
+            "note": null
+          },
+          {
+            "key": "revenue_growth",
+            "unit": "%",
+            "value": 4.2,
+            "basis": "2024년 매출 7.9조원 ÷ 2023년 매출 7.6조원 − 1",
+            "note": null
+          }
+        ],
+        "issues": []
+      },
+      "068270": {
+        "fiscalYear": 2024,
+        "statement": "연결",
+        "receiptNo": "20250317000929",
+        "filedAt": "2025-03-17",
+        "sharesBasis": "2024-12-31 보통주",
+        "metrics": [
+          {
+            "key": "per",
+            "unit": "배",
+            "value": 89.4,
+            "basis": "주가 172,523원 ÷ 주당순이익(당기순이익 4,189억원 ÷ 발행주식수 217,078,554주)",
+            "note": null
+          },
+          {
+            "key": "pbr",
+            "unit": "배",
+            "value": 2.1,
+            "basis": "주가 172,523원 ÷ 주당순자산(자본총계 17.6조원 ÷ 발행주식수 217,078,554주)",
+            "note": null
+          },
+          {
+            "key": "roe",
+            "unit": "%",
+            "value": 2.4,
+            "basis": "당기순이익 4,189억원 ÷ 자본총계 17.6조원",
+            "note": null
+          },
+          {
+            "key": "operating_margin",
+            "unit": "%",
+            "value": 13.8,
+            "basis": "영업이익 4,920억원 ÷ 매출 3.6조원",
+            "note": null
+          },
+          {
+            "key": "debt_ratio",
+            "unit": "%",
+            "value": 19.8,
+            "basis": "부채총계 3.5조원 ÷ 자본총계 17.6조원",
+            "note": null
+          },
+          {
+            "key": "revenue_growth",
+            "unit": "%",
+            "value": 63.4,
+            "basis": "2024년 매출 3.6조원 ÷ 2023년 매출 2.2조원 − 1",
+            "note": null
+          }
+        ],
+        "issues": []
+      }
+    }
   }
 }

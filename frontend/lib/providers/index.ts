@@ -5,13 +5,20 @@ import type { NudgeMarket } from "../profiling/nudges";
 import type { DataProvenance, PortfolioHolding, RiskGrade, StockDetail } from "../types";
 import {
   CONTRIBUTION_FIXTURE,
-  FINANCIAL_FIXTURE,
   HYUNDAI_SENTIMENT,
   VOLATILITY_PERCENTILE_FIXTURE,
   businessDaysEndingAt,
 } from "./fixtures.ts";
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
-import { PRICE_PROVENANCE, STOCK_SNAPSHOT, SUPPLY_PROVENANCE, SUPPLY_SNAPSHOT } from "./demo-snapshot.ts";
+import {
+  FINANCIAL_SNAPSHOT,
+  FINANCIAL_SOURCE,
+  PRICE_PROVENANCE,
+  SNAPSHOT_AS_OF,
+  STOCK_SNAPSHOT,
+  SUPPLY_PROVENANCE,
+  SUPPLY_SNAPSHOT,
+} from "./demo-snapshot.ts";
 
 // 순매수 수량(주). + 순매수, - 순매도. 날짜 오름차순. 기타법인은 원천(네이버 금융)에 없어 뺐다.
 export interface SupplyDemandDay {
@@ -60,14 +67,24 @@ export type ContributionProvider = (code: string) => Promise<ContributionSignal[
 export interface FinancialMetric {
   key: string;
   label: string;
-  value: number;
+  value: number | null; // null = 확인 불가(검증 탈락·계산 불가). note에 이유
   unit: "배" | "%";
-  description: string;
+  basis: string; // 계산 근거(식과 원자료 값)
+  note: string | null;
 }
 export interface FinancialSnapshot {
   period: string;
   metrics: FinancialMetric[];
 }
+
+const FINANCIAL_LABEL: Record<string, string> = {
+  per: "PER",
+  pbr: "PBR",
+  roe: "ROE",
+  operating_margin: "영업이익률",
+  debt_ratio: "부채비율",
+  revenue_growth: "매출 증가율(전년 대비)",
+};
 export type FinancialProvider = (code: string) => Promise<FinancialSnapshot | null>;
 
 export const supplyDemandProvider: SupplyDemandProvider = async (code) =>
@@ -93,8 +110,14 @@ export const contributionProvider: ContributionProvider = async (code) => {
     .sort((left, right) => right.share - left.share);
 };
 
-export const financialProvider: FinancialProvider = async (code) =>
-  FINANCIAL_FIXTURE[code] ?? null;
+export const financialProvider: FinancialProvider = async (code) => {
+  const row = FINANCIAL_SNAPSHOT[code];
+  if (!row) return null;
+  return {
+    period: `${row.fiscalYear} 사업연도 · ${row.statement}재무제표 · 사업보고서 ${row.filedAt} 공시(접수번호 ${row.receiptNo}) · 주식수 ${row.sharesBasis} · 주가 ${SNAPSHOT_AS_OF} 종가`,
+    metrics: row.metrics.map((metric) => ({ ...metric, label: FINANCIAL_LABEL[metric.key] ?? metric.key })),
+  };
+};
 
 export type HoldingWeight = Pick<PortfolioHolding, "code" | "quantity" | "avgBuyPrice">;
 
@@ -145,7 +168,7 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
           ? { kind: "real", source: "BigKinds · KR-FinBERT", asOf: sentiment.days.at(-1)?.date }
           : FIXTURE,
       contributions: FIXTURE,
-      financial: FIXTURE,
+      financial: financial ? { kind: "real", source: FINANCIAL_SOURCE, asOf: SNAPSHOT_AS_OF } : FIXTURE,
     },
   };
 }

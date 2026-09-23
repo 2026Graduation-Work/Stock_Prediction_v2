@@ -516,9 +516,10 @@ function FinancialPanel({ financial, provenance }: { financial: FinancialSnapsho
   const debt = value("debt_ratio");
   return (
     <>
-      {roe !== undefined && debt !== undefined && (
+      {roe != null && debt != null && (
         <Conclusion>
-          자기 돈으로 1년에 <strong className="font-semibold">{roe}%</strong>를 벌었고, 빚은 자기 돈의{" "}
+          자기 돈 대비 1년에 <strong className="font-semibold">{Math.abs(roe)}%</strong>를 {roe < 0 ? "잃었고" : "벌었고"}, 빚은
+          자기 돈의{" "}
           <strong className="font-semibold">{debt}%</strong> 수준이에요.
         </Conclusion>
       )}
@@ -526,13 +527,32 @@ function FinancialPanel({ financial, provenance }: { financial: FinancialSnapsho
         {financial.metrics.map((metric) => (
           <div key={metric.key} className="flex items-baseline justify-between gap-3 rounded-md bg-field px-4 py-3">
             <dt className="text-sm text-body">{FINANCIAL_TERM[metric.key] ?? metric.label}</dt>
-            <dd className="m-0 flex-none text-base font-semibold tabular-nums">
-              {metric.value.toLocaleString("ko-KR")}
-              {metric.unit}
+            <dd className="m-0 flex-none text-right text-base font-semibold tabular-nums">
+              {metric.value === null ? (
+                <>
+                  확인 불가
+                  {metric.note && <span className="block text-2xs font-normal text-muted">{metric.note}</span>}
+                </>
+              ) : (
+                <>
+                  {metric.value.toLocaleString("ko-KR")}
+                  {metric.unit}
+                </>
+              )}
             </dd>
           </div>
         ))}
       </dl>
+      <details className="disclosure">
+        <summary className="text-sm">계산 근거</summary>
+        <ul className="m-0 mt-3 flex list-none flex-col gap-2 p-0 text-xs text-body">
+          {financial.metrics.map((metric) => (
+            <li key={metric.key}>
+              <span className="font-medium text-ink">{metric.label}</span> = {metric.basis}
+            </li>
+          ))}
+        </ul>
+      </details>
       <p className="m-0 flex flex-wrap items-center gap-x-3 text-2xs text-muted">
         <span>{financial.period}</span>
         <SourceChip provenance={provenance} />
