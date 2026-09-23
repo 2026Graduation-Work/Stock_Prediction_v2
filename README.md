@@ -9,7 +9,7 @@
 [![Python CI](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/python-ci.yml/badge.svg)](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/python-ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**라이브 데모 → https://stock-prediction-v2-chi.vercel.app** (가입 없이 "데모로 둘러보기"로 모든 화면을 볼 수 있습니다)
+**라이브 데모 → https://takealook-skku.vercel.app** (기존 주소 https://stock-prediction-v2-chi.vercel.app 도 그대로 동작합니다. 가입 없이 "데모로 둘러보기"로 모든 화면을 볼 수 있습니다)
 
 <p>
   <img src="docs/images/dashboard.png" alt="대시보드: 한 줄 요약, 보유 종목 맵, 모델 신호가 강한 종목" width="100%" />
