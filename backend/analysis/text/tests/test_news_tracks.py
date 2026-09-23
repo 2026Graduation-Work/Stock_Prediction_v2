@@ -148,7 +148,7 @@ class _CountingFetcher:
         date_end: str,
         *,
         page_size: int,
-    ) -> list[dict]:
+    ) -> object:
         self.calls.append(
             {
                 "keywords": keywords,
@@ -157,7 +157,13 @@ class _CountingFetcher:
                 "page_size": page_size,
             }
         )
-        return _articles()
+        return news_run.newsapi_ai.ArticleBatch(
+            articles=_articles(),
+            total_results=150,
+            returned_count=3,
+            pages=2,
+            truncated=True,
+        )
 
 
 def test_live_cycle_fetches_once_for_multiple_targets(
@@ -175,11 +181,94 @@ def test_live_cycle_fetches_once_for_multiple_targets(
 
     assert len(fetcher.calls) == 1
     assert fetcher.calls[0]["keywords"] == ["삼성전자", "SK하이닉스"]
-    assert fetcher.calls[0]["date_start"] == "2026-09-12"
+    assert fetcher.calls[0]["date_start"] == "2026-09-11"
     assert fetcher.calls[0]["date_end"] == "2026-09-18"
     assert set(outputs) == {"005930", "000660"}
     assert outputs["005930"]["coverage"]["relevant_count"] == 2
     assert outputs["000660"]["coverage"]["relevant_count"] == 1
+    assert outputs["005930"]["coverage"]["provider_total_results"] == 150
+    assert outputs["005930"]["coverage"]["provider_truncated"] is True
+    assert outputs["005930"]["status"] == "partial"
+
+
+def test_live_track_groups_utc_boundary_by_kst_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """00:00~08:59 KST 기사를 UTC 전날이 아닌 한국의 오늘로 센다."""
+    monkeypatch.setattr(news_tracks.sentiment, "score_texts", _fixed_scores)
+    article = {
+        "news_id": "midnight",
+        "title": "삼성전자 실적 개선",
+        "summary": "실적이 개선됐다.",
+        "url": "https://example.com/midnight",
+        "press": "한국경제",
+        "date": "2026-09-17",
+        "published_at": "2026-09-17T15:30:00Z",
+        "event_id": "event-midnight",
+    }
+
+    out = news_tracks.build_live_track(
+        [article],
+        "005930",
+        "삼성전자",
+        as_of=datetime(2026, 9, 18, 0, 45, tzinfo=KST),
+    )
+
+    assert out["today"]["article_count"] == 1
+    assert out["timeline"][-1]["date"] == "2026-09-18"
+    assert out["articles"][0]["date"] == "2026-09-18"
+
+
+def test_live_command_retries_transient_failure_without_overwriting(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = 0
+    sleeps: list[int] = []
+
+    def fake_cycle(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise news_run.newsapi_ai.NewsApiAiError("HTTP 429")
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(news_run, "run_live_cycle", fake_cycle)
+    monkeypatch.setattr(news_run.time, "sleep", sleeps.append)
+    args = type(
+        "Args",
+        (),
+        {
+            "target": [("005930", "삼성전자")],
+            "page_size": 100,
+            "out_dir": tmp_path,
+            "watch": True,
+            "interval_minutes": 60,
+        },
+    )()
+
+    with pytest.raises(KeyboardInterrupt):
+        news_run._live_command(args)
+
+    assert calls == 2
+    assert sleeps == [60]
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_live_command_rejects_nonpositive_interval(tmp_path: Path) -> None:
+    args = type(
+        "Args",
+        (),
+        {
+            "target": [("005930", "삼성전자")],
+            "page_size": 100,
+            "out_dir": tmp_path,
+            "watch": True,
+            "interval_minutes": 0,
+        },
+    )()
+
+    with pytest.raises(ValueError, match="interval-minutes"):
+        news_run._live_command(args)
 
 
 def test_historical_cycle_loads_bigkinds_days_and_builds_one_track(

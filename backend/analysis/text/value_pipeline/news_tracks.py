@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -19,6 +20,9 @@ _FORBIDDEN_PERSISTED_FIELDS = {"body", "summary", "content"}
 
 
 def _article_date(item: dict[str, Any]) -> date | None:
+    published = _published_datetime(item.get("published_at"))
+    if published is not None:
+        return published.date()
     value = str(item.get("date") or str(item.get("published_at") or "")[:10])
     try:
         return date.fromisoformat(value)
@@ -76,13 +80,14 @@ def _timeline(
 
 
 def _safe_article(item: dict[str, Any], score: float, ticker: str) -> dict[str, Any]:
+    article_day = _article_date(item)
     return {
         "news_id": str(item.get("news_id") or ""),
         "ticker": ticker,
         "title": str(item.get("title") or ""),
         "press": str(item.get("press") or ""),
         "url": str(item.get("url") or ""),
-        "date": str(item.get("date") or ""),
+        "date": article_day.isoformat() if article_day else "",
         "published_at": str(item.get("published_at") or ""),
         "event_id": str(item.get("event_id") or ""),
         "sentiment_score": round(float(score), 4),
@@ -128,6 +133,7 @@ def build_live_track(
     company_name: str,
     *,
     as_of: datetime | None = None,
+    provider_metadata: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     """오늘과 최근 7일 심리지수를 만든다."""
     now = as_of or datetime.now(KST)
@@ -137,6 +143,16 @@ def build_live_track(
     scored, backend = _score_relevant(items, company_name)
     in_window = [pair for pair in scored if (day := _article_date(pair[0])) and start <= day <= end]
     coverage = _coverage(len(items), in_window, now)
+    if provider_metadata:
+        coverage.update(
+            {
+                "provider_total_results": provider_metadata.get("total_results"),
+                "provider_returned_count": provider_metadata.get("returned_count"),
+                "provider_pages": provider_metadata.get("pages"),
+                "provider_truncated": bool(provider_metadata.get("truncated")),
+            }
+        )
+    is_partial = bool(provider_metadata and provider_metadata.get("truncated"))
     return {
         "schema_version": "1.0",
         "track": "live",
@@ -144,7 +160,7 @@ def build_live_track(
         "source": "newsapi_ai",
         "as_of": now.isoformat(),
         "backend": backend,
-        "status": "ok" if in_window else "insufficient_data",
+        "status": "partial" if is_partial else ("ok" if in_window else "insufficient_data"),
         "coverage": coverage,
         "today": _stats(in_window, end, end),
         "recent_7d": _stats(in_window, start, end),

@@ -47,7 +47,7 @@
 사용자가 현재 판단을 재점검하는 근거이다.
 
 - `historical`: BigKinds 과거 기사 → 일별 평균 감성·의견 분산·기사 수 추이
-- `live`: NewsAPI.ai 최근 7일 → 오늘/최근 7일 감성·최신 기사 시각·지연 분
+- `live`: NewsAPI.ai 최근 7일 → KST 기준 오늘/최근 7일 감성·최신 기사 시각·지연 분
 
 `.env`:
 
@@ -80,7 +80,13 @@ python -m value_pipeline.news_run live \
 
 `live`는 보도 시각과 API 색인 지연이 있는 **1시간 갱신형(near-real-time)**이지,
 틱 단위 실시간은 아니다. 산출 JSON은 기사 본문을 저장하지 않고 `news_id`, 제목,
-언론사, URL, 시각, 사건 ID, 감성 결과만 보존한다.
+언론사, URL, 시각, 사건 ID, 감성 결과만 보존한다. 기본 출력 위치는
+`out/news_tracks/`이다.
+
+여러 종목 OR 검색은 호출당 최신 100건까지만 받는다. 전체 검색 결과가 이를 넘으면
+`status=partial`, `coverage.provider_truncated=true`와 공급자 전체·반환 건수를 함께
+기록한다. 따라서 이 값은 수집 범위를 숨긴 완전한 시장 전수조사가 아니라, 표시된
+커버리지 안에서의 뉴스 분위기이다.
 
 ## 빅카인즈 뉴스 전처리
 

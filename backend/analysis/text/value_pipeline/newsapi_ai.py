@@ -6,14 +6,28 @@ FinBERT 추론을 위한 일시 필드(`summary`)로만 반환하며, 저장 계
 """
 from __future__ import annotations
 
-from datetime import date
+from dataclasses import dataclass
+from datetime import UTC, date, datetime
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import requests
 
 from .config import SETTINGS
 
 API_URL = "https://eventregistry.org/api/v1/article/getArticles"
+KST = ZoneInfo("Asia/Seoul")
+
+
+@dataclass(frozen=True)
+class ArticleBatch:
+    """한 번의 공급자 호출 결과와 완전성 메타데이터."""
+
+    articles: list[dict[str, str]]
+    total_results: int | None
+    returned_count: int
+    pages: int | None
+    truncated: bool
 
 
 class NewsApiAiError(RuntimeError):
@@ -40,6 +54,25 @@ def _error_message(payload: dict[str, Any]) -> str:
     return str(error or "NewsAPI.ai 알 수 없는 오류")
 
 
+def _optional_int(value: object) -> int | None:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _kst_day(published_at: str) -> str | None:
+    if not published_at:
+        return None
+    try:
+        parsed = datetime.fromisoformat(published_at.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    return parsed.astimezone(KST).date().isoformat()
+
+
 def _normalize_article(row: dict[str, Any]) -> dict[str, str] | None:
     news_id = str(row.get("uri") or "").strip()
     title = str(row.get("title") or "").strip()
@@ -48,7 +81,9 @@ def _normalize_article(row: dict[str, Any]) -> dict[str, str] | None:
     published_at = str(
         row.get("dateTimePub") or row.get("dateTime") or row.get("date") or ""
     ).strip()
-    article_date = str(row.get("date") or published_at[:10]).strip()
+    article_date = _kst_day(published_at) or str(
+        row.get("date") or published_at[:10]
+    ).strip()
     source = row.get("source") if isinstance(row.get("source"), dict) else {}
     return {
         "news_id": news_id,
@@ -62,7 +97,7 @@ def _normalize_article(row: dict[str, Any]) -> dict[str, str] | None:
     }
 
 
-def fetch_articles(
+def fetch_article_batch(
     keywords: list[str],
     date_start: str,
     date_end: str,
@@ -71,8 +106,8 @@ def fetch_articles(
     api_key: str | None = None,
     session: Any = requests,
     timeout: int = 20,
-) -> list[dict[str, str]]:
-    """한국어 뉴스를 최대 100건 수집해 기존 뉴스 내부 형식으로 반환한다."""
+) -> ArticleBatch:
+    """한국어 뉴스를 최대 100건 수집하고 공급자 완전성을 함께 반환한다."""
     key = (api_key if api_key is not None else SETTINGS.newsapi_ai_key) or ""
     key = key.strip()
     if not key:
@@ -103,7 +138,7 @@ def fetch_articles(
         "articlesSortBy": "date",
         "articlesSortByAsc": False,
         "resultType": "articles",
-        "articleBodyLen": -1,
+        "articlesArticleBodyLen": -1,
         "apiKey": key,
     }
     try:
@@ -131,4 +166,37 @@ def fetch_articles(
             continue
         seen.add(normalized["news_id"])
         result.append(normalized)
-    return result
+    total_results = _optional_int(articles.get("totalResults"))
+    pages = _optional_int(articles.get("pages"))
+    truncated = (pages is not None and pages > 1) or (
+        total_results is not None and total_results > len(result)
+    )
+    return ArticleBatch(
+        articles=result,
+        total_results=total_results,
+        returned_count=len(result),
+        pages=pages,
+        truncated=truncated,
+    )
+
+
+def fetch_articles(
+    keywords: list[str],
+    date_start: str,
+    date_end: str,
+    *,
+    page_size: int = 100,
+    api_key: str | None = None,
+    session: Any = requests,
+    timeout: int = 20,
+) -> list[dict[str, str]]:
+    """기존 수집기 호환용: 기사 목록만 반환한다."""
+    return fetch_article_batch(
+        keywords,
+        date_start,
+        date_end,
+        page_size=page_size,
+        api_key=api_key,
+        session=session,
+        timeout=timeout,
+    ).articles

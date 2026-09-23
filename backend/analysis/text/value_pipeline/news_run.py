@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import sys
 import time
 from collections.abc import Callable, Mapping
 from datetime import date, datetime, timedelta
@@ -12,14 +13,14 @@ from zoneinfo import ZoneInfo
 from . import collectors, news_tracks, newsapi_ai
 
 KST = ZoneInfo("Asia/Seoul")
-Fetcher = Callable[..., list[dict[str, Any]]]
+Fetcher = Callable[..., newsapi_ai.ArticleBatch | list[dict[str, Any]]]
 Loader = Callable[..., list[dict[str, Any]]]
 
 
 def run_live_cycle(
     targets: Mapping[str, str],
     *,
-    fetcher: Fetcher = newsapi_ai.fetch_articles,
+    fetcher: Fetcher = newsapi_ai.fetch_article_batch,
     as_of: datetime | None = None,
     page_size: int = 100,
 ) -> dict[str, dict[str, Any]]:
@@ -30,15 +31,33 @@ def run_live_cycle(
     now = now.replace(tzinfo=KST) if now.tzinfo is None else now.astimezone(KST)
     end = now.date()
     start = end - timedelta(days=6)
-    items = fetcher(
+    # KST 자정은 UTC 전날 15시이므로 공급자 날짜 범위를 하루 넓힌 뒤
+    # build_live_track에서 KST 날짜로 정확히 잘라낸다.
+    query_start = start - timedelta(days=1)
+    fetched = fetcher(
         list(targets.values()),
-        start.isoformat(),
+        query_start.isoformat(),
         end.isoformat(),
         page_size=page_size,
     )
+    if isinstance(fetched, newsapi_ai.ArticleBatch):
+        items = fetched.articles
+        provider_metadata = {
+            "total_results": fetched.total_results,
+            "returned_count": fetched.returned_count,
+            "pages": fetched.pages,
+            "truncated": fetched.truncated,
+        }
+    else:
+        items = fetched
+        provider_metadata = None
     return {
         ticker: news_tracks.build_live_track(
-            items, ticker, company_name, as_of=now
+            items,
+            ticker,
+            company_name,
+            as_of=now,
+            provider_metadata=provider_metadata,
         )
         for ticker, company_name in targets.items()
     }
@@ -87,9 +106,27 @@ def _parse_target(value: str) -> tuple[str, str]:
 
 
 def _live_command(args: argparse.Namespace) -> None:
+    if args.watch and args.interval_minutes <= 0:
+        raise ValueError("--interval-minutes는 1 이상이어야 합니다.")
     targets = dict(args.target)
+    failure_count = 0
     while True:
-        outputs = run_live_cycle(targets, page_size=args.page_size)
+        try:
+            outputs = run_live_cycle(targets, page_size=args.page_size)
+        except newsapi_ai.NewsApiAiConfigurationError:
+            raise
+        except newsapi_ai.NewsApiAiError as exc:
+            if not args.watch:
+                raise
+            failure_count += 1
+            retry_seconds = min(60 * (2 ** (failure_count - 1)), 15 * 60)
+            print(
+                f"NewsAPI.ai 일시 오류: {exc}. {retry_seconds}초 후 재시도합니다.",
+                file=sys.stderr,
+            )
+            time.sleep(retry_seconds)
+            continue
+        failure_count = 0
         write_live_outputs(outputs, args.out_dir)
         for ticker, output in outputs.items():
             coverage = output["coverage"]
@@ -111,7 +148,7 @@ def _historical_command(args: argparse.Namespace) -> None:
         args.end,
         data_dir=args.data_dir,
     )
-    output_path = args.out or Path(f"outputs/news_tracks/{ticker}_historical.json")
+    output_path = args.out or Path(f"out/news_tracks/{ticker}_historical.json")
     news_tracks.write_track_json(output, output_path)
     print(
         f"{ticker}: status={output['status']} "
@@ -126,7 +163,7 @@ def build_parser() -> argparse.ArgumentParser:
     live.add_argument(
         "--target", type=_parse_target, action="append", required=True, metavar="TICKER:COMPANY"
     )
-    live.add_argument("--out-dir", type=Path, default=Path("outputs/news_tracks"))
+    live.add_argument("--out-dir", type=Path, default=Path("out/news_tracks"))
     live.add_argument("--page-size", type=int, default=100)
     live.add_argument("--watch", action="store_true", help="1시간 주기 반복 수집")
     live.add_argument("--interval-minutes", type=int, default=60)

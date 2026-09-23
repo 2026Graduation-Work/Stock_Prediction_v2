@@ -10,6 +10,7 @@ openpyxl>=3.1.5
 langgraph>=1.2.11
 langchain-core>=1.6.3
 pydantic>=2.13.5
+requests>=2.32.0
 
 # ── 감성 분석 (필수) ─────────────────────────────────────────
 # 한국어 금융 감성 (KR-FinBERT, snunlp/KR-FinBert-SC).
@@ -35,5 +36,3 @@ langchain-google-genai>=4.4.0
 beautifulsoup4>=4.15.0
 # .env 자동 로드
 python-dotenv>=1.2.3
-
-# 참고: requests 는 명시하지 않으며 상위 의존성으로 함께 설치된다.

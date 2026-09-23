@@ -32,6 +32,8 @@ class _FakeSession:
 def _api_response() -> dict:
     return {
         "articles": {
+            "totalResults": 1,
+            "pages": 1,
             "results": [
                 {
                     "uri": "kor-article-1",
@@ -72,6 +74,8 @@ def test_fetch_articles_batches_keywords_into_one_korean_request() -> None:
     assert payload["isDuplicateFilter"] == "skipDuplicates"
     assert payload["dateStart"] == "2026-09-18"
     assert payload["dateEnd"] == "2026-09-18"
+    assert payload["articlesArticleBodyLen"] == -1
+    assert "articleBodyLen" not in payload
     assert payload["apiKey"] == "test-key"
 
     assert rows == [
@@ -86,6 +90,46 @@ def test_fetch_articles_batches_keywords_into_one_korean_request() -> None:
             "event_id": "kor-event-1",
         }
     ]
+
+
+def test_fetch_article_batch_reports_truncated_provider_results() -> None:
+    """100건 제한으로 일부만 받은 사실을 완전한 수집처럼 숨기지 않는다."""
+    payload = _api_response()
+    payload["articles"]["totalResults"] = 137
+    payload["articles"]["pages"] = 2
+    session = _FakeSession(payload)
+
+    batch = newsapi_ai.fetch_article_batch(
+        ["삼성전자", "SK하이닉스"],
+        "2026-09-18",
+        "2026-09-18",
+        api_key="test-key",
+        session=session,
+    )
+
+    assert batch.articles[0]["news_id"] == "kor-article-1"
+    assert batch.total_results == 137
+    assert batch.returned_count == 1
+    assert batch.pages == 2
+    assert batch.truncated is True
+
+
+def test_article_date_is_normalized_to_kst() -> None:
+    """UTC 전날 시각이어도 한국 자정 이후 기사는 한국 날짜로 분류한다."""
+    payload = _api_response()
+    article = payload["articles"]["results"][0]
+    article["date"] = "2026-09-17"
+    article["dateTimePub"] = "2026-09-17T15:30:00Z"
+
+    rows = newsapi_ai.fetch_articles(
+        ["삼성전자"],
+        "2026-09-17",
+        "2026-09-18",
+        api_key="test-key",
+        session=_FakeSession(payload),
+    )
+
+    assert rows[0]["date"] == "2026-09-18"
 
 
 def test_fetch_articles_requires_nonempty_api_key() -> None:
@@ -118,7 +162,13 @@ def test_collect_news_uses_newsapi_ai_when_bigkinds_is_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """오늘 뉴스 폴백이 기존 네이버 크롤러로 돌아가는 회귀를 막는다."""
-    expected = [{"news_id": "live-1", "title": "삼성전자 실적 개선"}]
+    expected = [
+        {
+            "news_id": "live-1",
+            "title": "삼성전자 실적 개선",
+            "date": "2026-09-18",
+        }
+    ]
     calls: list[dict] = []
 
     monkeypatch.setattr(collectors.preprocess, "find_news_workbook", lambda *args: None)
@@ -148,7 +198,7 @@ def test_collect_news_uses_newsapi_ai_when_bigkinds_is_unavailable(
     assert calls == [
         {
             "keywords": ["삼성전자"],
-            "date_start": "2026-09-18",
+            "date_start": "2026-09-17",
             "date_end": "2026-09-18",
             "page_size": 100,
         }

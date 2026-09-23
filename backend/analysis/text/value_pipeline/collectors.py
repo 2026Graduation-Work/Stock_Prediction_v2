@@ -62,9 +62,8 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
     빅카인즈 엑셀(data/, preprocess)이 정본이다. 워크북을 찾았는데 그날 기사가
     없으면 그대로 빈 리스트를 준다 — 다른 소스로 폴백하지 않는다.
 
-    네이버는 과거 날짜 조회가 불안정하고(OpenAPI는 최근 1,000건까지만) news_id도
-    없어 그라운딩이 안 된다. 백테스트 행마다 소스가 다르면 피처가 비교 불가능해진다.
-    그래서 워크북이 아예 없을 때(=오늘 날짜 조회 같은 실시간 용도)만 폴백한다.
+    백테스트 행마다 소스가 다르면 피처가 비교 불가능해진다. 그래서 워크북이
+    아예 없을 때(=오늘 날짜 조회 같은 최근 뉴스 용도)만 NewsAPI.ai로 폴백한다.
 
     빅카인즈 경로는 상한 없이(limit=None) 전량을 돌려준다 — 상한은 관련성 필터
     뒤에 news_agent가 적용한다. news_id 정렬순 상위 N건은 임의 표본이기 때문이다.
@@ -99,7 +98,12 @@ def collect_news(ticker: str, company_name: str, date: str) -> tuple[list[dict],
 
     if SETTINGS.has_newsapi_ai:
         try:
-            items = newsapi_ai.fetch_articles([query], date, date, page_size=100)
+            requested_day = dt.date.fromisoformat(date)
+            query_start = (requested_day - dt.timedelta(days=1)).isoformat()
+            items = newsapi_ai.fetch_articles(
+                [query], query_start, date, page_size=100
+            )
+            items = _filter_by_date(items, date)
             if items:
                 return items, "newsapi_ai"
         except newsapi_ai.NewsApiAiError as exc:
