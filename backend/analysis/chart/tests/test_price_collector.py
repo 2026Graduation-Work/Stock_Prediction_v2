@@ -166,6 +166,7 @@ def test_daily_bulk_update_uses_exact_krx_snapshot_date(tmp_path, monkeypatch):
                 "Low": [69000] if market == "KOSPI" else [],
                 "Close": [70500] if market == "KOSPI" else [],
                 "Volume": [1000] if market == "KOSPI" else [],
+                "Amount": [70400000] if market == "KOSPI" else [],
                 "ChagesRatio": [0.5] if market == "KOSPI" else [],
             }
         )
@@ -182,6 +183,100 @@ def test_daily_bulk_update_uses_exact_krx_snapshot_date(tmp_path, monkeypatch):
     stored = pd.read_parquet(raw_dir / "005930.parquet")
     assert stored.loc[0, "Date"] == pd.Timestamp("2026-09-01")
     assert stored.loc[0, "Close"] == 70500
+    assert stored.loc[0, "VWAP"] == 70400
+    assert stored.loc[0, "Amount"] == 70400000
+
+
+def test_attach_actual_vwap_matches_adjusted_price_scale():
+    dates = pd.to_datetime(["2018-04-27", "2018-05-04"])
+    adjusted = pd.DataFrame(
+        {
+            "Open": [50.0, 52.0],
+            "High": [52.0, 55.0],
+            "Low": [49.0, 51.0],
+            "Close": [50.0, 54.0],
+            "Volume": [100.0, 200.0],
+            "Change": [0.0, 8.0],
+        },
+        index=dates,
+    )
+    raw = pd.DataFrame(
+        {
+            "종가": [5000.0, 5400.0],
+            "거래량": [100.0, 200.0],
+            "거래대금": [510000.0, 1060000.0],
+        },
+        index=dates,
+    )
+
+    result = price_collector._attach_actual_vwap(adjusted, raw)
+
+    assert result["AdjustmentFactor"].tolist() == pytest.approx([0.01, 0.01])
+    assert result["VWAP"].tolist() == pytest.approx([51.0, 53.0])
+    assert result["RawClose"].tolist() == [5000.0, 5400.0]
+    assert result["RawVolume"].tolist() == [100.0, 200.0]
+
+
+def test_attach_actual_vwap_rejects_missing_turnover_on_trading_day():
+    adjusted = pd.DataFrame(
+        {"Close": [100.0], "Volume": [10.0]},
+        index=pd.to_datetime(["2026-09-01"]),
+    )
+    raw = pd.DataFrame(
+        {"종가": [100.0], "거래량": [10.0], "거래대금": [0.0]},
+        index=adjusted.index,
+    )
+
+    with pytest.raises(ValueError, match="거래대금/거래량"):
+        price_collector._attach_actual_vwap(adjusted, raw)
+
+
+def test_fdr_history_joins_unadjusted_krx_turnover(monkeypatch):
+    index = pd.to_datetime(["2026-09-01"])
+    adjusted = pd.DataFrame(
+        {
+            "Open": [99.0],
+            "High": [102.0],
+            "Low": [98.0],
+            "Close": [100.0],
+            "Volume": [10.0],
+            "Change": [0.01],
+        },
+        index=index,
+    )
+    raw = pd.DataFrame(
+        {"종가": [200.0], "거래량": [10.0], "거래대금": [2020.0]}, index=index
+    )
+    raw_calls = []
+    monkeypatch.setattr(price_collector.fdr, "DataReader", lambda *args: adjusted)
+
+    def fake_raw(fromdate, todate, code, adjusted):
+        raw_calls.append((fromdate, todate, code, adjusted))
+        return raw
+
+    monkeypatch.setattr(price_collector.krx, "get_market_ohlcv_by_date", fake_raw)
+
+    result = price_collector._fetch_ohlcv_fdr("005930", "2026-09-01", "2026-09-01")
+
+    assert raw_calls == [("20260901", "20260901", "005930", False)]
+    assert result.loc[index[0], "Change"] == pytest.approx(1.0)
+    assert result.loc[index[0], "VWAP"] == pytest.approx(101.0)
+    assert result.loc[index[0], "AdjustmentFactor"] == pytest.approx(0.5)
+
+
+def test_actual_vwap_completeness_checks_values_not_only_columns():
+    frame = pd.DataFrame(
+        {
+            "Volume": [100.0, 200.0],
+            "Amount": [10000.0, pd.NA],
+            "RawClose": [100.0, pd.NA],
+            "RawVolume": [100.0, pd.NA],
+            "AdjustmentFactor": [1.0, pd.NA],
+            "VWAP": [100.0, pd.NA],
+        }
+    )
+
+    assert not price_collector._has_complete_actual_vwap(frame)
 
 
 def test_update_ohlcv_daily_reports_bulk_failure(monkeypatch):

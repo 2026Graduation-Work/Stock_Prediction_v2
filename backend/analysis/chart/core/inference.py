@@ -85,7 +85,8 @@ def predict_success_probability(df: pd.DataFrame, model: lgb.Booster) -> pd.Seri
     Parameters:
     -----------
     df : pd.DataFrame
-        컬럼으로 ['Date', 'Open', 'High', 'Low', 'Close', 'Volume']을 포함해야 합니다.
+        컬럼으로 ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'VWAP']을 포함해야 합니다.
+        VWAP은 거래대금/거래량으로 계산하고 수정주가 배율을 적용한 일별 값이어야 합니다.
     model : lgb.Booster
         load_prediction_model() 함수로 사전에 로드된 모델 객체
 
