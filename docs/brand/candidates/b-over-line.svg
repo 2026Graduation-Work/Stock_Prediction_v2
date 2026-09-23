@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Take a Look">
+  <!-- B안 · 선 너머로 눈만 내다보는 고양이: 머리 윗부분만 선 위로 올라오고 눈이 선에 걸친다 -->
+  <path fill="#124532" d="M9 40V32c0-3 .7-5.8 2-8.3L13 10l12.5 9.6c2.1-.6 4.3-.9 6.5-.9s4.4.3 6.5.9L51 10l2 13.7c1.3 2.5 2 5.3 2 8.3v8Z"/>
+  <circle cx="36" cy="34" r="3.6" fill="#8DC63F"/>
+  <circle cx="47" cy="34" r="3.6" fill="#8DC63F"/>
+  <rect x="4" y="43" width="56" height="6" rx="3" fill="#124532"/>
+</svg>

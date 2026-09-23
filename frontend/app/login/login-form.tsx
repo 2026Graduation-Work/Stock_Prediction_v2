@@ -9,6 +9,7 @@ import {
   startDemoSession,
 } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import LogoMark from "@/components/brand/LogoMark";
 import { SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
 
 type AccountTab = "signin" | "signup";
@@ -75,7 +76,8 @@ export default function LoginForm() {
   return (
     <main className="grid min-h-dvh place-items-center bg-page px-4 py-10">
       <section className="surface flex w-full max-w-[400px] flex-col gap-6 px-6 py-9 sm:px-9">
-        <div className="flex flex-col gap-2 text-center">
+        <div className="flex flex-col items-center gap-2 text-center">
+          <LogoMark size={56} className="mb-2" />
           <h1 className="text-3xl font-semibold">
             <span className="text-brand">{SERVICE_NAME}</span> 로그인
           </h1>
