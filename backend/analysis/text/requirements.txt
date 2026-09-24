@@ -23,7 +23,7 @@ transformers>=5.17.0
 # ── 재무·시세 (필수) ─────────────────────────────────────────
 # 한국 재무제표 (DART_API_KEY 필요, 무료). 재무 없이는 시그널을 만들지 않는다.
 # 버전 미고정: 최신 0.3.x는 Python>=3.13 요구 → Python 3.12면 uv가 3.12 호환 버전 자동 선택
-opendartreader
+opendartreader>=0.2.3
 # 한국 시세/상장정보 (키 불필요)
 finance-datareader>=0.9.202
 
