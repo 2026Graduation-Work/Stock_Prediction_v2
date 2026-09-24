@@ -151,7 +151,72 @@ def _apply_barrier_labeling_by_interval(
                 label_params.get("tp", 3.5),
                 label_params.get("sl", 2.0),
             )
+        if master is not None:
+            interval = master.reset_index(drop=True).iloc[int(interval_id)]
+            if pd.notna(interval["DelistingDate"]):
+                labels = _resolve_delisting_tail_labels(part, labels, label_params, interval)
         result.loc[part.index] = labels
+    return result
+
+
+def _resolve_delisting_tail_labels(
+    frame: pd.DataFrame,
+    labels: pd.Series,
+    label_params: dict,
+    interval: pd.Series,
+) -> pd.Series:
+    """완전한 관측 구간이 끝나는 상폐 꼬리는 마지막 거래 가능일까지 라벨링한다."""
+    delisting_date = pd.Timestamp(interval["DelistingDate"]).normalize()
+    last_date = pd.to_datetime(frame["Date"]).dt.tz_localize(None).max().normalize()
+    # 끝 행이 실제 상폐 경계 근처에 있을 때만 데이터가 상폐까지 수집된 것으로 본다.
+    # 중간 시점에서 잘린 학습 요청을 상폐 종가로 오인하지 않도록 여유는 14일로 둔다.
+    if last_date >= delisting_date or (delisting_date - last_date).days > 14:
+        return labels
+
+    result = labels.copy()
+    label_type = label_params.get("type", "fixed")
+    horizon = int(label_params["horizon"])
+    if label_type == "dynamic_sigma":
+        max_rows = int(np.ceil(horizon * 2.5))
+        up_mult = label_params.get("up_mult", 1.5)
+        down_mult = label_params.get("down_mult", 1.2)
+    else:
+        max_rows = horizon
+        up_mult = label_params.get("tp", 3.5) / 100.0
+        down_mult = label_params.get("sl", 2.0) / 100.0
+
+    trading_halt = frame.get("Trading_Halt", pd.Series(0, index=frame.index)).fillna(0)
+    for position in np.flatnonzero(result.isna().to_numpy()):
+        if label_type == "dynamic_sigma":
+            end = min(len(frame), position + max_rows + 1)
+            candidates = np.arange(position + 1, end)
+            active = candidates[trading_halt.iloc[candidates].to_numpy() == 0]
+            future_positions = active[:horizon]
+            sigma = float(frame["Sigma"].iloc[position]) if "Sigma" in frame else 0.01
+            upper = float(frame["Close"].iloc[position]) * (1 + up_mult * sigma)
+            lower = float(frame["Close"].iloc[position]) * (1 - down_mult * sigma)
+        else:
+            future_positions = np.arange(position + 1, min(len(frame), position + horizon + 1))
+            future_positions = future_positions[
+                trading_halt.iloc[future_positions].to_numpy() == 0
+            ]
+            close = float(frame["Close"].iloc[position])
+            upper = close * (1 + up_mult)
+            lower = close * (1 - down_mult)
+
+        outcome = None
+        for future_position in future_positions:
+            future_close = float(frame["Close"].iloc[future_position])
+            if future_close <= lower:
+                outcome = -1
+                break
+            if float(frame["High"].iloc[future_position]) >= upper:
+                outcome = 1
+                break
+        if outcome is None:
+            terminal_close = float(frame["Close"].iloc[-1])
+            outcome = 1 if terminal_close >= upper else -1 if terminal_close <= lower else 0
+        result.iloc[position] = outcome
     return result
 
 

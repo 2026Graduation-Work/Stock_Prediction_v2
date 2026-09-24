@@ -114,7 +114,9 @@ python data_collectors/price_collector.py --mode full --start-date 2016-01-01 \
 `full` 수집은 master도 먼저 갱신한다. 한 종목이라도 이력 수집/보정에 실패하면
 `data/failed_downloads.csv`를 남기고 실패하므로, 이 파일을 해결하기 전에는 PIT
 데이터셋이 완성된 것으로 간주하지 않는다. 기존 processed에는 PIT 메타데이터가 없으므로
-첫 실행에서 자동으로 다시 전처리된다.
+첫 실행에서 자동으로 다시 전처리된다. 이전 버전의 processed가 섞여 있거나 PIT
+메타데이터 누락으로 학습 로더 검증에 실패하면 `python data_collectors/preprocess_data.py --mode full`
+명령으로 전체 재전처리한다.
 
 ### 최신 거래일 갱신
 

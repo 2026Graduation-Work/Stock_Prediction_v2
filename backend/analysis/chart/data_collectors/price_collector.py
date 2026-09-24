@@ -151,7 +151,12 @@ def _fetch_stock_listing(name: str, attempts: int = 3) -> pd.DataFrame:
 
 
 def _infer_missing_listing_dates(master: pd.DataFrame) -> pd.DataFrame:
-    """DESC가 비운 상장일을 공급자의 최초 OHLCV 거래일로 보강한다."""
+    """최초 거래일을 조회해 DESC의 이전상장일과 누락 상장일을 보정한다.
+
+    KOSPI-DESC의 ListingDate는 KOSPI 이전상장일일 수 있다. KOSPI+KOSDAQ
+    전체 universe에서는 시장 이전 뒤에도 같은 상장 구간이 이어져야 하므로
+    최초 거래일과 비교해 더 이른 날짜를 사용한다.
+    """
     result = master.copy()
     result["ListingDate"] = pd.to_datetime(result["ListingDate"], errors="coerce")
     if os.path.isfile(SECURITY_MASTER_PATH):
@@ -167,30 +172,43 @@ def _infer_missing_listing_dates(master: pd.DataFrame) -> pd.DataFrame:
             result.loc[reusable, "ListingDateSource"] = normalized_codes[reusable].map(
                 previous_sources
             )
-    missing_rows = result.index[result["ListingDate"].isna()]
+    # 누락값은 물론 KOSPI-DESC 날짜도 최초 거래일과 비교한다. 한 종목이
+    # KOSPI와 KOSDAQ 응답에 중복될 가능성에 대비해 코드별 조회 결과를 재사용한다.
+    candidate_rows = result.index[
+        result["ListingDate"].isna()
+        | (result["Source"].eq("KOSPI-DESC") & result["ListingDate"].notna())
+    ]
     failures = []
+    first_trade_by_code = {}
     today = pd.Timestamp.now().strftime("%Y-%m-%d")
-    for row_index in missing_rows:
+    for row_index in candidate_rows:
         code = str(result.at[row_index, "Code"]).strip().upper().zfill(6)
-        errors = []
-        for attempt in range(1, 4):
-            try:
-                history = fdr.DataReader(code, "1980-01-01", today)
-                dates = pd.to_datetime(history.index, errors="coerce").dropna()
-                if len(dates) == 0:
-                    raise ValueError("OHLCV 응답이 비어 있습니다.")
-                result.at[row_index, "ListingDate"] = dates.min().normalize()
-                result.at[row_index, "ListingDateSource"] = "FDR_FIRST_TRADE"
-                break
-            except Exception as exc:
-                errors.append(str(exc))
-                if attempt < 3:
-                    time.sleep(attempt)
-        if pd.isna(result.at[row_index, "ListingDate"]):
-            failures.append(f"{code}: {'; '.join(errors)}")
+        if code not in first_trade_by_code:
+            errors = []
+            for attempt in range(1, 4):
+                try:
+                    history = fdr.DataReader(code, "1980-01-01", today)
+                    dates = pd.to_datetime(history.index, errors="coerce").dropna()
+                    if len(dates) == 0:
+                        raise ValueError("OHLCV 응답이 비어 있습니다.")
+                    first_trade_by_code[code] = dates.min().normalize()
+                    break
+                except Exception as exc:
+                    errors.append(str(exc))
+                    if attempt < 3:
+                        time.sleep(attempt)
+            if code not in first_trade_by_code:
+                failures.append(f"{code}: {'; '.join(errors)}")
+                continue
+
+        first_trade = first_trade_by_code[code]
+        current_listing = result.at[row_index, "ListingDate"]
+        if pd.isna(current_listing) or first_trade < current_listing:
+            result.at[row_index, "ListingDate"] = first_trade
+            result.at[row_index, "ListingDateSource"] = "FDR_FIRST_TRADE"
     if failures:
         raise RuntimeError(
-            "상장일 누락 종목의 최초 거래일 보강에 실패했습니다: " + "; ".join(failures[:10])
+            "상장일 보정용 최초 거래일 조회에 실패했습니다: " + "; ".join(failures[:10])
         )
     return result
 

@@ -83,9 +83,32 @@ def test_loader_labels_reused_codes_within_each_listing_interval(tmp_path) -> No
 
     assert loaded["Date"].tolist() == [
         pd.Timestamp("2010-01-01"),
+        pd.Timestamp("2010-01-02"),
         pd.Timestamp("2020-01-01"),
     ]
-    assert loaded["Y_Label"].tolist() == [1, 1]
+    assert loaded["Y_Label"].tolist() == [1, 1, 1]
+
+
+def test_delisted_partial_horizon_uses_last_observed_close() -> None:
+    frame = pd.DataFrame(
+        {
+            "Date": pd.to_datetime(["2020-01-01", "2020-01-02"]),
+            "Close": [100.0, 90.0],
+            "High": [100.0, 91.0],
+            "Trading_Halt": [0, 0],
+        }
+    )
+    interval = pd.Series({"DelistingDate": pd.Timestamp("2020-01-03")})
+    labels = pd.Series([float("nan"), float("nan")])
+
+    resolved = loaders._resolve_delisting_tail_labels(
+        frame,
+        labels,
+        {"type": "fixed", "horizon": 3, "tp": 3.5, "sl": 2.0},
+        interval,
+    )
+
+    assert resolved.tolist() == [-1.0, 0.0]
 
 
 def test_loader_fails_if_any_selected_file_cannot_be_loaded(monkeypatch) -> None:

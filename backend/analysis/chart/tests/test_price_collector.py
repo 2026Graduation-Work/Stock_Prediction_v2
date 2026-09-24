@@ -4,6 +4,7 @@ from datetime import date
 import pandas as pd
 import pytest
 from data_collectors import price_collector, trading_calendar
+from point_in_time_universe import filter_point_in_time_rows
 
 
 def test_security_master_preserves_listing_intervals(tmp_path, monkeypatch):
@@ -35,6 +36,13 @@ def test_security_master_preserves_listing_intervals(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(price_collector.fdr, "StockListing", fake_listing)
+    monkeypatch.setattr(
+        price_collector.fdr,
+        "DataReader",
+        lambda code, start, end: pd.DataFrame(
+            {"Close": [100.0]}, index=pd.to_datetime(["2015-01-01"])
+        ),
+    )
     selected = price_collector.get_all_tickers("2016-01-01", "2023-12-31")
 
     assert set(selected["Code"]) == {"000001", "000002", "000003"}
@@ -51,6 +59,43 @@ def test_delisted_collection_bounds_use_listing_interval() -> None:
         pd.Timestamp("2016-01-01"),
         pd.Timestamp("2018-12-31"),
     )
+
+
+def test_kospi_transfer_listing_date_uses_earliest_ohlcv_trade(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        price_collector,
+        "SECURITY_MASTER_PATH",
+        str(tmp_path / "universe" / "security_master.parquet"),
+    )
+    master = pd.DataFrame(
+        {
+            "Code": ["068270"],
+            "Name": ["셀트리온"],
+            "Market": ["KOSPI"],
+            "SecuGroup": ["주권"],
+            "ListingDate": ["2018-02-09"],
+            "DelistingDate": [pd.NaT],
+            "Source": ["KOSPI-DESC"],
+            "SnapshotDate": ["2026-09-24"],
+            "ListingDateSource": ["FDR_DESC"],
+        }
+    )
+    monkeypatch.setattr(
+        price_collector.fdr,
+        "DataReader",
+        lambda code, start, end: pd.DataFrame(
+            {"Close": [100.0]}, index=pd.to_datetime(["2005-07-19"])
+        ),
+    )
+
+    corrected = price_collector._infer_missing_listing_dates(master)
+
+    assert corrected.loc[0, "ListingDate"] == pd.Timestamp("2005-07-19")
+    assert corrected.loc[0, "ListingDateSource"] == "FDR_FIRST_TRADE"
+    pre_transfer = pd.DataFrame(
+        {"Code": ["068270"], "Date": [pd.Timestamp("2017-12-01")]}
+    )
+    assert len(filter_point_in_time_rows(pre_transfer, corrected)) == 1
 
 
 def test_collection_bounds_exclude_not_yet_listed_interval() -> None:
