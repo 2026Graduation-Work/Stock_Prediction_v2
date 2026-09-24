@@ -28,7 +28,7 @@ try:
 except ModuleNotFoundError as exc:
     if exc.name != "opendartreader":
         raise
-    # Python 3.12에서 설치되는 마지막 호환 버전(0.2.3)은 대문자 모듈명을 쓴다.
+    # Python 3.12에서 설치되는 마지막 호환 버전(0.2.2)은 대문자 모듈명을 쓴다.
     import OpenDartReader  # type: ignore[no-redef]
 
 from . import newsapi_ai
