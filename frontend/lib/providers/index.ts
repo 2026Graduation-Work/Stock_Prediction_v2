@@ -46,8 +46,80 @@ export interface SentimentSeries {
 }
 export interface SentimentData extends SentimentSeries {
   source: "real" | "synthetic"; // real = 실제 기사에서 집계
+  track?: NewsTrack["track"];
+  provider?: NewsTrack["source"];
+  backend?: string;
+  status?: NewsTrackStatus;
+  asOf?: string;
+  coverage?: NewsTrackCoverage;
 }
 export type SentimentProvider = (code: string) => Promise<SentimentData | null>;
+
+export type NewsTrackStatus = "ok" | "partial" | "insufficient_data";
+
+export interface NewsTrackCoverage {
+  fetched_count: number;
+  relevant_count: number;
+  publisher_count: number;
+  newest_published_at: string | null;
+  lag_minutes: number | null;
+  provider_total_results?: number | null;
+  provider_returned_count?: number | null;
+  provider_pages?: number | null;
+  provider_truncated?: boolean;
+}
+
+export interface NewsTrackPoint {
+  date: string;
+  status: "ok" | "insufficient_data";
+  sentiment_mean: number | null;
+  sentiment_std: number | null;
+  article_count: number;
+  publisher_count: number;
+}
+
+export interface NewsTrackArticle {
+  news_id: string;
+  ticker: string;
+  title: string;
+  press: string;
+  url: string;
+  date: string;
+  published_at: string;
+  event_id: string;
+  sentiment_score: number;
+}
+
+export interface NewsTrack {
+  schema_version: "1.0";
+  track: "historical" | "live";
+  scope: { ticker: string; company_name: string };
+  source: "bigkinds" | "newsapi_ai";
+  as_of: string;
+  backend: string;
+  status: NewsTrackStatus;
+  coverage: NewsTrackCoverage;
+  timeline: NewsTrackPoint[];
+  articles: NewsTrackArticle[];
+}
+
+export function sentimentFromTrack(track: NewsTrack): SentimentData {
+  return {
+    days: track.timeline.flatMap((point) =>
+      point.sentiment_mean === null
+        ? []
+        : [{ date: point.date, score: point.sentiment_mean, articleCount: point.article_count }],
+    ),
+    headlines: track.articles.slice(0, 3).map(({ date, title, press }) => ({ date, title, press })),
+    source: "real",
+    track: track.track,
+    provider: track.source,
+    backend: track.backend,
+    status: track.status,
+    asOf: track.as_of,
+    coverage: track.coverage,
+  };
+}
 
 export type ContributionCategory = "technical" | "financial" | "sentiment" | "supply";
 export interface ContributionSignalInput {
@@ -92,7 +164,7 @@ export const supplyDemandProvider: SupplyDemandProvider = async (code) =>
 
 const SENTIMENT_BY_CODE: Record<string, SentimentData> = {
   "005930": { ...SAMSUNG_SENTIMENT, source: "real" },
-  "005380": { days: HYUNDAI_SENTIMENT.days, headlines: [], source: "real" }, // 기사 제목은 커밋하지 않는다
+  "005380": sentimentFromTrack(HYUNDAI_SENTIMENT as NewsTrack),
 };
 export const sentimentProvider: SentimentProvider = async (code) =>
   SENTIMENT_BY_CODE[code] ?? null;
@@ -165,7 +237,14 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
       supply: supply ? SUPPLY_PROVENANCE : FIXTURE,
       sentiment:
         sentiment?.source === "real"
-          ? { kind: "real", source: "BigKinds · KR-FinBERT", asOf: sentiment.days.at(-1)?.date }
+          ? {
+              kind: "real",
+              source:
+                sentiment.provider && sentiment.backend
+                  ? `${sentiment.provider === "bigkinds" ? "BigKinds" : "NewsAPI.ai"} · ${sentiment.backend === "kr-finbert" ? "KR-FinBERT" : sentiment.backend}`
+                  : "BigKinds · KR-FinBERT",
+              asOf: sentiment.asOf?.slice(0, 10) ?? sentiment.days.at(-1)?.date,
+            }
           : FIXTURE,
       contributions: FIXTURE,
       financial: financial ? { kind: "real", source: FINANCIAL_SOURCE, asOf: SNAPSHOT_AS_OF } : FIXTURE,

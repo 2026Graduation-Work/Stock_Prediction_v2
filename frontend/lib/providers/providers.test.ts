@@ -4,6 +4,7 @@ import { investorStyleAxes, portfolioHoldings, stockDetails } from "../mock-data
 import { classifyBit } from "../profiling/bit.ts";
 import { selectNudges } from "../profiling/nudges.ts";
 import type { StyleAxes } from "../types.ts";
+import HYUNDAI_NEWS_TRACK from "./sentiment-005380.json" with { type: "json" };
 import {
   contributionProvider,
   financialProvider,
@@ -14,6 +15,16 @@ import {
 } from "./index.ts";
 
 const CODES = ["005930", "005380"];
+
+test("현대차 감성 JSON은 백엔드 historical track 계약을 쓴다", () => {
+  assert.equal(HYUNDAI_NEWS_TRACK.schema_version, "1.0");
+  assert.equal(HYUNDAI_NEWS_TRACK.track, "historical");
+  assert.deepEqual(HYUNDAI_NEWS_TRACK.scope, { ticker: "005380", company_name: "현대차" });
+  assert.equal(HYUNDAI_NEWS_TRACK.source, "bigkinds");
+  assert.equal(HYUNDAI_NEWS_TRACK.backend, "kr-finbert");
+  assert.ok(HYUNDAI_NEWS_TRACK.timeline.length > 0);
+  assert.ok(!("days" in HYUNDAI_NEWS_TRACK));
+});
 
 for (const code of CODES) {
   test(`${code}: 4개 Provider가 값을 반환한다`, async () => {
