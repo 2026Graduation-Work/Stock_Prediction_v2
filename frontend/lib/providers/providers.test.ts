@@ -4,7 +4,9 @@ import { investorStyleAxes, portfolioHoldings, stockDetails } from "../mock-data
 import { classifyBit } from "../profiling/bit.ts";
 import { selectNudges } from "../profiling/nudges.ts";
 import type { StyleAxes } from "../types.ts";
+import KAKAO_NEWS_TRACK from "./sentiment-035720.json" with { type: "json" };
 import HYUNDAI_NEWS_TRACK from "./sentiment-005380.json" with { type: "json" };
+import CELLTRION_NEWS_TRACK from "./sentiment-068270.json" with { type: "json" };
 import {
   contributionProvider,
   financialProvider,
@@ -16,14 +18,29 @@ import {
 
 const CODES = ["005930", "005380"];
 
-test("현대차 감성 JSON은 백엔드 historical track 계약을 쓴다", () => {
-  assert.equal(HYUNDAI_NEWS_TRACK.schema_version, "1.0");
-  assert.equal(HYUNDAI_NEWS_TRACK.track, "historical");
-  assert.deepEqual(HYUNDAI_NEWS_TRACK.scope, { ticker: "005380", company_name: "현대차" });
-  assert.equal(HYUNDAI_NEWS_TRACK.source, "bigkinds");
-  assert.equal(HYUNDAI_NEWS_TRACK.backend, "kr-finbert");
-  assert.ok(HYUNDAI_NEWS_TRACK.timeline.length > 0);
-  assert.ok(!("days" in HYUNDAI_NEWS_TRACK));
+for (const [code, companyName, track] of [
+  ["005380", "현대차", HYUNDAI_NEWS_TRACK],
+  ["035720", "카카오", KAKAO_NEWS_TRACK],
+  ["068270", "셀트리온", CELLTRION_NEWS_TRACK],
+] as const) {
+  test(`${companyName} 감성 JSON은 백엔드 historical track 계약을 쓴다`, () => {
+    assert.equal(track.schema_version, "1.0");
+    assert.equal(track.track, "historical");
+    assert.deepEqual(track.scope, { ticker: code, company_name: companyName });
+    assert.equal(track.source, "bigkinds");
+    assert.equal(track.backend, "kr-finbert");
+    assert.equal(track.timeline.length, 20);
+    assert.ok(!("days" in track));
+  });
+}
+
+test("데모 4종목은 BigKinds 과거 감성 20개 관측치를 반환한다", async () => {
+  for (const code of ["005930", "005380", "035720", "068270"]) {
+    const sentiment = await sentimentProvider(code);
+    assert.equal(sentiment?.days.length, 20, code);
+    assert.equal(sentiment?.source, "real", code);
+    assert.ok(sentiment?.days.every(({ score }) => score >= -1 && score <= 1), code);
+  }
 });
 
 for (const code of CODES) {
@@ -38,7 +55,7 @@ for (const code of CODES) {
 
     const sentiment = await sentimentProvider(code);
     assert.equal(sentiment?.days.length, 20);
-    // 두 종목 모두 실제 BigKinds 기사 집계. 기사 제목은 삼성전자(기존)만 있고 현대차는 커밋하지 않는다.
+    // 4종목 모두 실제 BigKinds 기사 집계. 기사 제목은 삼성전자(기존)만 있고 나머지는 커밋하지 않는다.
     assert.equal(sentiment?.headlines.length, code === "005930" ? 3 : 0);
     assert.equal(sentiment?.source, "real");
     assert.ok(sentiment?.days.every(({ score }) => score >= -1 && score <= 1));
@@ -80,7 +97,7 @@ test("수급: 데모 4종목은 실데이터 20영업일(기준일까지, 12-25 
   }
 });
 
-test("출처: 감성은 삼성전자·현대차 실데이터, 모델 근거는 픽스처", async () => {
+test("출처: 감성은 데모 4종목 실데이터, 모델 근거는 픽스처", async () => {
   const samsung = await loadStockInsights("005930");
   assert.deepEqual(samsung.provenance.sentiment, {
     kind: "real",
@@ -90,9 +107,11 @@ test("출처: 감성은 삼성전자·현대차 실데이터, 모델 근거는 �
   for (const key of ["contributions"] as const) {
     assert.equal(samsung.provenance[key].kind, "fixture", key);
   }
-  const hyundai = await loadStockInsights("005380");
-  assert.equal(hyundai.provenance.sentiment.kind, "real");
-  assert.equal(hyundai.provenance.sentiment.asOf, hyundai.sentiment?.days.at(-1)?.date);
+  for (const code of ["005380", "035720", "068270"]) {
+    const insights = await loadStockInsights(code);
+    assert.equal(insights.provenance.sentiment.kind, "real", code);
+    assert.equal(insights.provenance.sentiment.asOf, insights.sentiment?.days.at(-1)?.date, code);
+  }
 });
 
 test("가격 흐름 분위기: 데모 4종목은 실데이터 스냅샷에서 구간 말을 갖는다", async () => {
