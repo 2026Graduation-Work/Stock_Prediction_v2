@@ -88,6 +88,26 @@ python -m value_pipeline.news_run live \
 기록한다. 따라서 이 값은 수집 범위를 숨긴 완전한 시장 전수조사가 아니라, 표시된
 커버리지 안에서의 뉴스 분위기이다.
 
+## DART 재무 적재용 JSON
+
+Supabase 테이블 합의 전에는 SQL 스키마를 고정하지 않고, 종목별 재무 스냅샷을
+`financial` track JSON으로 내보낸다. 원시 DART 계정 전체는 저장하지 않으며 화면에서
+설명하는 6개 지표와 계산 근거, 공시 식별자, 검증 결과만 보존한다.
+
+```bash
+cd backend
+python -m analysis.text.value_pipeline.financial_run \
+  --target 005930:삼성전자 --target 005380:현대차 \
+  --target 035720:카카오 --target 068270:셀트리온 \
+  --as-of 2025-12-30
+```
+
+기본 출력은 `backend/out/financial_tracks/<종목코드>_financial.json`이다.
+스냅샷 upsert 후보 키는 `(ticker, as_of, fiscal_year)`, 지표 행 upsert 후보 키는
+`(ticker, as_of, fiscal_year, metric_key)`다. `status=invalid`인 출력은 적재 전에
+검토하고, `value=null`은 0으로 바꾸지 않는다. 적자 기업의 PER처럼 계산 자체가
+성립하지 않는 값은 `note=negative_earnings`로 구분한다.
+
 ## 빅카인즈 뉴스 전처리
 
 1. 종목별로 저장소 루트 `data/<6자리 종목코드>/` 디렉터리를 만들고 그 종목의 빅카인즈 원본

@@ -1,5 +1,5 @@
-// 종목 상세 인사이트 어댑터. 인터페이스 뒤에 픽스처 구현을 둔다.
-// 대상 종목은 삼성전자(005930)·현대차(005380)이고, 그 외 종목은 null을 돌려준다.
+// 종목 상세 인사이트 어댑터. 인터페이스 뒤에 실데이터 스냅샷과 픽스처 구현을 둔다.
+// 시세·수급·재무·감성은 데모 4종목, 모델 기여도 픽스처는 삼성전자·현대차를 지원한다.
 
 import type { NudgeMarket } from "../profiling/nudges";
 import type { DataProvenance, PortfolioHolding, RiskGrade, StockDetail } from "../types";
@@ -9,6 +9,8 @@ import {
   businessDaysEndingAt,
 } from "./fixtures.ts";
 import HYUNDAI_SENTIMENT from "./sentiment-005380.json" with { type: "json" };
+import KAKAO_SENTIMENT from "./sentiment-035720.json" with { type: "json" };
+import CELLTRION_SENTIMENT from "./sentiment-068270.json" with { type: "json" };
 import { SAMSUNG_SENTIMENT } from "./sentiment-fixture.ts";
 import {
   FINANCIAL_SNAPSHOT,
@@ -165,6 +167,8 @@ export const supplyDemandProvider: SupplyDemandProvider = async (code) =>
 const SENTIMENT_BY_CODE: Record<string, SentimentData> = {
   "005930": { ...SAMSUNG_SENTIMENT, source: "real" },
   "005380": sentimentFromTrack(HYUNDAI_SENTIMENT as NewsTrack),
+  "035720": sentimentFromTrack(KAKAO_SENTIMENT as NewsTrack),
+  "068270": sentimentFromTrack(CELLTRION_SENTIMENT as NewsTrack),
 };
 export const sentimentProvider: SentimentProvider = async (code) =>
   SENTIMENT_BY_CODE[code] ?? null;
