@@ -200,3 +200,71 @@ test("김민지 + 삼성전자: information_reliance를 0.3으로 올리면 수�
 // N04(변동성 백분위 0.48)·N05(3개월 고점 대비, 실데이터 시세)는 시장 조건이 거짓이라 발화하지 않는다.
 // sentiment-fixture.ts가 다시 생성되면 재확인한다.
 const EXPECTED_MINJI_SAMSUNG: string[] = ["N07"];
+
+type SupabaseResponse = { data: unknown; error: { message: string } | null };
+
+class StaticSupabaseQuery implements PromiseLike<SupabaseResponse> {
+  private readonly response: SupabaseResponse;
+
+  constructor(response: SupabaseResponse) { this.response = response; }
+  select() { return this; }
+  eq() { return this; }
+  not() { return this; }
+  order() { return this; }
+  limit() { return this; }
+  maybeSingle() { return Promise.resolve(this.response); }
+  then<TResult1 = SupabaseResponse, TResult2 = never>(
+    onfulfilled?: ((value: SupabaseResponse) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2> {
+    return Promise.resolve(this.response).then(onfulfilled, onrejected);
+  }
+}
+
+class StaticSupabaseClient {
+  private readonly responses: Record<string, SupabaseResponse[]>;
+
+  constructor(responses: Record<string, SupabaseResponse[]>) { this.responses = responses; }
+  from(table: string) {
+    return new StaticSupabaseQuery(
+      this.responses[table]?.shift() ?? { data: [], error: null },
+    );
+  }
+}
+
+test("Supabase에 live만 있어도 과거 감성·재무는 정적 데이터로 각각 폴백한다", async () => {
+  const live = {
+    track: "live",
+    source: "newsapi_ai",
+    backend: "kr-finbert",
+    status: "ok",
+    as_of: "2026-09-26T09:00:00+09:00",
+    window_start: "2026-09-25",
+    window_end: "2026-09-26",
+    sentiment_mean: 0.6,
+    sentiment_std: 0.1,
+    article_count: 8,
+    publisher_count: 3,
+    fetched_count: 25,
+    relevant_count: 8,
+    newest_published_at: "2026-09-26T08:30:00+09:00",
+    lag_minutes: 30,
+    provider_total_results: 25,
+    provider_returned_count: 25,
+    provider_pages: 1,
+    provider_truncated: false,
+  };
+  const client = new StaticSupabaseClient({
+    news_sentiment_tracks: [{ data: [live], error: null }],
+    news_sentiment_daily: [{ data: [], error: null }],
+    news_articles: [{ data: [], error: null }],
+    financial_snapshots: [{ data: null, error: null }],
+  });
+
+  const insights = await loadStockInsights("005930", client as never);
+
+  assert.equal(insights.sentiment?.days.length, 20);
+  assert.equal(insights.liveSentiment?.score, 0.6);
+  assert.equal(insights.financial?.metrics.length, 6);
+  assert.equal(insights.provenance.liveSentiment.source, "NewsAPI.ai · KR-FinBERT");
+});

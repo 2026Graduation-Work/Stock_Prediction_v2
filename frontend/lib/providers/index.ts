@@ -2,6 +2,7 @@
 // 시세·수급·재무·감성은 데모 4종목, 모델 기여도 픽스처는 삼성전자·현대차를 지원한다.
 
 import type { NudgeMarket } from "../profiling/nudges";
+import { getSupabaseClient } from "../supabase.ts";
 import type { DataProvenance, PortfolioHolding, RiskGrade, StockDetail } from "../types";
 import {
   CONTRIBUTION_FIXTURE,
@@ -21,6 +22,13 @@ import {
   SUPPLY_PROVENANCE,
   SUPPLY_SNAPSHOT,
 } from "./demo-snapshot.ts";
+import {
+  loadSupabaseFinancial,
+  loadSupabaseSentiment,
+  type InsightQueryClient,
+  type LiveSentimentSummary,
+  type SupabaseSentimentResult,
+} from "./supabase-insights.ts";
 
 // 순매수 수량(주). + 순매수, - 순매도. 날짜 오름차순. 기타법인은 원천(네이버 금융)에 없어 뺐다.
 export interface SupplyDemandDay {
@@ -40,6 +48,8 @@ export interface Headline {
   date: string;
   title: string;
   press: string;
+  url?: string;
+  publishedAt?: string;
 }
 // 생성 파일(sentiment-fixture.ts)이 쓰는 형태. 생성 스크립트와 맞춰야 한다.
 export interface SentimentSeries {
@@ -149,6 +159,7 @@ export interface FinancialMetric {
 export interface FinancialSnapshot {
   period: string;
   metrics: FinancialMetric[];
+  asOf?: string;
 }
 
 const FINANCIAL_LABEL: Record<string, string> = {
@@ -209,20 +220,48 @@ export interface StockInsights {
   psychology: PsychologyLine | null;
   supply: SupplyDemandDay[] | null;
   sentiment: SentimentData | null;
+  liveSentiment: LiveSentimentSummary | null;
   contributions: ContributionSignal[] | null;
   financial: FinancialSnapshot | null;
-  provenance: Record<"supply" | "sentiment" | "contributions" | "financial", DataProvenance>;
+  provenance: Record<
+    "supply" | "sentiment" | "liveSentiment" | "contributions" | "financial",
+    DataProvenance
+  >;
 }
 
 const FIXTURE: DataProvenance = { kind: "fixture", source: "픽스처" };
 
-export async function loadStockInsights(code: string): Promise<StockInsights> {
-  const [supply, sentiment, contributions, financial] = await Promise.all([
+export async function loadStockInsights(
+  code: string,
+  queryClient: InsightQueryClient | null = getSupabaseClient(),
+): Promise<StockInsights> {
+  const [supply, fallbackSentiment, contributions, fallbackFinancial] = await Promise.all([
     supplyDemandProvider(code),
     sentimentProvider(code),
     contributionProvider(code),
     financialProvider(code),
   ]);
+  const emptySentiment: SupabaseSentimentResult = {
+    historical: null,
+    live: null,
+    headlines: [],
+  };
+  const [remoteSentiment, remoteFinancial] = queryClient
+    ? await Promise.all([
+        loadSupabaseSentiment(code, queryClient).catch(() => emptySentiment),
+        loadSupabaseFinancial(code, queryClient).catch(() => null),
+      ])
+    : [emptySentiment, null];
+  const historical = remoteSentiment.historical ?? fallbackSentiment;
+  const sentiment = historical
+    ? {
+        ...historical,
+        headlines: remoteSentiment.headlines.length
+          ? remoteSentiment.headlines
+          : historical.headlines,
+      }
+    : null;
+  const financial = remoteFinancial ?? fallbackFinancial;
   const psychology = STOCK_SNAPSHOT[code]?.psychology;
   return {
     psychology: psychology
@@ -235,6 +274,7 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
       : null,
     supply,
     sentiment,
+    liveSentiment: remoteSentiment.live,
     contributions,
     financial,
     provenance: {
@@ -250,8 +290,21 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
               asOf: sentiment.asOf?.slice(0, 10) ?? sentiment.days.at(-1)?.date,
             }
           : FIXTURE,
+      liveSentiment: remoteSentiment.live
+        ? {
+            kind: "real",
+            source: "NewsAPI.ai · KR-FinBERT",
+            asOf: remoteSentiment.live.asOf,
+          }
+        : FIXTURE,
       contributions: FIXTURE,
-      financial: financial ? { kind: "real", source: FINANCIAL_SOURCE, asOf: SNAPSHOT_AS_OF } : FIXTURE,
+      financial: financial
+        ? {
+            kind: "real",
+            source: FINANCIAL_SOURCE,
+            asOf: remoteFinancial?.asOf ?? SNAPSHOT_AS_OF,
+          }
+        : FIXTURE,
     },
   };
 }
