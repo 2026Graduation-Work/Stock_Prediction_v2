@@ -194,8 +194,8 @@ def compute_custom_krx_composite(
     try:
         import yfinance as yf
 
-        yf_start = (index[0] - pd.Timedelta(days=10)).strftime("%Y-%m-%d")
-        yf_end = (index[-1] + pd.Timedelta(days=10)).strftime("%Y-%m-%d")
+        yf_start = (index[0] - pd.Timedelta(10, unit="D")).strftime("%Y-%m-%d")
+        yf_end = (index[-1] + pd.Timedelta(10, unit="D")).strftime("%Y-%m-%d")
 
         print("[*] 커스텀 KRX 통합 지수 산출: KOSPI(^KS11) + KOSDAQ(^KQ11) 다운로드 중...")
         raw = yf.download(
