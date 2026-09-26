@@ -204,6 +204,9 @@ def _resolve_delisting_tail_labels(
             upper = close * (1 + up_mult)
             lower = close * (1 - down_mult)
 
+        if len(future_positions) == 0:
+            # 다음 거래일이 하나도 없으면 판정 근거가 없다. 0(중립)으로 채우지 않고 NaN으로 둔다.
+            continue
         outcome = None
         for future_position in future_positions:
             future_close = float(frame["Close"].iloc[future_position])

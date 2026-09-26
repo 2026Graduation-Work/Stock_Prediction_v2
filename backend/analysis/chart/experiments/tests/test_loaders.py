@@ -83,10 +83,9 @@ def test_loader_labels_reused_codes_within_each_listing_interval(tmp_path) -> No
 
     assert loaded["Date"].tolist() == [
         pd.Timestamp("2010-01-01"),
-        pd.Timestamp("2010-01-02"),
         pd.Timestamp("2020-01-01"),
     ]
-    assert loaded["Y_Label"].tolist() == [1, 1, 1]
+    assert loaded["Y_Label"].tolist() == [1, 1]
 
 
 def test_delisted_partial_horizon_uses_last_observed_close() -> None:
@@ -108,7 +107,8 @@ def test_delisted_partial_horizon_uses_last_observed_close() -> None:
         interval,
     )
 
-    assert resolved.tolist() == [-1.0, 0.0]
+    assert resolved.iloc[0] == -1.0
+    assert pd.isna(resolved.iloc[1])
 
 
 def test_loader_fails_if_any_selected_file_cannot_be_loaded(monkeypatch) -> None:
