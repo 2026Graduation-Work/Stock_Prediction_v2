@@ -353,7 +353,7 @@ export default function SurveyFlow() {
         )}
         {stage === "holdings" && (
           <HoldingsStep
-            mode={onboardingState.mode === "supabase" ? "supabase" : "demo"}
+            mode={onboardingState.mode}
             onBack={() => setStage("result")}
             onDone={() => router.push("/")}
           />
@@ -795,7 +795,8 @@ export function ResultView({
         )}
 
         <div className="mt-8 flex flex-col gap-4 border-t border-line-soft pt-6">
-          <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${readOnly ? "hidden" : ""}`}>
+          {!readOnly && (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             {adjusting ? (
               <button
                 type="button"
@@ -814,6 +815,7 @@ export function ResultView({
               </button>
             )}
           </div>
+          )}
           <StepNav
             onBack={onBack}
             backLabel={readOnly ? "뒤로" : "이전"}
