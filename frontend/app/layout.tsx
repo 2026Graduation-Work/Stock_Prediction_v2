@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import OnboardingProvider from "./components/onboarding-provider";
 import { SERVICE_DESCRIPTION, SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
@@ -10,6 +10,9 @@ const pretendard = localFont({
   weight: "45 920",
   variable: "--font-pretendard",
 });
+
+// 아이폰 홈 인디케이터 영역(safe-area)까지 그려야 하단 탭 막대가 env(safe-area-inset-bottom)로 비켜 선다.
+export const viewport: Viewport = { viewportFit: "cover" };
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://stock-prediction-v2-chi.vercel.app"),

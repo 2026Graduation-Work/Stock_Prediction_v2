@@ -49,7 +49,7 @@ export default function MarketStatusBar({ status }: { status: MarketStatus }) {
               <strong className="font-medium text-ink">{level(status.volumeScore)}</strong>
               <span className="ml-1 text-muted underline underline-offset-2">자세히</span>
             </summary>
-            <div className="fixed left-4 right-4 top-28 z-50 rounded-md bg-white p-4 text-xs leading-5 text-body shadow-modal sm:left-auto sm:right-8 sm:w-80">
+            <div className="fixed left-4 right-4 top-28 z-50 rounded-md glass p-4 text-xs leading-5 text-body sm:left-auto sm:right-8 sm:w-80">
               <p className="m-0">
                 흔들림: KOSPI 최근 20거래일 가격 흔들림이 지난 1년 중 아래에서 {status.volatilityScore}% 위치예요.
               </p>

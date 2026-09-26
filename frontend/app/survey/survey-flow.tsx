@@ -282,7 +282,7 @@ export default function SurveyFlow() {
 
   return (
     <div className="min-h-dvh bg-page">
-      <header className="sticky top-0 z-50 border-b border-line/70 bg-white/80 backdrop-blur-xl">
+      <header className="sticky top-0 z-50 glass-bar">
         <div className="mx-auto flex min-h-14 w-full max-w-[880px] items-center gap-3 px-4 sm:px-8">
           <Link href="/" className="flex-none whitespace-nowrap text-lg hover:no-underline">
             <Wordmark size={26} compact />
