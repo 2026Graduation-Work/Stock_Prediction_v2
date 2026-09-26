@@ -234,7 +234,7 @@ export function Checkpoints({
 
       {demo.styleAxes && (
         <details className="disclosure border-t border-line-soft pt-3">
-          <summary className="text-xs font-medium text-brand">다른 유형이라면?</summary>
+          <summary>다른 유형이라면?</summary>
           <p className="mb-2.5 mt-2 text-xs text-muted">
             다른 유형은 같은 종목을 어떤 순서와 확인 거리로 보는지 바꿔 볼 수 있어요. 이 화면에서만 바뀌어요.
           </p>
@@ -408,7 +408,9 @@ function MarketPanel({ detail, insights }: { detail: StockDetail; insights: Stoc
       )}
       {sentimentView?.headlines.length ? (
         <details className="disclosure text-sm">
-          <summary className="text-xs font-medium text-body">대표 기사 {sentimentView.headlines.length}건</summary>
+          <summary>
+            대표 기사 <span className="count">{sentimentView.headlines.length}건</span>
+          </summary>
           <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
             {sentimentView.headlines.map((headline) => (
               <li key={`${headline.date}:${headline.title}`} className="text-sm text-ink">
@@ -564,7 +566,7 @@ function FinancialPanel({ financial, provenance }: { financial: FinancialSnapsho
         ))}
       </dl>
       <details className="disclosure">
-        <summary className="text-sm">계산 근거</summary>
+        <summary>계산 근거</summary>
         <ul className="m-0 mt-3 flex list-none flex-col gap-2 p-0 text-xs text-body">
           {financial.metrics.map((metric) => (
             <li key={metric.key}>

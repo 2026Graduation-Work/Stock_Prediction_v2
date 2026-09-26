@@ -278,13 +278,27 @@ summary::-webkit-details-marker {
     box-shadow: var(--shadow-hairline);
   }
 
-  /* 접기: <details class="disclosure"><summary>…</summary>…</details> */
+  /* 접기: <details class="disclosure"><summary>라벨 <span class="count">N개</span></summary>…</details>
+     한 줄 전체가 누르는 행(44px)이고, 오른쪽에 개수(있으면)와 펼침 화살표. 열리면 화살표가 돈다. 내용은 바로 아래 */
   .disclosure > summary {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    min-height: 2.75rem;
     cursor: pointer;
     list-style: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    color: var(--color-ink);
+  }
+  .disclosure > summary > .count {
+    margin-left: auto;
+    font-weight: 400;
+    color: var(--color-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .disclosure > summary:has(> .count)::after {
+    margin-left: 0.25rem;
   }
   .disclosure > summary::after {
     content: "";
