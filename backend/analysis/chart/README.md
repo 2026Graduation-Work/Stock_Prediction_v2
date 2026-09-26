@@ -3,6 +3,10 @@
 기술적 피처와 3분류 LightGBM으로 profile별 상대 스코어를 생성하고 공용 평가·백테스트를
 수행한다.
 
+과거 실험 universe는 `data/universe/security_master.parquet`의 상장 구간을 기준으로
+`ListingDate <= Date < DelistingDate` 규칙을 적용한다. 상폐 종목을 제외하거나 현재
+상장 목록으로 과거 universe를 대신하지 않는다.
+
 설치, 데이터, 모델, config, 학습, 평가, 추론, 추가 피처, 파일 구조는
 [`ONBOARDING.md`](ONBOARDING.md) 하나를 기준으로 한다.
 

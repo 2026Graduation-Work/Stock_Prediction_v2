@@ -21,6 +21,10 @@ python -m experiments.comparison.runner --config experiments/comparison/config.y
 
 ## 1. 현재 정본
 
+> 아래 모델 파일은 PIT universe 도입 전 학습 산출물이므로 서비스 회귀 확인용으로만
+> 보존한다. 새 `security_master.parquet`로 수집·전처리·재학습·2025 holdout 평가를
+> 완료하기 전에는 생존편향을 제거한 연구 결과로 인용하지 않는다.
+
 | profile      | 모델 | 라벨                        | 학습      | 평가 | 모델 파일                                                           |
 | ------------ | ---- | --------------------------- | --------- | ---- | ------------------------------------------------------------------- |
 | `aggressive` | H5   | dynamic sigma `u1.75/d1.50` | 2022~2024 | 2025 | `core/models/baseline_h5_u175_d150_train2022_2024_holdout2025.txt`  |
@@ -30,7 +34,8 @@ python -m experiments.comparison.runner --config experiments/comparison/config.y
 - 서비스 스코어: class 2 확률
 - 피처: Alpha158 계열 161개
 - 모델 매핑·SHA-256 정본: `core/models/registry.yaml`
-- 고정 universe: `experiments/configs/universes/kospi_all_2024-12-30.csv`
+- PIT universe SSOT: `data/universe/security_master.parquet`
+- 경계 규칙: `ListingDate <= Date < DelistingDate` (`DelistingDate`가 없으면 현재 상장)
 - 공식 config: `experiments/configs/holdout_2025_h5.yaml`, `holdout_2025_h20.yaml`
 
 ## 2. 파일 구조와 역할
@@ -91,9 +96,27 @@ pytest
 ### 새로 구축
 
 ```bash
+# 활성·상폐 이력을 병합하고 누락 상장일은 최초 OHLCV 거래일로 보강
+python data_collectors/price_collector.py --mode master
+
+# 상폐 종목을 포함해 각 종목의 상장 구간만 수집
 python data_collectors/price_collector.py --mode full --start-date 2016-01-01
 python data_collectors/preprocess_data.py --mode full
 ```
+
+누락 종목만 다시 받을 때는 다음처럼 제한할 수 있다.
+
+```bash
+python data_collectors/price_collector.py --mode full --start-date 2016-01-01 \
+  --codes 000001,000002
+```
+
+`full` 수집은 master도 먼저 갱신한다. 한 종목이라도 이력 수집/보정에 실패하면
+`data/failed_downloads.csv`를 남기고 실패하므로, 이 파일을 해결하기 전에는 PIT
+데이터셋이 완성된 것으로 간주하지 않는다. 기존 processed에는 PIT 메타데이터가 없으므로
+첫 실행에서 자동으로 다시 전처리된다. 이전 버전의 processed가 섞여 있거나 PIT
+메타데이터 누락으로 학습 로더 검증에 실패하면 `python data_collectors/preprocess_data.py --mode full`
+명령으로 전체 재전처리한다.
 
 ### 최신 거래일 갱신
 
@@ -104,7 +127,9 @@ python data_collectors/preprocess_data.py --mode update
 
 ### Drive 스냅샷 사용
 
-Drive에는 전체 3,000여 종목 대신 공식 universe에 포함된 KOSPI processed만 공유한다.
+Drive 공유본도 `security_master.parquet`과 그 기간에 한 번이라도 포함된 processed를 함께
+전달해야 한다. 학습·평가 로더는 config의 `data.universe_file`을 실제로 읽으며, 파일이
+없으면 실행을 중단한다. 폴더에 어떤 parquet가 우연히 들어 있는지로 universe를 정하지 않는다.
 최종 배치 위치는 아래와 같다.
 
 ```text

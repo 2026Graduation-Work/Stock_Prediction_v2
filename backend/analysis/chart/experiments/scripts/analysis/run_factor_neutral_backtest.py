@@ -34,6 +34,7 @@ from run_factor_attribution import (  # noqa: E402
 )
 from train_src.loaders import load_parquet_data  # noqa: E402
 from train_src.swing_strategy import SwingStrategy  # noqa: E402
+from point_in_time_universe import load_security_master  # noqa: E402
 
 
 DEFAULT_OUTPUT_DIR = EXPERIMENTS_DIR / "results" / "factor_neutral_backtest"
@@ -145,6 +146,9 @@ def run_engine_only_backtest(config_path: Path, predictions_path: Path, result_d
 
     full_test_start, full_test_end = test_date_bounds(splits)
     price_cols = ["Date", "Code", "Open", "High", "Low", "Close", "Sigma", "Trading_Halt"]
+    universe_value = config.get("data", {}).get("universe_file")
+    universe_file = str(CHART_ROOT / universe_value) if universe_value else None
+    universe_master = load_security_master(universe_file) if universe_file else None
     market_df = load_parquet_data(
         str(CHART_ROOT / config.get("data", {}).get("price_dir", "data/processed")),
         full_test_start,
@@ -152,19 +156,24 @@ def run_engine_only_backtest(config_path: Path, predictions_path: Path, result_d
         columns_only=price_cols,
         tickers=config.get("data", {}).get("tickers", None),
         label_params=label_params_from_config(config),
+        universe_file=universe_file,
     )
     market_df["Date"] = pd.to_datetime(market_df["Date"]).dt.tz_localize(None)
 
     strategy = SwingStrategy(config)
-    entries, weights = strategy.generate_signals(predictions, market_df)
+    entries, weights = strategy.generate_signals(predictions, market_df, universe_master)
     engine = VectorBTEngine(config)
-    pf = engine.run(entries, weights, market_df, generate_report=False)
+    pf = engine.run(
+        entries, weights, market_df, generate_report=False, universe_master=universe_master
+    )
 
     daily_returns = pf.returns()
     daily_returns.index = pd.to_datetime(daily_returns.index).tz_localize(None)
     trades = pf.trades.records_readable if len(pf.trades.records) > 0 else pd.DataFrame()
     ew_benchmark = pf.benchmark_returns()
-    custom_krx = compute_custom_krx_composite(daily_returns.index, market_df)
+    custom_krx = compute_custom_krx_composite(
+        daily_returns.index, market_df, universe_master
+    )
     metrics = calculate_trading_metrics(daily_returns, trades)
     krx_metrics = calculate_trading_metrics(custom_krx)
 
