@@ -97,6 +97,7 @@
 |---|---|---|
 | `redesign-existing-projects`, `minimalist-ui` | https://github.com/Leonxlnx/taste-skill (MIT) | `5217fb45be2c0b302f29c9cd31cbd3237501c684` |
 | `baseline-ui`, `fixing-motion-performance` | https://github.com/ibelick/ui-skills (MIT) | `b1cc8e0073ac64b09b3d38cd604407aa20c2b7ad` |
+| `frontend-design` | https://github.com/anthropics/skills (Apache-2.0, Anthropic 공식) | `33375500bcea98d610eb30ce10ac4e59b89c390d` |
 
 - 우선순위: **AGENTS.md > `frontend/DESIGN.md` > 스킬.** 스킬이 표현 규칙·색의 의미·화이트박스·결정론과 부딪히면 우리 규칙을 따른다.
 - 미러·포크본은 설치하지 않는다(내용이 빈 복제본이 있다). 새 스킬·새 버전은 SKILL.md를 읽고 PR에 요약과 SHA를 남긴 뒤 이 표에 추가한다.

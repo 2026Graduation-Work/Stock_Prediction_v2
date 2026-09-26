@@ -22,7 +22,7 @@ export default function AccountControls({
         <summary className="cursor-pointer list-none whitespace-nowrap text-xs font-medium text-body hover:text-ink">
           계정
         </summary>
-        <div className="absolute right-0 top-7 z-50 flex w-44 flex-col overflow-hidden rounded-md bg-white py-1 shadow-modal">
+        <div className="absolute right-0 top-7 z-50 flex w-44 flex-col overflow-hidden rounded-md glass py-1">
           <Link href="/survey" className="px-4 py-2.5 text-sm text-ink hover:bg-field hover:text-ink hover:no-underline">
             내 성향 다시 진단
           </Link>
