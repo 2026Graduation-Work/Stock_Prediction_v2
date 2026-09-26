@@ -5,8 +5,8 @@
 행동재무학 기반 투자 판단 보조 플랫폼 · 성균관대 소프트웨어학과 2026 졸업작품.
 투자 성향을 진단해 근거를 보여 주는 순서를 사람마다 다르게 하고, 주가 예측 모델은 여러 근거 중 하나로만 씁니다.
 
-[![Web CI](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/web-ci.yml/badge.svg)](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/web-ci.yml)
-[![Python CI](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/python-ci.yml/badge.svg)](https://github.com/2026Graduation-Work/Stock_Prediction_v2/actions/workflows/python-ci.yml)
+[![Web CI](https://github.com/2026Graduation-Work/take_a_look/actions/workflows/web-ci.yml/badge.svg)](https://github.com/2026Graduation-Work/take_a_look/actions/workflows/web-ci.yml)
+[![Python CI](https://github.com/2026Graduation-Work/take_a_look/actions/workflows/python-ci.yml/badge.svg)](https://github.com/2026Graduation-Work/take_a_look/actions/workflows/python-ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 **라이브 데모 → https://takealook-skku.vercel.app** (기존 주소 https://stock-prediction-v2-chi.vercel.app 도 그대로 동작합니다. 가입 없이 "데모로 둘러보기"로 모든 화면을 볼 수 있습니다)
@@ -41,8 +41,8 @@
 Node 22 이상과 pnpm이 필요합니다.
 
 ```bash
-git clone https://github.com/2026Graduation-Work/Stock_Prediction_v2.git
-cd Stock_Prediction_v2/frontend
+git clone https://github.com/2026Graduation-Work/take_a_look.git
+cd take_a_look/frontend
 pnpm install
 cp .env.example .env.local
 pnpm dev   # http://localhost:3000

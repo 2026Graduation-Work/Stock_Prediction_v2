@@ -180,7 +180,6 @@ def _load_market_map() -> dict:
 def _load_name_map(anchor_file: str) -> dict:
     candidates = [
         os.path.abspath(os.path.join(_experiments_dir(anchor_file), "..", "data", "ticker_metadata.csv")),
-        os.path.abspath(os.path.join(os.getcwd(), "Stock_Prediction_v2", "analysis", "chart", "data", "ticker_metadata.csv")),
     ]
     for path in candidates:
         if not os.path.exists(path):
