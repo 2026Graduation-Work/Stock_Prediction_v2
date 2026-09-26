@@ -20,7 +20,7 @@ export default function AccountControls({ profile }: { profile: InvestorProfileS
         {displayName}
         <span aria-hidden className="text-muted">▾</span>
       </summary>
-      <div className="glass absolute right-0 top-11 z-50 flex w-48 flex-col overflow-hidden rounded-md py-1">
+      <div className="glass bg-white/90 absolute right-0 top-11 z-50 flex w-48 flex-col overflow-hidden rounded-md py-1">
         <Link href="/survey" className={item}>
           내 성향 다시 진단
         </Link>

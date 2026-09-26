@@ -268,17 +268,24 @@ export default function Dashboard(initialData: DashboardData) {
                   <span className="text-2xs text-muted">신호는 과거 데이터로 만든 참고 정보예요</span>
                 </div>
                 {!keyword && activeExcludedStocks.length > 0 && (
-                  <details className="disclosure px-1 text-xs text-muted">
+                  <details className="disclosure surface px-5">
                     <summary>
-                      직접 고른 제외 항목({activeAvoidedLabels.join(" · ")})으로 {activeExcludedStocks.length}개를 목록에서 뺐어요
+                      직접 고른 제외 항목
+                      <span className="count">{activeExcludedStocks.length}개</span>
                     </summary>
-                    <ul className="mt-2 flex flex-col gap-1">
-                      {activeExcludedStocks.map((stock) => (
-                        <li key={stock.code}>
-                          {stock.name} ({stock.code}) · {stock.reason}
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="flex flex-col gap-2 pb-4 text-xs text-body">
+                      <p className="m-0 text-muted">{activeAvoidedLabels.join(" · ")}을(를) 골라 목록에서 뺐어요.</p>
+                      <ul className="m-0 flex list-none flex-col gap-1.5 p-0">
+                        {activeExcludedStocks.map((stock) => (
+                          <li key={stock.code} className="flex flex-wrap items-baseline gap-x-2 [word-break:keep-all]">
+                            <span className="font-medium text-ink [overflow-wrap:anywhere]">{stock.name}</span>
+                            <span className="text-muted tabular-nums">
+                              {stock.code} · {stock.reason}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   </details>
                 )}
               </section>
