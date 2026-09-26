@@ -5,6 +5,8 @@ export const STORAGE_KEYS = {
   profile: "takealook.ips-profile.v1",
   holdings: "takealook.holdings.v1",
   surveyDraft: "takealook.survey-draft.v1",
+  // 마지막으로 저장한 설문 답. "다시 진단"을 지난 답이 채워진 상태로 시작한다(성향과 함께 지운다).
+  surveyAnswers: "takealook.survey-answers.v1",
 } as const;
 
 // 2027-02 이후 제거: 옛 키(signallab.*) 이전. 그때쯤이면 옛 키를 가진 브라우저가 남지 않는다.

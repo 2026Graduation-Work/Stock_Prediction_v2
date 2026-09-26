@@ -267,6 +267,7 @@ function syncSavedProfile(value: unknown): void {
 }
 
 function clearSavedProfile(): void {
+  window.localStorage.removeItem(STORAGE_KEYS.surveyAnswers);
   if (!window.localStorage.getItem(PROFILE_STORAGE_KEY)) return;
   window.localStorage.removeItem(PROFILE_STORAGE_KEY);
   window.dispatchEvent(new Event(PROFILE_UPDATED_EVENT));

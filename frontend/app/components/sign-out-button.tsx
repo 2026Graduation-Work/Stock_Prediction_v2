@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { useOnboarding } from "./onboarding-provider";
 
-export default function SignOutButton() {
+export default function SignOutButton({ className, label }: { className?: string; label?: string } = {}) {
   const router = useRouter();
   const { logOut } = useOnboarding();
   const [submitting, setSubmitting] = useState(false);
@@ -34,10 +34,15 @@ export default function SignOutButton() {
         onClick={() => void handleSignOut()}
         disabled={submitting}
         title={error || undefined}
-        className="whitespace-nowrap text-xs font-medium text-body hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+        className={
+          className ??
+          "whitespace-nowrap text-xs font-medium text-body hover:text-ink disabled:cursor-not-allowed disabled:opacity-50"
+        }
       >
         {submitting ? (
           "처리 중"
+        ) : label ? (
+          label
         ) : (
           <>
             <span className="sm:hidden">나가기</span>

@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 const SESSION_KEY = "takealook.demo-session.v1";
 const PROFILE_KEY = "takealook.ips-profile.v1";
 const HOLDINGS_KEY = "takealook.holdings.v1";
+const ANSWERS_KEY = "takealook.survey-answers.v1";
 
 // 문항 정의(정본)를 읽어, 모든 축을 +2(축의 positive 쪽 끝)로 답하게 만든다.
 // 김민지 mock(추종형)과 다른 "적극 축적형"이 나와야 대시보드·상세가 설문 결과를 쓰는지 가려진다.
@@ -125,12 +126,17 @@ test("new user: 환영 -> 16문항 -> 결과 -> 보유 종목 1개 -> 대시보�
   await expect(page.getByText("적극 축적형", { exact: true })).toBeVisible();
   await assertNoHorizontalOverflow(page, 390, 844);
 
-  // 계정 메뉴에 다시 진단·보유 종목 편집이 묶여 있다
+  // 헤더: 내비는 대시보드·보유 종목 둘, 오른쪽은 이름 하나(유형 이름 없음). 이름을 누르면 계정 메뉴
   await page.setViewportSize({ width: 1024, height: 900 });
-  await page.getByText("계정", { exact: true }).click();
+  const header = page.locator("header");
+  await expect(header.getByRole("navigation", { name: "주요 화면" }).getByRole("link")).toHaveText(["대시보드", "보유 종목"]);
+  await expect(header.getByText("적극 축적형")).toHaveCount(0);
+  const accountMenu = header.locator("summary", { hasText: "김민지" });
+  await accountMenu.click();
   await expect(page.getByRole("link", { name: "내 성향 다시 진단" })).toBeVisible();
   await expect(page.getByRole("link", { name: "보유 종목 편집" })).toBeVisible();
-  await page.getByText("계정", { exact: true }).click();
+  await expect(header.getByRole("button", { name: "로그아웃" })).toBeVisible();
+  await accountMenu.click();
 
   await page.locator("[data-stock-row]").first().click();
   await expect(page).toHaveURL(/\/stocks\/(005930|005380|068270)$/);
@@ -153,12 +159,14 @@ test("new user: 환영 -> 16문항 -> 결과 -> 보유 종목 1개 -> 대시보�
   await page.getByRole("button", { name: "내 성향" }).click();
   await expect(page.locator('[data-bit-type="ACCUMULATOR"]')).toBeVisible();
 
-  await page.getByRole("link", { name: "모델 성적표" }).click();
+  // 모델 성적표는 내비가 아니라 푸터의 작은 링크
+  await page.locator("footer").getByRole("link", { name: "모델 성적표" }).click();
   await expect(page).toHaveURL(/\/performance$/);
   await expect(page.getByRole("heading", { name: /판별력\(AUC\)/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "심리 지표를 더하면 나아지나요?" })).toBeVisible();
 
-  await page.getByRole("button", { name: /로그아웃|나가기/ }).click();
+  await page.locator("header summary", { hasText: "김민지" }).click();
+  await page.getByRole("button", { name: "로그아웃" }).click();
   await expect(page).toHaveURL(/\/login$/);
   await expectStoredOnboardingData(page, { session: false, profile: false });
   expect(browserErrors).toEqual([]);
@@ -209,7 +217,7 @@ test("옛 저장 키(signallab.*)로 저장된 데모 상태가 새로고침 후
       localStorage.removeItem(key);
     }
     return values;
-  }, [SESSION_KEY, PROFILE_KEY, HOLDINGS_KEY]);
+  }, [SESSION_KEY, PROFILE_KEY, HOLDINGS_KEY, ANSWERS_KEY]);
   expect(Object.values(before).every((value) => value !== null)).toBe(true);
 
   await page.reload();
@@ -322,5 +330,43 @@ test("설문 이전/다음 왕복: 답한 문항에서만 다음이 켜지고, �
   await expect(page.getByRole("button", { name: "아직 없어요" })).toBeVisible();
   await back.click();
   await expect(page.getByRole("heading", { level: 1 })).toHaveAttribute("data-bit-type", /.+/);
+  expect(browserErrors).toEqual([]);
+});
+
+test("다시 진단: 대시보드 성향 한 줄 → 결과 → 다시 진단(지난 답 채워진 채 1번부터) → 완료 → 저장 → 대시보드", async ({ page }) => {
+  const browserErrors = collectBrowserErrors(page);
+  await startDemo(page);
+  await page.getByRole("button", { name: "시작하기" }).click();
+  await page.getByRole("button", { name: /데모 응답/ }).click();
+  await page.getByRole("button", { name: "완료" }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await page.getByRole("button", { name: "저장하고 시작" }).click();
+  await expect(page).toHaveURL("/");
+
+  // 대시보드 맨 위 성향 한 줄 → 결과 화면. 아래쪽 큰 성향 블록·다시 진단 버튼은 없다
+  await expect(page.getByText("목록에서 빼 둔 종목")).toHaveCount(0);
+  await page.getByRole("link", { name: /내 투자 성향: 추종형/ }).click();
+  await expect(page).toHaveURL(/\/profile$/);
+  await expect(page.getByRole("heading", { name: "추종형" })).toBeVisible();
+  await page.getByRole("button", { name: "다시 진단" }).click();
+
+  // 환영 없이 1번부터, 지난 답이 채워져 있어 바로 "다음"으로 넘길 수 있다
+  await expect(page).toHaveURL(/\/survey$/);
+  await expect(page.getByRole("heading", { name: "Take a Look은 이렇게 도와줘요" })).toHaveCount(0);
+  await expect(page.getByText("질문 1/16")).toBeVisible();
+  await expect(page.locator("fieldset input:checked")).toHaveCount(1);
+  const next = page.getByRole("button", { name: "다음", exact: true });
+  for (let number = 1; number < 16 + 3; number += 1) await next.click();
+  await expect(page.getByText("마무리 3/3")).toBeVisible();
+  await page.getByRole("button", { name: "완료" }).click();
+  await page.getByRole("button", { name: "저장" }).click();
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("heading", { name: "지금 가진 주식이 있나요?" })).toHaveCount(0);
+
+  // 처음부터 새로 하기: 지난 답을 비우고 1번부터
+  await page.goto("/survey");
+  await page.getByRole("button", { name: "처음부터 새로 하기" }).click();
+  await expect(page.getByText("질문 1/16")).toBeVisible();
+  await expect(page.locator("fieldset input:checked")).toHaveCount(0);
   expect(browserErrors).toEqual([]);
 });

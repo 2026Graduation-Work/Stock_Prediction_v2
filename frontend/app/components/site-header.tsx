@@ -16,7 +16,6 @@ interface SiteHeaderProps {
 const NAV_ITEMS = [
   { href: "/", label: "대시보드", page: "dashboard" },
   { href: "/portfolio", label: "보유 종목", page: "portfolio" },
-  { href: "/performance", label: "모델 성적표", page: "performance" },
 ] as const;
 
 export default function SiteHeader({
