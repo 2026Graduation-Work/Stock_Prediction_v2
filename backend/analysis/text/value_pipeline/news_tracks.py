@@ -35,10 +35,12 @@ def _article_text(item: dict[str, Any]) -> str:
 
 
 def _score_relevant(
-    items: list[dict[str, Any]], company_name: str
+    items: list[dict[str, Any]], company_name: str, *, require_finbert: bool = False
 ) -> tuple[list[tuple[dict[str, Any], float]], str]:
     relevant = [items[index] for index in relevant_indices(items, company_name)]
-    scores, backend = sentiment.score_texts([_article_text(item) for item in relevant])
+    scores, backend = sentiment.score_texts(
+        [_article_text(item) for item in relevant], require_finbert=require_finbert
+    )
     return list(zip(relevant, scores, strict=False)), backend
 
 
@@ -77,6 +79,27 @@ def _timeline(
         points.append(point)
         day += timedelta(days=1)
     return points
+
+
+def _window_stats(
+    scored: list[tuple[dict[str, Any], float]], start: datetime, end: datetime
+) -> dict[str, Any]:
+    scores = [score for _, score in scored]
+    publishers = {str(item.get("press") or "") for item, _ in scored if item.get("press")}
+    if scores:
+        mean, std = sentiment.aggregate(scores)
+        status = "ok"
+    else:
+        mean, std, status = None, None, "insufficient_data"
+    return {
+        "start": start.isoformat(),
+        "end": end.isoformat(),
+        "status": status,
+        "sentiment_mean": mean,
+        "sentiment_std": std,
+        "article_count": len(scored),
+        "publisher_count": len(publishers),
+    }
 
 
 def _safe_article(item: dict[str, Any], score: float, ticker: str) -> dict[str, Any]:
@@ -134,14 +157,23 @@ def build_live_track(
     *,
     as_of: datetime | None = None,
     provider_metadata: Mapping[str, Any] | None = None,
+    require_finbert: bool = False,
 ) -> dict[str, Any]:
-    """오늘과 최근 7일 심리지수를 만든다."""
+    """기준시각 직전 24시간의 뉴스 심리지수를 만든다."""
     now = as_of or datetime.now(KST)
     now = now.replace(tzinfo=KST) if now.tzinfo is None else now.astimezone(KST)
+    window_start = now - timedelta(hours=24)
     end = now.date()
-    start = end - timedelta(days=6)
-    scored, backend = _score_relevant(items, company_name)
-    in_window = [pair for pair in scored if (day := _article_date(pair[0])) and start <= day <= end]
+    start = window_start.date()
+    bounded = [
+        item
+        for item in items
+        if (published := _published_datetime(item.get("published_at"))) is not None
+        and window_start <= published <= now
+    ]
+    in_window, backend = _score_relevant(
+        bounded, company_name, require_finbert=require_finbert
+    )
     coverage = _coverage(len(items), in_window, now)
     if provider_metadata:
         coverage.update(
@@ -162,6 +194,7 @@ def build_live_track(
         "backend": backend,
         "status": "partial" if is_partial else ("ok" if in_window else "insufficient_data"),
         "coverage": coverage,
+        "window": _window_stats(in_window, window_start, now),
         "today": _stats(in_window, end, end),
         "recent_7d": _stats(in_window, start, end),
         "timeline": _timeline(in_window, start, end),
