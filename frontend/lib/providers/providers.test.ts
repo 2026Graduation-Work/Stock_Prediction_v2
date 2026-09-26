@@ -285,7 +285,9 @@ test("Supabase에 live만 있어도 과거 감성·재무는 정적 데이터로
   assert.equal(insights.financial?.metrics.length, 6);
   assert.equal(insights.provenance.liveSentiment.source, "NewsAPI.ai · KR-FinBERT");
   assert.equal(insights.provenance.sentiment.source, "BigKinds · KR-FinBERT · 저장된 데이터");
-  assert.deepEqual(marketSentimentView(insights), {
+  const collectedAt = Date.parse("2026-09-26T09:00:00+09:00");
+  assert.equal(marketSentimentView(insights, collectedAt + 73 * 3_600_000)?.basis, "historical");
+  assert.deepEqual(marketSentimentView(insights, collectedAt), {
     basis: "live",
     score: 0.6,
     status: "ok",

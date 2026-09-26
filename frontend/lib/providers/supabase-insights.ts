@@ -61,6 +61,9 @@ const FINANCIAL_LABEL: Record<string, string> = {
   revenue_growth: "매출 증가율(전년 대비)",
 };
 
+// DART fs_div 코드 → 화면 말. 정적 스냅샷(demo-snapshot.ts)은 이미 "연결"·"별도"로 저장돼 있다.
+const STATEMENT_LABEL: Record<string, string> = { CFS: "연결", OFS: "별도" };
+
 const METRIC_KEYS = Object.keys(FINANCIAL_LABEL);
 
 function unwrap(result: QueryResult, table: string): unknown {
@@ -136,7 +139,8 @@ export async function loadSupabaseSentiment(
       date: article_date,
       title,
       press,
-      url,
+      // DB 값이 그대로 href가 되므로 http(s)만 링크로 쓴다.
+      url: url && /^https?:\/\//.test(url) ? url : undefined,
       publishedAt: published_at ?? undefined,
     }));
 
@@ -221,7 +225,7 @@ export async function loadSupabaseFinancial(
   });
   const priceLabel = snapshot.price_as_of ? ` · 주가 ${snapshot.price_as_of} 종가` : "";
   return {
-    period: `${snapshot.fiscal_year} 사업연도 · ${snapshot.statement}재무제표 · 사업보고서 ${snapshot.filed_at} 공시(접수번호 ${snapshot.receipt_no}) · 주식수 ${snapshot.shares_basis}${priceLabel}`,
+    period: `${snapshot.fiscal_year} 사업연도 · ${STATEMENT_LABEL[snapshot.statement] ?? snapshot.statement}재무제표 · 사업보고서 ${snapshot.filed_at} 공시(접수번호 ${snapshot.receipt_no}) · 주식수 ${snapshot.shares_basis}${priceLabel}`,
     metrics,
     asOf: snapshot.as_of,
   };

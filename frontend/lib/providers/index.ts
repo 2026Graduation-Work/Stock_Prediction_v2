@@ -286,7 +286,7 @@ export async function loadStockInsights(
           ? {
               kind: "real",
               source: remoteSentiment.historical
-                ? "BigKinds · KR-FinBERT · 연결 데이터"
+                ? "BigKinds · KR-FinBERT · DB 조회"
                 : sentiment.provider && sentiment.backend
                   ? `${sentiment.provider === "bigkinds" ? "BigKinds" : "NewsAPI.ai"} · ${sentiment.backend === "kr-finbert" ? "KR-FinBERT" : sentiment.backend}`
                     + " · 저장된 데이터"
@@ -306,7 +306,7 @@ export async function loadStockInsights(
         ? {
             kind: "real",
             source: remoteFinancial
-              ? `${FINANCIAL_SOURCE} · 연결 데이터`
+              ? `${FINANCIAL_SOURCE} · DB 조회`
               : `${FINANCIAL_SOURCE} · 저장된 데이터`,
             asOf: remoteFinancial?.asOf ?? SNAPSHOT_AS_OF,
           }
@@ -325,8 +325,15 @@ export interface MarketSentimentView {
   headlines: Headline[];
 }
 
-export function marketSentimentView(insights: StockInsights): MarketSentimentView | null {
-  if (insights.liveSentiment) {
+// 수집은 평일 09시 1회라 금요일분이 월요일 09시까지 최신이다(72시간). 그보다 오래되면 "최근 24시간"이라 부르지 않는다.
+const LIVE_MAX_AGE_MS = 72 * 3_600_000;
+
+export function marketSentimentView(
+  insights: StockInsights,
+  now: number = Date.now(),
+): MarketSentimentView | null {
+  const liveAge = insights.liveSentiment ? now - Date.parse(insights.liveSentiment.asOf) : Infinity;
+  if (insights.liveSentiment && liveAge <= LIVE_MAX_AGE_MS) {
     const live = insights.liveSentiment;
     return {
       basis: "live",
