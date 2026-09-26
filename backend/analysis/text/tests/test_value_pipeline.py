@@ -22,6 +22,7 @@ from analysis.text.value_pipeline import llm as llm_mod
 from analysis.text.value_pipeline import metrics as metrics_mod
 from analysis.text.value_pipeline import run as run_mod
 from analysis.text.value_pipeline import schema as schema_mod
+from analysis.text.value_pipeline import sentiment as sentiment_mod
 from analysis.text.value_pipeline import staleness as staleness_mod
 
 
@@ -64,6 +65,36 @@ def _patch_collectors(monkeypatch: pytest.MonkeyPatch, news: list, fin: dict) ->
     monkeypatch.setattr(
         graph_mod.collectors, "collect_financials", lambda t, d: (fin, "dart")
     )
+
+
+def test_finbert_batch_scores_all_texts_in_one_call_and_preserves_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: list[tuple[list[str], int]] = []
+
+    def classifier(texts: list[str], *, batch_size: int):
+        calls.append((texts, batch_size))
+        return [
+            [{"label": "positive", "score": 0.8}, {"label": "negative", "score": 0.2}],
+            [{"label": "positive", "score": 0.1}, {"label": "negative", "score": 0.7}],
+        ]
+
+    monkeypatch.setattr(sentiment_mod, "_load_finbert", lambda: classifier)
+
+    scores, backend = sentiment_mod.score_texts(["첫 기사", "둘째 기사"])
+
+    assert calls == [(["첫 기사", "둘째 기사"], 16)]
+    assert scores == pytest.approx([0.6, -0.6])
+    assert backend == "kr-finbert"
+
+
+def test_require_finbert_raises_instead_of_using_lexicon(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(sentiment_mod, "_load_finbert", lambda: None)
+
+    with pytest.raises(sentiment_mod.SentimentBackendError, match="KR-FinBERT"):
+        sentiment_mod.score_texts(["상승 호재"], require_finbert=True)
 
 
 # ── Point-in-time 뉴스 로더 ────────────────────────────────────────
