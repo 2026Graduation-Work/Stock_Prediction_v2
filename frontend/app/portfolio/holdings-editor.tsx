@@ -4,6 +4,7 @@ import { useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "../components/disclaimer-footer";
 import SiteHeader from "../components/site-header";
+import { WatchlistEditor } from "../components/stock-marks";
 import { useOnboarding } from "../components/onboarding-provider";
 import { useStockOptions } from "./use-stock-options";
 import {
@@ -234,6 +235,8 @@ export default function HoldingsEditor({
             {supabaseMode ? "내 계정에 저장돼요" : "데모 계정이라 이 브라우저에만 저장돼요"}
           </span>
         </div>
+
+        <WatchlistEditor />
       </main>
 
       {/* 종목 추가 시트 — 네이티브 dialog라 포커스 가두기·Esc 닫기를 브라우저가 맡는다 */}
