@@ -19,7 +19,15 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { FINANCIAL_TERM, TERM } from "@/lib/copy-glossary";
+import {
+  BIAS_MODE_WORD,
+  CHECKPOINT_RULE,
+  FINANCIAL_TERM,
+  PSYCHOLOGY_RULE,
+  STYLE_TYPE_RULE,
+  STYLE_TYPE_SOURCE,
+  TERM,
+} from "@/lib/copy-glossary";
 import { STYLE_AXIS_IDS } from "@/lib/profiling-rules";
 import {
   BIT_LABEL,
@@ -62,11 +70,6 @@ const AXIS_META: Record<StyleAxisId, { name: string; negative: string; positive:
   urgency: { name: "기회를 대하는 태도", negative: "여유", positive: "조급함" },
   drawdown_reaction: { name: "하락에 대한 반응", negative: "하락 시 유지", positive: "하락 시 이탈" },
 };
-
-const BIAS_MODE_LABEL = {
-  emotional: "감정적 편향이 두드러지는 구간",
-  cognitive: "인지적 편향이 두드러지는 구간",
-} as const;
 
 // 8축 진단 결과가 없을 때의 순서
 const DEFAULT_CARD_ORDER: readonly CardId[] = [
@@ -663,7 +666,7 @@ function ContributionPanel({
 }
 
 // ── 계산 근거 (더 알아보기 안) ────────────────────────────────
-// 개발 용어(BIT·composite·능동성 등)는 이 영역에서만 쓴다.
+// 한 줄에 무엇을 · 어떤 자료로 · 어떻게 계산했나 · 이번 값을 쉬운 말로 쓴다(copy-glossary.ts).
 
 export function CalculationBasis({
   demo,
@@ -677,40 +680,37 @@ export function CalculationBasis({
   holdings: HoldingWeight[];
 }) {
   const { bit, styleAxes } = demo;
-  const order = bit?.cardOrder ?? DEFAULT_CARD_ORDER;
   const market = toNudgeMarket(detail, insights, holdings);
   const nudges = bit && market ? selectNudges(bit, market) : [];
   if (!bit || !styleAxes) {
-    return <p className="m-0 text-sm text-muted">8축 성향 진단 결과가 없어 기본 순서로 보여 줘요.</p>;
+    return <p className="m-0 text-sm text-muted">성향 진단 결과가 없어 기본 순서로 보여 줘요.</p>;
   }
-  // copy-rules:계산근거 시작
+  const tabs = [...new Set(bit.cardOrder.map((id) => CARD_TO_TAB[id]).filter((id): id is TabId => Boolean(id)))];
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-start">
-      <div className="flex min-w-0 flex-1 flex-col gap-2 text-sm text-body">
-        <p className="m-0">
-          유형: <strong className="font-semibold text-ink">{BIT_LABEL[bit.type]}</strong> · {BIAS_MODE_LABEL[bit.biasMode]}
-        </p>
-        <p className="m-0 tabular-nums">
-          composite {signed(bit.composite)} = (능동성 {signed(bit.activeness)} + 위험감수 {signed(bit.riskTaking)}) ÷ 2 · 분류 신뢰도{" "}
-          {Math.round(bit.confidence * 100)}%
-        </p>
-        <p className="m-0">탭 순서(카드 순서): {order.join(" → ")}</p>
+      <ul className="m-0 flex min-w-0 flex-1 list-none flex-col gap-2.5 p-0 text-sm text-body">
+        <li className="tabular-nums">
+          <strong className="font-semibold text-ink">투자 유형 {BIT_LABEL[bit.type]}</strong>: {STYLE_TYPE_RULE} 이번 값{" "}
+          {signed(bit.composite)}({BIAS_MODE_WORD[bit.biasMode]}), 답끼리 맞는 정도 {Math.round(bit.confidence * 100)}%.
+        </li>
+        <li>
+          <strong className="font-semibold text-ink">판단 근거 탭 순서</strong>: {BIT_LABEL[bit.type]}이 먼저 보면 좋은 것부터 놓았어요.
+          이번 순서 {tabs.map((id) => TAB_META[id].label).join(" → ")}.
+        </li>
         {insights.psychology && (
-          <p className="m-0 tabular-nums">
-            가격 흐름 분위기 psych_greed_fear_axis {signed(insights.psychology.axis)} = (fear_greed + disposition) ÷ 2 · -1
-            움츠러듦 ~ +1 들뜸 (psychology_market_v1)
-          </p>
+          <li className="tabular-nums">
+            <strong className="font-semibold text-ink">가격 흐름 분위기</strong>: {PSYCHOLOGY_RULE} -1은 움츠러듦, +1은 들뜸. 이번 값{" "}
+            {signed(insights.psychology.axis)}({insights.psychology.word}).
+          </li>
         )}
         {nudges.map((nudge) => (
-          <p key={nudge.id} className="m-0 tabular-nums">
-            {nudge.id} 근거 축 {AXIS_META[nudge.axis].name}({nudge.axis}) {signed(nudge.ratio)} · -1{" "}
-            {AXIS_META[nudge.axis].negative} ↔ +1 {AXIS_META[nudge.axis].positive}
-          </p>
+          <li key={nudge.id} className="tabular-nums">
+            <strong className="font-semibold text-ink">체크포인트가 뜬 이유</strong>: 설문의 &lsquo;{AXIS_META[nudge.axis].name}&rsquo;
+            답이 {signed(nudge.ratio)}(-1 {AXIS_META[nudge.axis].negative} ~ +1 {AXIS_META[nudge.axis].positive})예요. {CHECKPOINT_RULE}
+          </li>
         ))}
-        <p className="m-0 text-xs text-muted">
-          Pompian 행동투자자 유형(BIT)에서 착안한 근사 분류예요. 넛지 판정 규칙: lib/profiling/nudges.ts
-        </p>
-      </div>
+        <li className="text-xs text-muted">{STYLE_TYPE_SOURCE}</li>
+      </ul>
       <div className="flex-none self-center">
         <RadarChart
           width={280}
@@ -722,15 +722,14 @@ export function CalculationBasis({
           outerRadius={72}
         >
           <PolarGrid stroke={CHART.line} />
-          <PolarAngleAxis dataKey="axis" tick={{ fill: CHART.muted, fontSize: 11 }} />
+          <PolarAngleAxis dataKey="axis" tick={{ fill: CHART.muted, fontSize: 13 }} />
           <PolarRadiusAxis domain={[-1, 1]} tick={false} axisLine={false} />
           <Radar dataKey="ratio" stroke={CHART.accent} fill={CHART.accent} fillOpacity={0.25} isAnimationActive={false} />
         </RadarChart>
-        <span className="block text-center text-2xs text-muted">바깥쪽 = 축의 +1 방향 · 중심 = -1</span>
+        <span className="block text-center text-2xs text-muted">바깥으로 갈수록 그 항목 쪽으로 강해요</span>
       </div>
     </div>
   );
-  // copy-rules:계산근거 끝
 }
 
 // 데이터 출처 전체 — 섹션마다 한 줄로 둔 출처를 한곳에 모은다.
