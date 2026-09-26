@@ -52,8 +52,8 @@ def _api_response() -> dict:
     }
 
 
-def test_fetch_articles_batches_keywords_into_one_korean_request() -> None:
-    """종목마다 호출하는 회귀를 막고 한 번의 한국어 OR 검색으로 묶는다."""
+def test_fetch_articles_encodes_korean_keyword_request() -> None:
+    """공급자 어댑터가 받은 키워드를 한국어 뉴스 검색 조건으로 전달한다."""
     session = _FakeSession(_api_response())
 
     rows = newsapi_ai.fetch_articles(

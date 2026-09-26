@@ -11,7 +11,7 @@
 ## 입력 데이터
 
 - 과거 뉴스 — 빅카인즈 수동 다운로드 엑셀(`data/<종목코드>/{회사명}_{YYYYMMDD}-{YYYYMMDD}.xlsx`)
-- 최근 뉴스 — NewsAPI.ai 한국어 기사(`NEWSAPI_AI_KEY` 필수). 여러 종목을 1회 OR 검색으로 묶음
+- 최근 뉴스 — NewsAPI.ai 한국어 기사(`NEWSAPI_AI_KEY` 필수). 종목별 최대 100건을 각각 조회
 - 재무제표 — DART OpenAPI (`DART_API_KEY` 필수)
 - profiling 블록의 사용자 컨텍스트 JSON
 
@@ -47,12 +47,14 @@
 사용자가 현재 판단을 재점검하는 근거이다.
 
 - `historical`: BigKinds 과거 기사 → 일별 평균 감성·의견 분산·기사 수 추이
-- `live`: NewsAPI.ai 최근 7일 → KST 기준 오늘/최근 7일 감성·최신 기사 시각·지연 분
+- `live`: NewsAPI.ai → KST 기준 직전 24시간 감성·최신 기사 시각·지연 분
 
 `.env`:
 
 ```dotenv
-NEWSAPI_AI_KEY=...
+NEWSAPI_AI_KEY=
+SUPABASE_URL=
+SUPABASE_SECRET_KEY=
 ```
 
 과거 트랙 생성:
@@ -63,30 +65,56 @@ python -m value_pipeline.news_run historical \
   --target 005930:삼성전자 --start 2022-01-01 --end 2022-12-31
 ```
 
-최근 뉴스를 즉시 1회 수집(종목 수와 무관하게 API 1회):
+최근 뉴스를 파일로 즉시 1회 수집(종목별 API 1회):
 
 ```bash
 python -m value_pipeline.news_run live \
-  --target 005930:삼성전자 --target 000660:SK하이닉스
+  --target 005930:삼성전자 --target 035720:카카오
 ```
 
-1시간 주기 갱신:
+Supabase에 네 종목 최근 뉴스를 수집·분석·적재(KR-FinBERT 필수):
 
 ```bash
-python -m value_pipeline.news_run live \
-  --target 005930:삼성전자 --target 000660:SK하이닉스 \
-  --watch --interval-minutes 60
+python -m value_pipeline.supabase_sync live
 ```
 
-`live`는 보도 시각과 API 색인 지연이 있는 **1시간 갱신형(near-real-time)**이지,
-틱 단위 실시간은 아니다. 산출 JSON은 기사 본문을 저장하지 않고 `news_id`, 제목,
+특정 종목만 시험하려면 `--target 005930:삼성전자`를 반복해서 지정한다. `live`는
+보도 시각과 API 색인 지연이 있는 **일 단위 뉴스 분석**이지 틱 단위 실시간은 아니다.
+산출 JSON과 DB는 기사 본문을 저장하지 않고 `news_id`, 제목,
 언론사, URL, 시각, 사건 ID, 감성 결과만 보존한다. 기본 출력 위치는
 `out/news_tracks/`이다.
 
-여러 종목 OR 검색은 호출당 최신 100건까지만 받는다. 전체 검색 결과가 이를 넘으면
+각 종목 검색은 호출당 최신 100건까지만 받는다. 전체 검색 결과가 이를 넘으면
 `status=partial`, `coverage.provider_truncated=true`와 공급자 전체·반환 건수를 함께
 기록한다. 따라서 이 값은 수집 범위를 숨긴 완전한 시장 전수조사가 아니라, 표시된
 커버리지 안에서의 뉴스 분위기이다.
+
+과거 뉴스와 DART JSON을 Supabase에 최초 적재하거나 다시 upsert할 때:
+
+```bash
+python -m value_pipeline.supabase_sync backfill-news \
+  ../../../frontend/lib/providers/sentiment-005380.json
+python -m value_pipeline.supabase_sync backfill-financial \
+  value_pipeline/output_sample/financial_tracks/*_financial.json
+```
+
+동일 파일을 다시 실행해도 migration 0005의 고유키로 upsert되어 중복 행이 생기지
+않는다. 한 종목/파일이 실패해도 나머지는 처리하지만 명령은 종료 코드 1을 반환한다.
+오류 실행이나 관련 기사 0건은 기존 정상 뉴스 track을 덮어쓰지 않는다.
+
+### GitHub Actions 자동 적재
+
+저장소 관리자가 GitHub의 **Settings → Secrets and variables → Actions**에서 다음
+Repository secret 세 개를 직접 등록한다. 값은 채팅·이슈·커밋에 남기지 않는다.
+
+- `NEWSAPI_AI_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
+
+workflow 이름은 `News Supabase Sync`다. 평일 09:00 KST에 실행되며, Secret 등록 후
+cron을 기다리기 전에 Actions 화면의 **Run workflow**로 한 번 수동 실행한다. 로그의
+네 종목이 모두 `ok`인지와 Supabase의 뉴스 세 테이블 행을 확인한 뒤 자동 실행을
+유지한다.
 
 ## DART 재무 적재용 JSON
 

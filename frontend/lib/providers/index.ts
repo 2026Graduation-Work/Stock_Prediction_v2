@@ -2,6 +2,7 @@
 // 시세·수급·재무·감성은 데모 4종목, 모델 기여도 픽스처는 삼성전자·현대차를 지원한다.
 
 import type { NudgeMarket } from "../profiling/nudges";
+import { getSupabaseClient } from "../supabase.ts";
 import type { DataProvenance, PortfolioHolding, RiskGrade, StockDetail } from "../types";
 import {
   CONTRIBUTION_FIXTURE,
@@ -21,6 +22,13 @@ import {
   SUPPLY_PROVENANCE,
   SUPPLY_SNAPSHOT,
 } from "./demo-snapshot.ts";
+import {
+  loadSupabaseFinancial,
+  loadSupabaseSentiment,
+  type InsightQueryClient,
+  type LiveSentimentSummary,
+  type SupabaseSentimentResult,
+} from "./supabase-insights.ts";
 
 // 순매수 수량(주). + 순매수, - 순매도. 날짜 오름차순. 기타법인은 원천(네이버 금융)에 없어 뺐다.
 export interface SupplyDemandDay {
@@ -40,6 +48,8 @@ export interface Headline {
   date: string;
   title: string;
   press: string;
+  url?: string;
+  publishedAt?: string;
 }
 // 생성 파일(sentiment-fixture.ts)이 쓰는 형태. 생성 스크립트와 맞춰야 한다.
 export interface SentimentSeries {
@@ -149,6 +159,7 @@ export interface FinancialMetric {
 export interface FinancialSnapshot {
   period: string;
   metrics: FinancialMetric[];
+  asOf?: string;
 }
 
 const FINANCIAL_LABEL: Record<string, string> = {
@@ -209,20 +220,50 @@ export interface StockInsights {
   psychology: PsychologyLine | null;
   supply: SupplyDemandDay[] | null;
   sentiment: SentimentData | null;
+  liveSentiment: LiveSentimentSummary | null;
   contributions: ContributionSignal[] | null;
   financial: FinancialSnapshot | null;
-  provenance: Record<"supply" | "sentiment" | "contributions" | "financial", DataProvenance>;
+  provenance: Record<
+    "supply" | "sentiment" | "liveSentiment" | "contributions" | "financial",
+    DataProvenance
+  >;
 }
 
 const FIXTURE: DataProvenance = { kind: "fixture", source: "픽스처" };
 
-export async function loadStockInsights(code: string): Promise<StockInsights> {
-  const [supply, sentiment, contributions, financial] = await Promise.all([
+export async function loadStockInsights(
+  code: string,
+  queryClient: InsightQueryClient | null = getSupabaseClient(),
+): Promise<StockInsights> {
+  const [supply, fallbackSentiment, contributions, fallbackFinancial] = await Promise.all([
     supplyDemandProvider(code),
     sentimentProvider(code),
     contributionProvider(code),
     financialProvider(code),
   ]);
+  const emptySentiment: SupabaseSentimentResult = {
+    historical: null,
+    live: null,
+    headlines: [],
+  };
+  const [remoteSentiment, remoteFinancial] = queryClient
+    ? await Promise.all([
+        loadSupabaseSentiment(code, queryClient).catch(() => emptySentiment),
+        loadSupabaseFinancial(code, queryClient).catch(() => null),
+      ])
+    : [emptySentiment, null];
+  const historical = remoteSentiment.historical ?? fallbackSentiment;
+  const sentiment = historical
+    ? {
+        ...historical,
+        headlines: remoteSentiment.live
+          ? remoteSentiment.headlines
+          : remoteSentiment.headlines.length
+            ? remoteSentiment.headlines
+            : historical.headlines,
+      }
+    : null;
+  const financial = remoteFinancial ?? fallbackFinancial;
   const psychology = STOCK_SNAPSHOT[code]?.psychology;
   return {
     psychology: psychology
@@ -235,6 +276,7 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
       : null,
     supply,
     sentiment,
+    liveSentiment: remoteSentiment.live,
     contributions,
     financial,
     provenance: {
@@ -243,16 +285,76 @@ export async function loadStockInsights(code: string): Promise<StockInsights> {
         sentiment?.source === "real"
           ? {
               kind: "real",
-              source:
-                sentiment.provider && sentiment.backend
+              source: remoteSentiment.historical
+                ? "BigKinds · KR-FinBERT · DB 조회"
+                : sentiment.provider && sentiment.backend
                   ? `${sentiment.provider === "bigkinds" ? "BigKinds" : "NewsAPI.ai"} · ${sentiment.backend === "kr-finbert" ? "KR-FinBERT" : sentiment.backend}`
-                  : "BigKinds · KR-FinBERT",
+                    + " · 저장된 데이터"
+                  : "BigKinds · KR-FinBERT · 저장된 데이터",
               asOf: sentiment.asOf?.slice(0, 10) ?? sentiment.days.at(-1)?.date,
             }
           : FIXTURE,
+      liveSentiment: remoteSentiment.live
+        ? {
+            kind: "real",
+            source: "NewsAPI.ai · KR-FinBERT",
+            asOf: remoteSentiment.live.asOf,
+          }
+        : FIXTURE,
       contributions: FIXTURE,
-      financial: financial ? { kind: "real", source: FINANCIAL_SOURCE, asOf: SNAPSHOT_AS_OF } : FIXTURE,
+      financial: financial
+        ? {
+            kind: "real",
+            source: remoteFinancial
+              ? `${FINANCIAL_SOURCE} · DB 조회`
+              : `${FINANCIAL_SOURCE} · 저장된 데이터`,
+            asOf: remoteFinancial?.asOf ?? SNAPSHOT_AS_OF,
+          }
+        : FIXTURE,
     },
+  };
+}
+
+export interface MarketSentimentView {
+  basis: "live" | "historical";
+  score: number;
+  status: NewsTrackStatus;
+  asOf: string;
+  articleCount: number;
+  publisherCount: number;
+  headlines: Headline[];
+}
+
+// 수집은 평일 09시 1회라 금요일분이 월요일 09시까지 최신이다(72시간). 그보다 오래되면 "최근 24시간"이라 부르지 않는다.
+const LIVE_MAX_AGE_MS = 72 * 3_600_000;
+
+export function marketSentimentView(
+  insights: StockInsights,
+  now: number = Date.now(),
+): MarketSentimentView | null {
+  const liveAge = insights.liveSentiment ? now - Date.parse(insights.liveSentiment.asOf) : Infinity;
+  if (insights.liveSentiment && liveAge <= LIVE_MAX_AGE_MS) {
+    const live = insights.liveSentiment;
+    return {
+      basis: "live",
+      score: live.score,
+      status: live.status,
+      asOf: live.asOf,
+      articleCount: live.articleCount,
+      publisherCount: live.publisherCount,
+      headlines: insights.sentiment?.headlines.slice(0, 3) ?? [],
+    };
+  }
+  const latest = insights.sentiment?.days.at(-1);
+  if (!latest) return null;
+  return {
+    basis: "historical",
+    score: latest.score,
+    status: insights.sentiment?.status ?? "ok",
+    asOf: insights.sentiment?.asOf ?? latest.date,
+    articleCount: latest.articleCount,
+    publisherCount: insights.sentiment?.coverage?.publisher_count ?? 0,
+    headlines: insights.sentiment?.headlines.slice(0, 3) ?? [],
   };
 }
 

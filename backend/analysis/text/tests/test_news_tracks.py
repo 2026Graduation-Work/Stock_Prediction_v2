@@ -46,7 +46,9 @@ def _articles() -> list[dict]:
     ]
 
 
-def _fixed_scores(texts: list[str]) -> tuple[list[float], str]:
+def _fixed_scores(
+    texts: list[str], *, require_finbert: bool = False, batch_size: int = 16
+) -> tuple[list[float], str]:
     scores = []
     for text in texts:
         scores.append(0.8 if "개선" in text else -0.2)
@@ -166,29 +168,123 @@ class _CountingFetcher:
         )
 
 
-def test_live_cycle_fetches_once_for_multiple_targets(
+def test_live_cycle_fetches_once_per_stock_with_no_combined_query(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """한 시간 주기마다 종목 수만큼 토큰을 쓰는 회귀를 막는다."""
+    """인기 종목이 다른 종목의 100건을 잠식하지 않도록 검색을 분리한다."""
     monkeypatch.setattr(news_tracks.sentiment, "score_texts", _fixed_scores)
     fetcher = _CountingFetcher()
 
     outputs = news_run.run_live_cycle(
-        {"005930": "삼성전자", "000660": "SK하이닉스"},
+        {
+            "005930": "삼성전자",
+            "005380": "현대차",
+            "035720": "카카오",
+            "068270": "셀트리온",
+        },
         fetcher=fetcher,
         as_of=datetime(2026, 9, 18, 12, 0, tzinfo=KST),
     )
 
-    assert len(fetcher.calls) == 1
-    assert fetcher.calls[0]["keywords"] == ["삼성전자", "SK하이닉스"]
-    assert fetcher.calls[0]["date_start"] == "2026-09-11"
-    assert fetcher.calls[0]["date_end"] == "2026-09-18"
-    assert set(outputs) == {"005930", "000660"}
-    assert outputs["005930"]["coverage"]["relevant_count"] == 2
-    assert outputs["000660"]["coverage"]["relevant_count"] == 1
+    assert [call["keywords"] for call in fetcher.calls] == [
+        ["삼성전자"],
+        ["현대차"],
+        ["카카오"],
+        ["셀트리온"],
+    ]
+    assert all(call["page_size"] == 100 for call in fetcher.calls)
+    assert all(call["date_start"] == "2026-09-16" for call in fetcher.calls)
+    assert all(call["date_end"] == "2026-09-18" for call in fetcher.calls)
+    assert set(outputs) == {"005930", "005380", "035720", "068270"}
     assert outputs["005930"]["coverage"]["provider_total_results"] == 150
     assert outputs["005930"]["coverage"]["provider_truncated"] is True
     assert outputs["005930"]["status"] == "partial"
+
+
+def test_live_track_uses_exact_preceding_24_hours_and_scores_all_remaining(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    as_of = datetime(2026, 9, 18, 12, 0, tzinfo=KST)
+    captured: list[str] = []
+
+    def capture_scores(texts: list[str], **kwargs) -> tuple[list[float], str]:
+        captured.extend(texts)
+        return [0.25] * len(texts), "kr-finbert"
+
+    monkeypatch.setattr(news_tracks.sentiment, "score_texts", capture_scores)
+    articles = [
+        {
+            "news_id": "boundary",
+            "title": "삼성전자 경계 기사",
+            "summary": "정확히 24시간 전",
+            "press": "A",
+            "published_at": "2026-09-17T12:00:00+09:00",
+        },
+        {
+            "news_id": "newest",
+            "title": "삼성전자 최신 기사",
+            "summary": "기준 시각",
+            "press": "B",
+            "published_at": "2026-09-18T12:00:00+09:00",
+        },
+        {
+            "news_id": "too-old",
+            "title": "삼성전자 오래된 기사",
+            "summary": "경계보다 1초 전",
+            "press": "C",
+            "published_at": "2026-09-17T11:59:59+09:00",
+        },
+    ]
+
+    out = news_tracks.build_live_track(articles, "005930", "삼성전자", as_of=as_of)
+
+    assert len(captured) == 2
+    assert out["window"] == {
+        "start": "2026-09-17T12:00:00+09:00",
+        "end": "2026-09-18T12:00:00+09:00",
+        "status": "ok",
+        "sentiment_mean": 0.25,
+        "sentiment_std": 0.0,
+        "article_count": 2,
+        "publisher_count": 2,
+    }
+    assert [article["news_id"] for article in out["articles"]] == ["boundary", "newest"]
+    _assert_no_raw_text_fields(out)
+
+
+def test_live_track_marks_truncated_provider_sample_partial(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(news_tracks.sentiment, "score_texts", _fixed_scores)
+
+    out = news_tracks.build_live_track(
+        _articles(),
+        "005930",
+        "삼성전자",
+        as_of=datetime(2026, 9, 18, 12, 0, tzinfo=KST),
+        provider_metadata={
+            "total_results": 101,
+            "returned_count": 100,
+            "pages": 2,
+            "truncated": True,
+        },
+    )
+
+    assert out["status"] == "partial"
+    assert {
+        key: out["coverage"][key]
+        for key in (
+            "provider_total_results",
+            "provider_returned_count",
+            "provider_pages",
+            "provider_truncated",
+        )
+    } == {
+        "provider_total_results": 101,
+        "provider_returned_count": 100,
+        "provider_pages": 2,
+        "provider_truncated": True,
+    }
 
 
 def test_live_track_groups_utc_boundary_by_kst_date(

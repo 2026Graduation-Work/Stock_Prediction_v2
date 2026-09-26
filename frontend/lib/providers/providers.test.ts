@@ -11,6 +11,7 @@ import {
   contributionProvider,
   financialProvider,
   loadStockInsights,
+  marketSentimentView,
   sentimentProvider,
   supplyDemandProvider,
   toNudgeMarket,
@@ -101,7 +102,7 @@ test("출처: 감성은 데모 4종목 실데이터, 모델 근거는 픽스처"
   const samsung = await loadStockInsights("005930");
   assert.deepEqual(samsung.provenance.sentiment, {
     kind: "real",
-    source: "BigKinds · KR-FinBERT",
+    source: "BigKinds · KR-FinBERT · 저장된 데이터",
     asOf: samsung.sentiment?.days.at(-1)?.date,
   });
   for (const key of ["contributions"] as const) {
@@ -110,6 +111,7 @@ test("출처: 감성은 데모 4종목 실데이터, 모델 근거는 픽스처"
   for (const code of ["005380", "035720", "068270"]) {
     const insights = await loadStockInsights(code);
     assert.equal(insights.provenance.sentiment.kind, "real", code);
+    assert.match(insights.provenance.sentiment.source, /저장된 데이터/, code);
     assert.equal(insights.provenance.sentiment.asOf, insights.sentiment?.days.at(-1)?.date, code);
   }
 });
@@ -141,7 +143,11 @@ test("재무: 데모 4종목은 기준일 전에 공시된 FY2024 사업보고�
   for (const code of ["005930", "005380", "035720", "068270"]) {
     const { financial, provenance } = await loadStockInsights(code);
     assert.ok(financial, code);
-    assert.deepEqual(provenance.financial, { kind: "real", source: "DART 사업보고서", asOf: "2025-12-30" });
+    assert.deepEqual(provenance.financial, {
+      kind: "real",
+      source: "DART 사업보고서 · 저장된 데이터",
+      asOf: "2025-12-30",
+    });
     assert.match(financial.period, /^2024 사업연도 · 연결재무제표 · 사업보고서 2025-0[1-9]-\d{2} 공시/);
     const filedAt = financial.period.match(/사업보고서 (\d{4}-\d{2}-\d{2}) 공시/)?.[1] ?? "";
     assert.ok(filedAt <= "2025-12-30", `${code} 공시일 ${filedAt}`);
@@ -200,3 +206,94 @@ test("김민지 + 삼성전자: information_reliance를 0.3으로 올리면 수�
 // N04(변동성 백분위 0.48)·N05(3개월 고점 대비, 실데이터 시세)는 시장 조건이 거짓이라 발화하지 않는다.
 // sentiment-fixture.ts가 다시 생성되면 재확인한다.
 const EXPECTED_MINJI_SAMSUNG: string[] = ["N07"];
+
+type SupabaseResponse = { data: unknown; error: { message: string } | null };
+
+class StaticSupabaseQuery implements PromiseLike<SupabaseResponse> {
+  private readonly response: SupabaseResponse;
+
+  constructor(response: SupabaseResponse) { this.response = response; }
+  select() { return this; }
+  eq() { return this; }
+  not() { return this; }
+  order() { return this; }
+  limit() { return this; }
+  maybeSingle() { return Promise.resolve(this.response); }
+  then<TResult1 = SupabaseResponse, TResult2 = never>(
+    onfulfilled?: ((value: SupabaseResponse) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ): PromiseLike<TResult1 | TResult2> {
+    return Promise.resolve(this.response).then(onfulfilled, onrejected);
+  }
+}
+
+class StaticSupabaseClient {
+  private readonly responses: Record<string, SupabaseResponse[]>;
+
+  constructor(responses: Record<string, SupabaseResponse[]>) { this.responses = responses; }
+  from(table: string) {
+    return new StaticSupabaseQuery(
+      this.responses[table]?.shift() ?? { data: [], error: null },
+    );
+  }
+}
+
+test("Supabase에 live만 있어도 과거 감성·재무는 정적 데이터로 각각 폴백한다", async () => {
+  const live = {
+    track: "live",
+    source: "newsapi_ai",
+    backend: "kr-finbert",
+    status: "ok",
+    as_of: "2026-09-26T09:00:00+09:00",
+    window_start: "2026-09-25",
+    window_end: "2026-09-26",
+    sentiment_mean: 0.6,
+    sentiment_std: 0.1,
+    article_count: 8,
+    publisher_count: 3,
+    fetched_count: 25,
+    relevant_count: 8,
+    newest_published_at: "2026-09-26T08:30:00+09:00",
+    lag_minutes: 30,
+    provider_total_results: 25,
+    provider_returned_count: 25,
+    provider_pages: 1,
+    provider_truncated: false,
+  };
+  const client = new StaticSupabaseClient({
+    news_sentiment_tracks: [{ data: [live], error: null }],
+    news_sentiment_daily: [{ data: [], error: null }],
+    news_articles: [{
+      data: Array.from({ length: 4 }, (_, index) => ({
+        news_id: `n${index}`,
+        title: `대표 기사 ${index}`,
+        press: "언론사",
+        url: `https://example.com/${index}`,
+        article_date: "2026-09-26",
+        published_at: `2026-09-26T0${8 - index}:30:00+09:00`,
+      })),
+      error: null,
+    }],
+    financial_snapshots: [{ data: null, error: null }],
+  });
+
+  const insights = await loadStockInsights("005930", client as never);
+
+  assert.equal(insights.sentiment?.days.length, 20);
+  assert.equal(insights.liveSentiment?.score, 0.6);
+  assert.equal(insights.sentiment?.headlines.length, 3);
+  assert.equal(insights.financial?.metrics.length, 6);
+  assert.equal(insights.provenance.liveSentiment.source, "NewsAPI.ai · KR-FinBERT");
+  assert.equal(insights.provenance.sentiment.source, "BigKinds · KR-FinBERT · 저장된 데이터");
+  const collectedAt = Date.parse("2026-09-26T09:00:00+09:00");
+  assert.equal(marketSentimentView(insights, collectedAt + 73 * 3_600_000)?.basis, "historical");
+  assert.deepEqual(marketSentimentView(insights, collectedAt), {
+    basis: "live",
+    score: 0.6,
+    status: "ok",
+    asOf: "2026-09-26T09:00:00+09:00",
+    articleCount: 8,
+    publisherCount: 3,
+    headlines: insights.sentiment?.headlines,
+  });
+});

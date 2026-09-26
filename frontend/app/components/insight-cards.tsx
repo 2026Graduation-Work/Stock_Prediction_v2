@@ -33,6 +33,7 @@ import {
 import { SCREEN_GUIDE_NOTICE, selectNudges } from "@/lib/profiling/nudges";
 import {
   combinedProvenance,
+  marketSentimentView,
   periodsOverlap,
   pricePeriod,
   riskSnapshot,
@@ -355,17 +356,18 @@ function Conclusion({ children }: { children: ReactNode }) {
 
 function MarketPanel({ detail, insights }: { detail: StockDetail; insights: StockInsights }) {
   const { sentiment, provenance, psychology } = insights;
+  const sentimentView = marketSentimentView(insights);
   const risk = riskSnapshot(detail);
   const prices = pricePeriod(detail);
   const sentimentDates = sentiment ? sentimentPeriod(sentiment) : null;
   const periodMismatch = Boolean(prices && sentimentDates && !periodsOverlap(prices, sentimentDates));
-  const latest = sentiment?.days.at(-1);
 
   return (
     <>
-      {latest ? (
+      {sentimentView ? (
         <Conclusion>
-          최근 {TERM.sentiment}는 <strong className="font-semibold">{moodWord(latest.score)}</strong>이에요.
+          {sentimentView.basis === "live" ? "최근 24시간" : "과거"} {TERM.sentiment}는{" "}
+          <strong className="font-semibold">{moodWord(sentimentView.score)}</strong>이에요.
         </Conclusion>
       ) : risk ? (
         <Conclusion>
@@ -374,6 +376,17 @@ function MarketPanel({ detail, insights }: { detail: StockDetail; insights: Stoc
       ) : !psychology ? (
         <Unavailable>이 종목은 분위기를 볼 데이터가 아직 없어요.</Unavailable>
       ) : null}
+      {sentimentView?.basis === "live" && (
+        <p className="m-0 text-xs text-muted tabular-nums">
+          기준시각 {sentimentView.asOf.slice(0, 16).replace("T", " ")} · 직전 24시간 · 관련 기사{" "}
+          {sentimentView.articleCount}건 · 언론사 {sentimentView.publisherCount}곳
+        </p>
+      )}
+      {sentimentView?.status === "partial" && (
+        <p data-coverage-notice className="m-0 text-xs text-body">
+          수집 범위 일부 · 공급자 결과가 100건을 넘어 확인된 기사 범위로 계산했어요.
+        </p>
+      )}
       {psychology && (
         <p className="m-0 text-sm text-body">
           가격 흐름으로 본 분위기: <strong className="font-semibold text-ink">{psychology.word}</strong>
@@ -394,23 +407,31 @@ function MarketPanel({ detail, insights }: { detail: StockDetail; insights: Stoc
           <Stat label="최근 3거래일" value={signedPercent(risk.return3d)} />
         </dl>
       )}
-      {sentiment?.headlines.length ? (
+      {sentimentView?.headlines.length ? (
         <details className="disclosure text-sm">
-          <summary className="text-xs font-medium text-body">대표 기사 {sentiment.headlines.length}건</summary>
+          <summary className="text-xs font-medium text-body">대표 기사 {sentimentView.headlines.length}건</summary>
           <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
-            {sentiment.headlines.map((headline) => (
+            {sentimentView.headlines.map((headline) => (
               <li key={`${headline.date}:${headline.title}`} className="text-sm text-ink">
                 <span className="mr-2 text-xs text-muted tabular-nums">
                   {shortDate(headline.date)} · {headline.press}
                 </span>
-                {headline.title}
+                {headline.url ? (
+                  <a className="text-brand hover:underline" href={headline.url} target="_blank" rel="noreferrer">
+                    {headline.title}
+                  </a>
+                ) : headline.title}
               </li>
             ))}
           </ul>
         </details>
       ) : null}
       <p className="m-0 flex flex-wrap gap-x-3 gap-y-1">
-        {sentiment && <SourceChip provenance={provenance.sentiment} />}
+        {sentimentView && (
+          <SourceChip
+            provenance={sentimentView.basis === "live" ? provenance.liveSentiment : provenance.sentiment}
+          />
+        )}
         {psychology && <SourceChip provenance={psychology.provenance} />}
         {risk && <SourceChip provenance={detail.priceProvenance ?? detail.provenance} />}
       </p>
@@ -717,6 +738,7 @@ export function SourceList({ detail, insights }: { detail: StockDetail; insights
     ["주가", detail.priceProvenance ?? detail.provenance],
     ["모델 신호·범위·근거", detail.provenance],
     [TERM.sentiment, insights.provenance.sentiment],
+    ["최근 24시간 뉴스", insights.provenance.liveSentiment],
     [TERM.supply, insights.provenance.supply],
     [TERM.financial, insights.provenance.financial],
     [TERM.contribution, insights.provenance.contributions],
