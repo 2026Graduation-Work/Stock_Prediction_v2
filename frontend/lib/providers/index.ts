@@ -256,9 +256,11 @@ export async function loadStockInsights(
   const sentiment = historical
     ? {
         ...historical,
-        headlines: remoteSentiment.headlines.length
+        headlines: remoteSentiment.live
           ? remoteSentiment.headlines
-          : historical.headlines,
+          : remoteSentiment.headlines.length
+            ? remoteSentiment.headlines
+            : historical.headlines,
       }
     : null;
   const financial = remoteFinancial ?? fallbackFinancial;
@@ -283,10 +285,12 @@ export async function loadStockInsights(
         sentiment?.source === "real"
           ? {
               kind: "real",
-              source:
-                sentiment.provider && sentiment.backend
+              source: remoteSentiment.historical
+                ? "BigKinds · KR-FinBERT · 연결 데이터"
+                : sentiment.provider && sentiment.backend
                   ? `${sentiment.provider === "bigkinds" ? "BigKinds" : "NewsAPI.ai"} · ${sentiment.backend === "kr-finbert" ? "KR-FinBERT" : sentiment.backend}`
-                  : "BigKinds · KR-FinBERT",
+                    + " · 저장된 데이터"
+                  : "BigKinds · KR-FinBERT · 저장된 데이터",
               asOf: sentiment.asOf?.slice(0, 10) ?? sentiment.days.at(-1)?.date,
             }
           : FIXTURE,
@@ -301,11 +305,49 @@ export async function loadStockInsights(
       financial: financial
         ? {
             kind: "real",
-            source: FINANCIAL_SOURCE,
+            source: remoteFinancial
+              ? `${FINANCIAL_SOURCE} · 연결 데이터`
+              : `${FINANCIAL_SOURCE} · 저장된 데이터`,
             asOf: remoteFinancial?.asOf ?? SNAPSHOT_AS_OF,
           }
         : FIXTURE,
     },
+  };
+}
+
+export interface MarketSentimentView {
+  basis: "live" | "historical";
+  score: number;
+  status: NewsTrackStatus;
+  asOf: string;
+  articleCount: number;
+  publisherCount: number;
+  headlines: Headline[];
+}
+
+export function marketSentimentView(insights: StockInsights): MarketSentimentView | null {
+  if (insights.liveSentiment) {
+    const live = insights.liveSentiment;
+    return {
+      basis: "live",
+      score: live.score,
+      status: live.status,
+      asOf: live.asOf,
+      articleCount: live.articleCount,
+      publisherCount: live.publisherCount,
+      headlines: insights.sentiment?.headlines.slice(0, 3) ?? [],
+    };
+  }
+  const latest = insights.sentiment?.days.at(-1);
+  if (!latest) return null;
+  return {
+    basis: "historical",
+    score: latest.score,
+    status: insights.sentiment?.status ?? "ok",
+    asOf: insights.sentiment?.asOf ?? latest.date,
+    articleCount: latest.articleCount,
+    publisherCount: insights.sentiment?.coverage?.publisher_count ?? 0,
+    headlines: insights.sentiment?.headlines.slice(0, 3) ?? [],
   };
 }
 

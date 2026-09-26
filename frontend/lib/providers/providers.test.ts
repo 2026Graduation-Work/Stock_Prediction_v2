@@ -11,6 +11,7 @@ import {
   contributionProvider,
   financialProvider,
   loadStockInsights,
+  marketSentimentView,
   sentimentProvider,
   supplyDemandProvider,
   toNudgeMarket,
@@ -101,7 +102,7 @@ test("출처: 감성은 데모 4종목 실데이터, 모델 근거는 픽스처"
   const samsung = await loadStockInsights("005930");
   assert.deepEqual(samsung.provenance.sentiment, {
     kind: "real",
-    source: "BigKinds · KR-FinBERT",
+    source: "BigKinds · KR-FinBERT · 저장된 데이터",
     asOf: samsung.sentiment?.days.at(-1)?.date,
   });
   for (const key of ["contributions"] as const) {
@@ -110,6 +111,7 @@ test("출처: 감성은 데모 4종목 실데이터, 모델 근거는 픽스처"
   for (const code of ["005380", "035720", "068270"]) {
     const insights = await loadStockInsights(code);
     assert.equal(insights.provenance.sentiment.kind, "real", code);
+    assert.match(insights.provenance.sentiment.source, /저장된 데이터/, code);
     assert.equal(insights.provenance.sentiment.asOf, insights.sentiment?.days.at(-1)?.date, code);
   }
 });
@@ -141,7 +143,11 @@ test("재무: 데모 4종목은 기준일 전에 공시된 FY2024 사업보고�
   for (const code of ["005930", "005380", "035720", "068270"]) {
     const { financial, provenance } = await loadStockInsights(code);
     assert.ok(financial, code);
-    assert.deepEqual(provenance.financial, { kind: "real", source: "DART 사업보고서", asOf: "2025-12-30" });
+    assert.deepEqual(provenance.financial, {
+      kind: "real",
+      source: "DART 사업보고서 · 저장된 데이터",
+      asOf: "2025-12-30",
+    });
     assert.match(financial.period, /^2024 사업연도 · 연결재무제표 · 사업보고서 2025-0[1-9]-\d{2} 공시/);
     const filedAt = financial.period.match(/사업보고서 (\d{4}-\d{2}-\d{2}) 공시/)?.[1] ?? "";
     assert.ok(filedAt <= "2025-12-30", `${code} 공시일 ${filedAt}`);
@@ -257,7 +263,17 @@ test("Supabase에 live만 있어도 과거 감성·재무는 정적 데이터로
   const client = new StaticSupabaseClient({
     news_sentiment_tracks: [{ data: [live], error: null }],
     news_sentiment_daily: [{ data: [], error: null }],
-    news_articles: [{ data: [], error: null }],
+    news_articles: [{
+      data: Array.from({ length: 4 }, (_, index) => ({
+        news_id: `n${index}`,
+        title: `대표 기사 ${index}`,
+        press: "언론사",
+        url: `https://example.com/${index}`,
+        article_date: "2026-09-26",
+        published_at: `2026-09-26T0${8 - index}:30:00+09:00`,
+      })),
+      error: null,
+    }],
     financial_snapshots: [{ data: null, error: null }],
   });
 
@@ -265,6 +281,17 @@ test("Supabase에 live만 있어도 과거 감성·재무는 정적 데이터로
 
   assert.equal(insights.sentiment?.days.length, 20);
   assert.equal(insights.liveSentiment?.score, 0.6);
+  assert.equal(insights.sentiment?.headlines.length, 3);
   assert.equal(insights.financial?.metrics.length, 6);
   assert.equal(insights.provenance.liveSentiment.source, "NewsAPI.ai · KR-FinBERT");
+  assert.equal(insights.provenance.sentiment.source, "BigKinds · KR-FinBERT · 저장된 데이터");
+  assert.deepEqual(marketSentimentView(insights), {
+    basis: "live",
+    score: 0.6,
+    status: "ok",
+    asOf: "2026-09-26T09:00:00+09:00",
+    articleCount: 8,
+    publisherCount: 3,
+    headlines: insights.sentiment?.headlines,
+  });
 });
