@@ -9,6 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { useMemo, useSyncExternalStore } from "react";
 import { getSupabaseClient } from "./supabase";
 import { STORAGE_KEYS } from "./storage-keys";
+import type { OnboardingState } from "./auth";
 
 export interface WatchedStock {
   code: string;
@@ -18,7 +19,7 @@ export interface StockNote {
   text: string;
   updatedAt: string; // ISO
 }
-export type Mode = "demo" | "supabase";
+type Mode = OnboardingState["mode"];
 
 const EVENT = "takealook:marks-updated";
 
@@ -35,16 +36,16 @@ function write(key: string, value: unknown): void {
   window.dispatchEvent(new Event(EVENT));
 }
 
-export const readWatchlist = (): WatchedStock[] => read(STORAGE_KEYS.watchlist, []);
-export const readNotes = (): Record<string, StockNote> => read(STORAGE_KEYS.stockNotes, {});
+const readWatchlist = (): WatchedStock[] => read(STORAGE_KEYS.watchlist, []);
+const readNotes = (): Record<string, StockNote> => read(STORAGE_KEYS.stockNotes, {});
 
 // useSyncExternalStore용: 두 키의 문자열을 그대로 스냅숏으로 쓴다(같은 값이면 같은 문자열).
-export function getMarksSnapshot(): string {
+function getMarksSnapshot(): string {
   if (typeof window === "undefined") return "";
   return `${window.localStorage.getItem(STORAGE_KEYS.watchlist)}|${window.localStorage.getItem(STORAGE_KEYS.stockNotes)}`;
 }
-export const getServerMarksSnapshot = () => "";
-export function subscribeToMarks(onChange: () => void) {
+const getServerMarksSnapshot = () => "";
+function subscribeToMarks(onChange: () => void) {
   window.addEventListener("storage", onChange);
   window.addEventListener(EVENT, onChange);
   return () => {

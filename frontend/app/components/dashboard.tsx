@@ -8,6 +8,7 @@ import PortfolioHeatmap from "./portfolio-heatmap";
 import SiteHeader from "./site-header";
 import SourceChip from "./source-chip";
 import StockRow from "./stock-card";
+import { useStockMarks } from "./stock-marks";
 import {
   getAuthenticatedDashboardData,
   type DashboardData,
@@ -16,8 +17,6 @@ import type { RecommendedStock } from "@/lib/types";
 import { AVOIDED_ASSET_LABELS, summaryFromProfilingOutput } from "@/lib/profiling-rules";
 import { CLOSING_PRICE } from "@/lib/closing-prices";
 import { SIGNAL_META } from "@/lib/display";
-import { STOCK_NAMES } from "@/lib/mock-data";
-import { syncMarks, useMarks } from "@/lib/stock-marks";
 import { dashboardSummary } from "@/lib/dashboard-summary";
 import { costBasis } from "@/lib/holdings-rules";
 import { holdingAlertsOutside } from "@/lib/recommendation-filter";
@@ -99,10 +98,7 @@ export default function Dashboard(initialData: DashboardData) {
     avoidedLabels = [],
   } = currentData;
   const holdingAlerts = holdingAlertsOutside(rawHoldingAlerts, stocks);
-  const { watchlist } = useMarks();
-  useEffect(() => {
-    void syncMarks(onboardingState.mode === "supabase" ? "supabase" : "demo", STOCK_NAMES).catch(() => undefined);
-  }, [onboardingState.mode]);
+  const { watchlist } = useStockMarks();
   const loadingAuthenticatedData =
     onboardingState.mode === "supabase" && !authenticatedData && !dataError;
   const savedSnapshot = useSyncExternalStore(

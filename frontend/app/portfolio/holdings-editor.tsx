@@ -132,7 +132,7 @@ export default function HoldingsEditor({
     setSaveError("");
     setStatus("saving");
     try {
-      await saveHoldings(rows, onboardingState.mode === "supabase" ? "supabase" : "demo");
+      await saveHoldings(rows, onboardingState.mode);
       setStatus("saved");
     } catch (cause) {
       setStatus("idle");
