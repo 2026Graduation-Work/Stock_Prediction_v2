@@ -3,7 +3,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import DisclaimerFooter from "./disclaimer-footer";
-import InvestorProfileCard from "./investor-profile-card";
 import { useOnboarding } from "./onboarding-provider";
 import PortfolioHeatmap from "./portfolio-heatmap";
 import SiteHeader from "./site-header";
@@ -210,7 +209,19 @@ export default function Dashboard(initialData: DashboardData) {
           <DashboardLoading />
         ) : (
           <>
-            <section aria-labelledby="today-summary" className="flex flex-col gap-1.5 px-1 pt-4">
+            <Link
+              href="/profile"
+              aria-label={`내 투자 성향: ${activeProfile.profileTypeLabel}. 결과 보기`}
+              className="surface flex items-center gap-3 px-5 py-3.5 text-sm text-body hover:bg-white/70 hover:no-underline"
+            >
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-semibold text-ink">{activeProfile.profileTypeLabel}</span> ·{" "}
+                {activeProfile.personaLabel}
+              </span>
+              <span aria-hidden className="flex-none text-muted">›</span>
+            </Link>
+
+            <section aria-labelledby="today-summary" className="flex flex-col gap-1.5 px-1">
               <span className="eyebrow tabular-nums">{marketStatus.date.replaceAll("-", ".")} 기준</span>
               <h1 id="today-summary" className="text-3xl font-semibold">
                 {summary}
@@ -273,7 +284,6 @@ export default function Dashboard(initialData: DashboardData) {
               </section>
             </div>
 
-            <InvestorProfileCard profile={activeProfile} avoidedLabels={activeAvoidedLabels} />
           </>
         )}
       </div>

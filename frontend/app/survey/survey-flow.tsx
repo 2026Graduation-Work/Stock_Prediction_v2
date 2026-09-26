@@ -36,6 +36,7 @@ import { SERVICE_NAME } from "@/lib/brand";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 const DRAFT_KEY = STORAGE_KEYS.surveyDraft;
+const ANSWERS_KEY = STORAGE_KEYS.surveyAnswers;
 const ADVANCE_DELAY_MS = 180; // 고른 답이 눌린 것을 보여 준 뒤 다음 문항으로
 
 type SurveyMode = "short" | "quick";
@@ -116,9 +117,9 @@ const DEMO_PORTFOLIO: ProfilingOutput["portfolio"] = {
 // https·localhost는 secure context라 randomUUID가 항상 있다.
 const createSessionId = () => `s_${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
 
-function readDraft(): Draft | null {
+function readDraft(key: string = DRAFT_KEY): Draft | null {
   try {
-    const parsed: unknown = JSON.parse(window.localStorage.getItem(DRAFT_KEY) ?? "null");
+    const parsed: unknown = JSON.parse(window.localStorage.getItem(key) ?? "null");
     if (!parsed || typeof parsed !== "object") return null;
     const draft = { ...EMPTY_DRAFT, ...(parsed as Partial<Draft>) };
     if (draft.mode !== "short" && draft.mode !== "quick") draft.mode = "short";
@@ -129,10 +130,10 @@ function readDraft(): Draft | null {
   }
 }
 
-function writeDraft(draft: Draft | null) {
+function writeDraft(draft: Draft | null, key: string = DRAFT_KEY) {
   try {
-    if (draft) window.localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
-    else window.localStorage.removeItem(DRAFT_KEY);
+    if (draft) window.localStorage.setItem(key, JSON.stringify(draft));
+    else window.localStorage.removeItem(key);
   } catch {
     // 저장이 막힌 브라우저(시크릿 모드 등)에서는 중간 저장만 건너뛴다.
   }
@@ -152,15 +153,21 @@ export default function SurveyFlow() {
   const [submitting, setSubmitting] = useState(false);
 
   // 중간 저장 불러오기. localStorage는 브라우저에서만 읽을 수 있어 마운트 후에 한 번 읽는다.
+  // 다시 진단은 지난 답이 채워진 상태로 1번부터 시작한다(답하던 중간 저장이 있으면 그쪽이 먼저).
   useEffect(() => {
     const stored = readDraft();
-    if (!stored) return;
+    const previous = firstRun ? null : readDraft(ANSWERS_KEY);
+    if (!stored && !previous) return;
     /* eslint-disable react-hooks/set-state-in-effect -- 외부 저장소에서 한 번 복원 */
-    setDraft(stored);
-    setRestored(true);
+    if (stored) {
+      setDraft(stored);
+      setRestored(true);
+    } else {
+      setDraft({ ...previous!, page: 0 });
+    }
     setStage("survey");
     /* eslint-enable react-hooks/set-state-in-effect */
-  }, []);
+  }, [firstRun]);
 
   function update(next: Partial<Draft>) {
     setDraft((current) => {
@@ -250,6 +257,7 @@ export default function SurveyFlow() {
     void run(async () => {
       const profile = Object.keys(adjusted).length ? await requestProfile(payload(adjusted)) : result!;
       await saveProfile(profile, onboardingState.mode);
+      writeDraft({ ...draft, page: 0 }, ANSWERS_KEY);
       writeDraft(null);
       setResult(profile);
       if (firstRun) setStage("holdings");
@@ -270,6 +278,7 @@ export default function SurveyFlow() {
 
   function restart() {
     writeDraft(null);
+    writeDraft(null, ANSWERS_KEY);
     setDraft(EMPTY_DRAFT);
     setResult(null);
     setRestored(false);
@@ -432,6 +441,9 @@ function QuestionPage({
         <div className="flex items-baseline gap-3">
           <span className="text-xs font-medium text-ink tabular-nums">{label}</span>
           {page.kind === "style" && <span className="text-xs text-muted">{page.axis.section}</span>}
+          <button type="button" onClick={onRestart} className="btn-text ml-auto text-xs">
+            처음부터 새로 하기
+          </button>
         </div>
         <div
           className="h-1 overflow-hidden rounded-full bg-track"
@@ -446,12 +458,7 @@ function QuestionPage({
       </div>
 
       {restored && draft.page > 0 && (
-        <p className="mb-0 mt-5 flex items-center gap-3 rounded-md bg-field px-4 py-3 text-sm text-body">
-          저장해 둔 응답을 불러왔어요. 이어서 답하면 돼요.
-          <button type="button" onClick={onRestart} className="btn-text ml-auto text-xs">
-            처음부터
-          </button>
-        </p>
+        <p className="mb-0 mt-5 rounded-md bg-field px-4 py-3 text-sm text-body">저장해 둔 응답을 불러왔어요. 이어서 답하면 돼요.</p>
       )}
 
       <div className="mt-8 flex flex-1 flex-col">
@@ -636,24 +643,27 @@ function AxisGauge({
 
 const HORIZON_LABEL = { short: "단기", mid: "중기", long: "장기" } as const;
 
-function ResultView({
+// 설문 결과. readOnly는 저장된 결과를 다시 보는 화면(/profile): 조정·24문항 없이 뒤로 / 다시 진단만.
+export function ResultView({
   result,
-  submitting,
-  error,
+  submitting = false,
+  error = "",
   nextLabel,
-  canBeMoreAccurate,
+  canBeMoreAccurate = false,
   onConfirm,
   onMoreAccurate,
   onBack,
+  readOnly = false,
 }: {
   result: ProfilingOutput;
-  submitting: boolean;
-  error: string;
+  submitting?: boolean;
+  error?: string;
   nextLabel: string;
-  canBeMoreAccurate: boolean;
+  canBeMoreAccurate?: boolean;
   onConfirm: (adjusted: Partial<Record<StyleAxisId, number>>) => void;
-  onMoreAccurate: () => void;
+  onMoreAccurate?: () => void;
   onBack: () => void;
+  readOnly?: boolean;
 }) {
   const [adjusting, setAdjusting] = useState(false);
   const [adjusted, setAdjusted] = useState<Partial<Record<StyleAxisId, number>>>({});
@@ -667,7 +677,7 @@ function ResultView({
   return (
     <section className="surface overflow-hidden">
       <div className="border-b border-line-soft px-6 py-7 sm:px-10">
-        <span className="text-xs font-semibold text-brand">진단 결과</span>
+        <span className="text-xs font-semibold text-brand">{readOnly ? "내 투자 성향" : "진단 결과"}</span>
         <h1 data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="mt-2 text-3xl font-semibold text-ink sm:text-3xl">
           {bit.lowConfidence ? "유형 확인 중" : BIT_LABEL[bit.type]}
         </h1>
@@ -785,7 +795,7 @@ function ResultView({
         )}
 
         <div className="mt-8 flex flex-col gap-4 border-t border-line-soft pt-6">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className={`flex flex-wrap items-center gap-x-4 gap-y-2 ${readOnly ? "hidden" : ""}`}>
             {adjusting ? (
               <button
                 type="button"
@@ -806,6 +816,7 @@ function ResultView({
           </div>
           <StepNav
             onBack={onBack}
+            backLabel={readOnly ? "뒤로" : "이전"}
             backDisabled={submitting}
             nextLabel={submitting ? "저장 중" : nextLabel}
             onNext={() => onConfirm(changed ? adjusted : {})}
