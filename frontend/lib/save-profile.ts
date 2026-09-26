@@ -104,29 +104,14 @@ export async function saveProfile(
   );
   assertSupabaseResult(profileError, "IPS 프로필 저장");
 
-  const [avoidedReset, holdingsReset, watchlistReset] = await Promise.all([
-    client
-      .from("avoided_assets")
-      .update({ is_active: false, updated_at: now })
-      .eq("user_id", userId),
-    client
-      .from("portfolio_holdings")
-      .update({ is_active: false, updated_at: now })
-      .eq("user_id", userId),
-    client
-      .from("watchlist")
-      .update({ is_active: false, updated_at: now })
-      .eq("user_id", userId),
-  ]);
-  assertSupabaseResult(avoidedReset.error, "기존 회피 설정 비활성화");
-  assertSupabaseResult(holdingsReset.error, "기존 보유 종목 비활성화");
-  assertSupabaseResult(watchlistReset.error, "기존 관심 종목 비활성화");
-
-  await Promise.all([
-    upsertAvoidedAssets(profile, userId, now),
-    upsertPortfolioHoldings(profile, userId, now),
-    upsertWatchlist(profile, userId, now),
-  ]);
+  // 보유 종목(save-holdings.ts)·관심 종목(watchlist.ts)은 각자 저장한다. 성향을 다시 저장해도 건드리지 않는다
+  // (전에는 여기서 둘 다 비활성화한 뒤 설문 payload의 빈 목록으로 덮어 다시 진단할 때마다 지워졌다).
+  const { error: avoidedResetError } = await client
+    .from("avoided_assets")
+    .update({ is_active: false, updated_at: now })
+    .eq("user_id", userId);
+  assertSupabaseResult(avoidedResetError, "기존 회피 설정 비활성화");
+  await upsertAvoidedAssets(profile, userId, now);
 
   persistProfile(storedProfile);
 }
@@ -154,68 +139,6 @@ async function upsertAvoidedAssets(
     { onConflict: "user_id,asset_type" },
   );
   assertSupabaseResult(error, "회피 설정 저장");
-}
-
-async function upsertPortfolioHoldings(
-  profile: ProfilingOutput,
-  userId: string,
-  updatedAt: string,
-): Promise<void> {
-  if (!profile.portfolio.holdings.length) return;
-  const client = getSupabaseClient();
-  if (!client) return;
-
-  const tickers = profile.portfolio.holdings.map(({ ticker }) => ticker);
-  const { data, error: stockError } = await client
-    .from("stocks")
-    .select("code")
-    .in("code", tickers);
-  assertSupabaseResult(stockError, "보유 종목 마스터 확인");
-  const knownCodes = new Set(
-    ((data ?? []) as { code: string }[]).map(({ code }) => code),
-  );
-  const rows = profile.portfolio.holdings.flatMap((holding, index) =>
-    knownCodes.has(holding.ticker)
-      ? [
-          {
-            user_id: userId,
-            stock_code: holding.ticker,
-            quantity: holding.quantity,
-            avg_buy_price: holding.avg_buy_price,
-            display_order: index + 1,
-            is_active: true,
-            updated_at: updatedAt,
-          },
-        ]
-      : [],
-  );
-  if (!rows.length) return;
-
-  const { error } = await client.from("portfolio_holdings").upsert(rows, {
-    onConflict: "user_id,stock_code",
-  });
-  assertSupabaseResult(error, "보유 종목 저장");
-}
-
-async function upsertWatchlist(
-  profile: ProfilingOutput,
-  userId: string,
-  updatedAt: string,
-): Promise<void> {
-  if (!profile.portfolio.watchlist.length) return;
-  const client = getSupabaseClient();
-  if (!client) return;
-  const { error } = await client.from("watchlist").upsert(
-    profile.portfolio.watchlist.map((stockCode, index) => ({
-      user_id: userId,
-      stock_code: stockCode,
-      display_order: index + 1,
-      is_active: true,
-      updated_at: updatedAt,
-    })),
-    { onConflict: "user_id,stock_code" },
-  );
-  assertSupabaseResult(error, "관심 종목 저장");
 }
 
 function assertSupabaseResult(

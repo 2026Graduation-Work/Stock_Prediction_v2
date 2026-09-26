@@ -15,6 +15,7 @@ import EvidenceTabs, {
   useDemoStyleAxes,
 } from "./insight-cards";
 import SourceChip from "./source-chip";
+import StockMarks from "./stock-marks";
 import PriceHistoryChart from "./price-history-chart";
 import ReturnHistogram from "./return-histogram";
 import SiteHeader from "./site-header";
@@ -82,7 +83,6 @@ export default function StockDetailView({
 }: StockDetailViewProps) {
   const demo = useDemoStyleAxes(styleAxes);
   const [query, setQuery] = useState("");
-  const [choice, setChoice] = useState<"watch" | "reduce" | "drop" | null>(null);
 
   const signal = SIGNAL_META[detail.signalLight];
   const horizon = detail.returnHorizon ?? "h10";
@@ -106,12 +106,6 @@ export default function StockDetailView({
       ? `이 종목의 위험도는 ${riskLevel(detail.riskGrade).word}이에요. 설문에서 답한 위험 감수 정도(${profile.riskTolerance})보다 가격이 크게 흔들릴 수 있어요.`
       : null;
   const horizons = (["h5", "h10", "h20"] as const).map((key) => [key, detail.horizonAgreement[key]] as const);
-  const choiceLabels = {
-    watch: "관심 종목에 두기",
-    reduce: "비중을 다시 볼 종목",
-    drop: "관심 해제",
-  } as const;
-
   return (
     <div className="w-full">
       <SiteHeader query={query} onQueryChange={setQuery} profile={profile} marketStatus={marketStatus} />
@@ -170,6 +164,8 @@ export default function StockDetailView({
             )}
           </div>
         </section>
+
+        <StockMarks code={detail.code} name={detail.name} />
 
         {/* 2. 한눈에 보기 */}
         <section aria-labelledby="glance-title" className="surface flex flex-col gap-4 p-6">
@@ -285,31 +281,6 @@ export default function StockDetailView({
               <SourceList detail={detail} insights={insights} />
             </section>
 
-            <section aria-labelledby="more-note" className="flex flex-col gap-3">
-              <h3 id="more-note" className="text-base font-semibold">
-                내 판단 메모
-              </h3>
-              <div className="flex flex-wrap gap-2">
-                {(Object.keys(choiceLabels) as (keyof typeof choiceLabels)[]).map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    aria-pressed={choice === key}
-                    onClick={() => setChoice(key)}
-                    className={`min-h-10 rounded-md px-4 text-sm font-medium ${
-                      choice === key ? "bg-brand-soft text-brand" : "bg-track text-body hover:bg-line"
-                    }`}
-                  >
-                    {choiceLabels[key]}
-                  </button>
-                ))}
-              </div>
-              <p className="m-0 text-xs text-muted" role="status">
-                {choice
-                  ? `'${choiceLabels[choice]}'로 이 화면에만 메모했어요. 실제 주문은 실행되지 않아요.`
-                  : "최종 판단은 직접 해요. 여기서 고른 메모로 주문이 나가지 않아요."}
-              </p>
-            </section>
           </div>
         </details>
 

@@ -301,3 +301,9 @@ export const KNOWN_STOCKS: { code: string; name: string }[] = [
   celltrion,
   kakao,
 ].map(({ code, name }) => ({ code, name }));
+
+// 코드 → 이름. 로그인 사용자의 관심 종목(Supabase에는 코드만 있다)에 이름을 붙일 때 쓴다.
+export const STOCK_NAMES: Record<string, string> = Object.fromEntries([
+  ...KNOWN_STOCKS.map(({ code, name }) => [code, name]),
+  ...Object.values(stockDetails).map(({ code, name }) => [code, name]),
+]);

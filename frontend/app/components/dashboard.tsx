@@ -15,6 +15,9 @@ import {
 import type { RecommendedStock } from "@/lib/types";
 import { AVOIDED_ASSET_LABELS, summaryFromProfilingOutput } from "@/lib/profiling-rules";
 import { CLOSING_PRICE } from "@/lib/closing-prices";
+import { SIGNAL_META } from "@/lib/display";
+import { STOCK_NAMES } from "@/lib/mock-data";
+import { syncMarks, useMarks } from "@/lib/stock-marks";
 import { dashboardSummary } from "@/lib/dashboard-summary";
 import { costBasis } from "@/lib/holdings-rules";
 import { holdingAlertsOutside } from "@/lib/recommendation-filter";
@@ -96,6 +99,10 @@ export default function Dashboard(initialData: DashboardData) {
     avoidedLabels = [],
   } = currentData;
   const holdingAlerts = holdingAlertsOutside(rawHoldingAlerts, stocks);
+  const { watchlist } = useMarks();
+  useEffect(() => {
+    void syncMarks(onboardingState.mode === "supabase" ? "supabase" : "demo", STOCK_NAMES).catch(() => undefined);
+  }, [onboardingState.mode]);
   const loadingAuthenticatedData =
     onboardingState.mode === "supabase" && !authenticatedData && !dataError;
   const savedSnapshot = useSyncExternalStore(
@@ -229,6 +236,7 @@ export default function Dashboard(initialData: DashboardData) {
             </section>
 
             <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-2 lg:gap-6">
+              <div className="flex flex-col gap-8">
               <section aria-label="내 보유 종목" className="flex flex-col gap-3">
                 <SectionHead
                   title="내 보유 종목의 오늘 신호"
@@ -242,6 +250,42 @@ export default function Dashboard(initialData: DashboardData) {
                 />
                 <PortfolioHeatmap holdings={activeHoldings} withoutSignalCount={holdingsWithoutSignal} />
               </section>
+
+              {watchlist.length > 0 && (
+                <section aria-label="관심 종목" className="flex flex-col gap-3">
+                  <SectionHead
+                    title="관심 종목"
+                    action={
+                      <Link href="/portfolio" className="btn-text text-xs">
+                        편집
+                      </Link>
+                    }
+                  />
+                  <ul className="group-list m-0 list-none p-0">
+                    {watchlist.map(({ code, name }) => {
+                      const light = signalByCode.get(code)?.signalLight;
+                      return (
+                        <li key={code}>
+                          <Link
+                            href={`/stocks/${code}`}
+                            className="flex items-center gap-3 px-5 py-4 text-ink hover:bg-field hover:text-ink hover:no-underline"
+                          >
+                            <span className="min-w-0 flex-1 truncate text-base font-medium">{name}</span>
+                            <span className="flex-none text-xs text-muted tabular-nums">{code}</span>
+                            <span
+                              className="flex-none text-sm font-semibold"
+                              style={{ color: light ? SIGNAL_META[light].ink : "var(--color-muted)" }}
+                            >
+                              {light ? SIGNAL_META[light].label : "오늘 신호 없음"}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
+              </div>
 
               <section aria-label="오늘 신호가 강한 종목" className="flex flex-col gap-3">
                 <SectionHead title="오늘 신호가 강한 종목" />

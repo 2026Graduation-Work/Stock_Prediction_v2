@@ -37,11 +37,16 @@ function authUser(user: MockUser) {
 const json = (route: Route, body: unknown, status = 200) =>
   route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
-// 가입·로그인·로그아웃만 흉내 낸다. 서비스 사용자(users)·성향(ips_profiles)은 없음 → 설문 필요 상태.
-export async function mockSupabaseAuth(page: Page) {
+// 가입·로그인·로그아웃을 흉내 낸다. profile을 주면 서비스 사용자(users)·성향(ips_profiles)이 있는 "준비됨" 상태,
+// 없으면 설문 필요 상태. watchlist·stock_notes는 메모리에 담아 upsert·삭제·조회를 흉내 낸다.
+export async function mockSupabaseAuth(
+  page: Page,
+  { profile, notesTableMissing = false }: { profile?: unknown; notesTableMissing?: boolean } = {},
+) {
   const users = new Map<string, MockUser>();
   let current: MockUser | null = null;
   const calls: string[] = [];
+  const tables: Record<string, Map<string, Record<string, unknown>>> = { watchlist: new Map(), stock_notes: new Map() };
 
   await page.route(`${SUPABASE_URL}/**`, async (route) => {
     const request = route.request();
@@ -70,8 +75,37 @@ export async function mockSupabaseAuth(page: Page) {
       current = null;
       return route.fulfill({ status: 204 });
     }
-    if (url.pathname.startsWith("/rest/v1/")) return json(route, request.method() === "GET" ? [] : {});
+    if (url.pathname.startsWith("/rest/v1/")) {
+      const table = url.pathname.slice("/rest/v1/".length);
+      const method = request.method();
+      if (table === "users" && method === "GET") {
+        return json(route, profile && current ? [{ id: `app-${current.id}`, display_name: "테스터" }] : []);
+      }
+      if (table === "ips_profiles" && method === "GET") return json(route, profile ? [{ profile_payload: profile }] : []);
+      // 0006 마이그레이션 적용 전 DB: PostgREST가 모르는 테이블
+      if (table === "stock_notes" && notesTableMissing) {
+        return json(route, { code: "PGRST205", message: "Could not find the table 'public.stock_notes'" }, 404);
+      }
+      const rows = tables[table];
+      if (rows) {
+        const eq = (key: string) => url.searchParams.get(key)?.replace(/^eq\./, "");
+        if (method === "GET") {
+          const active = eq("is_active");
+          return json(route, [...rows.values()].filter((row) => active === undefined || String(row.is_active) === active));
+        }
+        if (method === "POST") {
+          const body = request.postDataJSON() as Record<string, unknown> | Record<string, unknown>[];
+          for (const row of Array.isArray(body) ? body : [body]) rows.set(String(row.stock_code), row);
+          return route.fulfill({ status: 201 });
+        }
+        if (method === "DELETE") {
+          rows.delete(eq("stock_code") ?? "");
+          return route.fulfill({ status: 204 });
+        }
+      }
+      return json(route, method === "GET" ? [] : {});
+    }
     return json(route, {});
   });
-  return { calls };
+  return { calls, tables };
 }
