@@ -174,7 +174,6 @@ export default function StockDetailView({
         {/* 2. 한눈에 보기 */}
         <section aria-labelledby="glance-title" className="surface flex flex-col gap-4 p-6">
           <div className="flex flex-col gap-1">
-            <span className="eyebrow">한눈에 보기</span>
             <h2 id="glance-title" className="text-xl font-semibold">
               모델 신호 <span style={{ color: signal.ink }}>{signal.label}</span>
               <span className="block text-sm font-normal text-muted sm:ml-2 sm:inline">{topPercentLabel(detail.rankPercentile)}</span>

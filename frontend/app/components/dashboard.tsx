@@ -32,13 +32,10 @@ import {
   subscribeToSavedProfile,
 } from "@/lib/save-profile";
 
-function SectionHead({ eyebrow, title, action }: { eyebrow: string; title: string; action?: React.ReactNode }) {
+function SectionHead({ title, action }: { title: string; action?: React.ReactNode }) {
   return (
     <div className="flex items-end justify-between gap-3 px-1">
-      <div className="flex flex-col gap-0.5">
-        <span className="eyebrow">{eyebrow}</span>
-        <h2 className="text-xl font-semibold">{title}</h2>
-      </div>
+      <h2 className="text-xl font-semibold">{title}</h2>
       {action}
     </div>
   );
@@ -214,7 +211,7 @@ export default function Dashboard(initialData: DashboardData) {
         ) : (
           <>
             <section aria-labelledby="today-summary" className="flex flex-col gap-1.5 px-1 pt-4">
-              <span className="eyebrow tabular-nums">{marketStatus.date.replaceAll("-", ".")} 기준 · 오늘 확인할 것</span>
+              <span className="eyebrow tabular-nums">{marketStatus.date.replaceAll("-", ".")} 기준</span>
               <h1 id="today-summary" className="text-3xl font-semibold">
                 {summary}
               </h1>
@@ -223,8 +220,7 @@ export default function Dashboard(initialData: DashboardData) {
             <div className="grid grid-cols-1 items-start gap-8 lg:grid-cols-2 lg:gap-6">
               <section aria-label="내 보유 종목" className="flex flex-col gap-3">
                 <SectionHead
-                  eyebrow="내 보유 종목"
-                  title="보유 종목의 오늘 신호"
+                  title="내 보유 종목의 오늘 신호"
                   action={
                     activeHoldings.length > 0 && (
                       <Link href="/portfolio" className="btn-text text-xs">
@@ -237,7 +233,7 @@ export default function Dashboard(initialData: DashboardData) {
               </section>
 
               <section aria-label="오늘 신호가 강한 종목" className="flex flex-col gap-3">
-                <SectionHead eyebrow="모델 신호 순 · 성향으로 고르지 않아요" title="오늘 신호가 강한 종목" />
+                <SectionHead title="오늘 신호가 강한 종목" />
                 {!keyword && stocks.length === 0 ? (
                   <div className="surface flex min-h-[160px] items-center justify-center px-6 text-center">
                     <p className="text-sm text-body">오늘 보여 줄 모델 신호가 아직 없어요.</p>

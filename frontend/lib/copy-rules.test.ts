@@ -71,6 +71,7 @@ test("금지 표현 목록이 대표 문장을 잡는다", () => {
     "시그널랩 로그인",
     "SignalLab",
     "signallab",
+    "KRX · 2025.12.30 · 실데이터",
   ]) {
     assert.ok(caught(text), text);
   }
