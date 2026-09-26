@@ -66,3 +66,26 @@ export function riskLevel(grade: RiskGrade): { word: RiskLevel; filled: number }
     filled: 6 - grade,
   };
 }
+
+// ── 계산 근거(종목 상세 "더 알아보기") 쉬운 말. 한 줄 = 무엇을 · 어떤 자료로 · 어떻게 계산했나 · 이번 값 ──
+// 계산 정의: lib/profiling/bit.ts(유형), lib/profiling/nudges.ts(체크포인트), backend market_psychology.py(가격 흐름 분위기)
+
+// 유형 점수 = (보유 기간 답 + (손실 감내 답 + 집중 답) ÷ 2) ÷ 2, -1~+1을 4구간으로 나눈다
+export const STYLE_TYPE_RULE =
+  "설문에서 '얼마나 자주 사고파는지' 답과 '손실을 견디고 몇 종목에 모으는지' 답을 평균해 -1~+1 점수로 만들고, " +
+  "-0.5 아래는 자산 보존형 · 0 아래는 추종형 · +0.5 아래는 독립 분석형 · 그 위는 적극 축적형으로 나눴어요.";
+
+// 스펙트럼 양 끝(감정적 편향)과 가운데(인지적 편향)
+export const BIAS_MODE_WORD = {
+  emotional: "양 끝 유형이라 기분에 흔들리기 쉬운 쪽",
+  cognitive: "가운데 유형이라 익숙한 생각에 기대기 쉬운 쪽",
+} as const;
+
+// 가격 흐름 분위기 = (20거래일 수익 ÷ 그동안의 흔들림, 60거래일 평균 매입가 대비 지금 가격의 위치)의 평균
+export const PSYCHOLOGY_RULE =
+  "최근 20거래일 수익을 그동안의 흔들림으로 나눈 값과, 최근 60거래일 동안 사람들이 평균적으로 산 가격 대비 지금 가격의 위치를 평균했어요.";
+
+export const CHECKPOINT_RULE = "설문 답이 한쪽으로 0.3 넘게 기울고, 지금 이 종목의 시장 조건이 맞을 때만 보여요.";
+
+export const STYLE_TYPE_SOURCE = "행동재무학의 투자자 유형 연구(Pompian)에서 착안해 설문으로 가늠한 분류예요.";
+
