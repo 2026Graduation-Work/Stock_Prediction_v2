@@ -50,7 +50,7 @@ def normalize_trading_halts(
     explicit_start = pd.Timestamp(listing_date).normalize() if listing_date is not None else None
     explicit_end = None
     if delisting_date is not None and pd.notna(delisting_date):
-        explicit_end = pd.Timestamp(delisting_date).normalize() - pd.Timedelta(days=1)
+        explicit_end = pd.Timestamp(delisting_date).normalize() - pd.Timedelta(1, unit="D")
     df = reindex_to_krx_trading_days(
         df,
         trading_days,
@@ -396,7 +396,7 @@ def _load_trading_days_for_files(raw_files: list[str], master: pd.DataFrame | No
         known_delistings = master.loc[
             master["Code"].isin(file_codes) & master["DelistingDate"].notna(),
             "DelistingDate",
-        ] - pd.Timedelta(days=1)
+        ] - pd.Timedelta(1, unit="D")
         if not known_delistings.empty:
             max_date = max(max_date, min(known_delistings.max(), pd.Timestamp.now().normalize()))
     return get_krx_trading_days(
@@ -541,7 +541,8 @@ def update_processed_data():
     print(f"총 {len(raw_files)}개 PIT 주권 증분 전처리 시작...")
     trading_days = _load_trading_days_for_files(raw_files, master)
 
-    updated, skipped, created, failed = 0, 0, 0, 0
+    updated, skipped, created = 0, 0, 0
+    failed = []
 
     for file_path in tqdm(raw_files, desc="증분 전처리 중"):
         file_name = os.path.basename(file_path)
@@ -589,7 +590,7 @@ def update_processed_data():
             df_raw = pd.read_parquet(file_path)
             df_raw["Date"] = pd.to_datetime(df_raw["Date"])
 
-            context_start = last_date - pd.Timedelta(days=_LOOKBACK_DAYS * 2)
+            context_start = last_date - pd.Timedelta(int(_LOOKBACK_DAYS * 2), unit="D")
             df_ctx = df_raw[df_raw["Date"] >= context_start].copy()
 
             if len(df_ctx) < _LOOKBACK_DAYS:
@@ -619,13 +620,13 @@ def update_processed_data():
 
         except Exception as e:
             print(f"Error updating {file_name}: {e}")
-            failed += 1
+            failed.append((file_name, str(e)))
 
     print(
-        f"\n✅ 증분 전처리 완료: 신규={updated}개, 신규생성={created}개, 스킵={skipped}개, 실패={failed}개"
+        f"\n✅ 증분 전처리 완료: 신규={updated}개, 신규생성={created}개, 스킵={skipped}개, 실패={len(failed)}개"
     )
     if failed:
-        raise RuntimeError(f"PIT 증분 전처리 실패: {failed}개")
+        raise RuntimeError(f"PIT 증분 전처리 실패 {len(failed)}개: {failed[:5]}")
 
 
 if __name__ == "__main__":

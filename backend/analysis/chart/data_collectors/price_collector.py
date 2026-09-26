@@ -379,6 +379,18 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
         if market_snapshot["Amount"].isna().any() or market_snapshot["Amount"].le(0).any():
             raise RuntimeError("FDR 전 종목 시세에 유효하지 않은 거래대금이 있습니다.")
         market_snapshot["Code"] = market_snapshot["Code"].astype(str).str.zfill(6)
+        # StockListing은 날짜 없는 실시간 스냅샷이다. KS11에 당일 행이 아직 없으면 당일 시세가
+        # 전일 날짜로 저장되므로, 삼성전자 스냅샷 종가가 기준일 DataReader 종가와 같을 때만 진행한다.
+        probe = fdr.DataReader("005930", actual_date_str, actual_date_str)
+        snapshot_close = market_snapshot.loc[market_snapshot["Code"].eq("005930"), "Close"]
+        if (
+            probe.empty
+            or snapshot_close.empty
+            or float(probe["Close"].iloc[-1]) != float(snapshot_close.iloc[0])
+        ):
+            raise RuntimeError(
+                f"스냅샷 시세가 기준일 {actual_date_str} 종가와 다릅니다. 장 마감 후 KS11 갱신 뒤 다시 실행하세요."
+            )
         print(f"  📅 수집된 실제 영업일 기준일: {actual_date_str}")
 
         ticker_to_name = dict(zip(all_stocks["Code"], all_stocks["Name"]))
@@ -441,9 +453,9 @@ def _update_ohlcv_bulk_fdr(all_stocks: pd.DataFrame) -> set:
                     )
                     merged.to_parquet(file_path, index=False)
                     updated_tickers.add(code)
-                except Exception:
-                    new_row.to_parquet(file_path, index=False)
-                    updated_tickers.add(code)
+                except Exception as exc:
+                    # 읽기 실패한 기존 이력을 1행짜리 파일로 덮어쓰지 않는다.
+                    print(f"  ⚠️ {code} 기존 raw 읽기 실패, 건너뜀: {exc}")
             else:
                 new_row.to_parquet(file_path, index=False)
                 updated_tickers.add(code)
@@ -475,7 +487,7 @@ def _collection_bounds(row: pd.Series, start_date: str, end_date: str) -> tuple[
     interval_start = max(pd.Timestamp(start_date).normalize(), listing_date)
     interval_end = pd.Timestamp(end_date).normalize()
     if pd.notna(delisting_date):
-        interval_end = min(interval_end, delisting_date.normalize() - pd.Timedelta(days=1))
+        interval_end = min(interval_end, delisting_date.normalize() - pd.Timedelta(1, unit="D"))
     return None if interval_start > interval_end else (interval_start, interval_end)
 
 
@@ -544,7 +556,7 @@ def download_ohlcv_full(
                     missing_days = check_days - existing_dates
 
                     last_date = existing_df["Date"].max()
-                    fetch_start_str = (last_date + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                    fetch_start_str = (last_date + pd.Timedelta(1, unit="D")).strftime("%Y-%m-%d")
 
                     # 2. 업데이트 및 보정 필요성 판단
                     if fetch_start_str <= interval_end_str or missing_days or vwap_incomplete:

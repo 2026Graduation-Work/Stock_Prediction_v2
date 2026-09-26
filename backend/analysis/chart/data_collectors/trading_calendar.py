@@ -206,7 +206,10 @@ def reindex_to_krx_trading_days(
     unexpected_dates = indexed.index.unique().difference(market_index)
     if not unexpected_dates.empty:
         formatted = ", ".join(day.strftime("%Y-%m-%d") for day in unexpected_dates[:5])
-        raise TradingCalendarError(f"KRX 거래일이 아닌 원본 데이터 날짜가 있습니다: {formatted}")
+        raise TradingCalendarError(
+            f"KRX 거래일이 아닌 원본 데이터 날짜가 있습니다: {formatted} "
+            "(휴장일에 저장된 행이거나, KS11 응답에 그 날짜가 빠진 캘린더 누락일 수 있습니다)"
+        )
 
     indexed = indexed.reindex(market_index)
     indexed.index.name = "Date"

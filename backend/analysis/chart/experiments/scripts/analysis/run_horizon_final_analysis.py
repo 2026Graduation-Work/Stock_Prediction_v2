@@ -218,7 +218,7 @@ def _load_horizon_data(anchor_file: str, horizon: str, spec: dict) -> HorizonDat
     else:
         start, end = test_date_bounds(splits)
         horizon_days = int(config.get("labels", {}).get("horizon", horizon.removeprefix("H")))
-        extended_end = (pd.to_datetime(end) + pd.Timedelta(days=horizon_days * 3)).strftime("%Y-%m-%d")
+        extended_end = (pd.to_datetime(end) + pd.Timedelta(int(horizon_days * 3), unit="D")).strftime("%Y-%m-%d")
         processed_dir = find_processed_dir(config, anchor_file)
         universe_value = config.get("data", {}).get("universe_file")
         universe_file = str(Path(processed_dir).parents[1] / universe_value) if universe_value else None

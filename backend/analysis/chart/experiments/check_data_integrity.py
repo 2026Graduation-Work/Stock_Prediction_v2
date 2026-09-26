@@ -23,7 +23,7 @@ def check_integrity():
 
     master = load_security_master(SECURITY_MASTER_PATH)
     target_date = pd.Timestamp.now().normalize()
-    start_check_date = target_date - pd.Timedelta(days=45)
+    start_check_date = target_date - pd.Timedelta(45, unit="D")
     all_stocks = intervals_overlapping(master, start_check_date, target_date)
 
     print(f"총 {len(all_stocks)}개 종목 검사 시작...")

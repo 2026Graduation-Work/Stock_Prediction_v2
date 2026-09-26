@@ -295,6 +295,11 @@ def test_daily_bulk_update_uses_exact_krx_snapshot_date(tmp_path, monkeypatch):
         )
 
     monkeypatch.setattr(price_collector.fdr, "StockListing", fake_stock_listing)
+    monkeypatch.setattr(
+        price_collector.fdr,
+        "DataReader",
+        lambda code, start, end: pd.DataFrame({"Close": [70500.0]}),
+    )
     stocks = pd.DataFrame(
         [{"Code": "005930", "Name": "삼성전자", "IsDelisted": False}]
     )
@@ -408,3 +413,33 @@ def test_update_ohlcv_daily_reports_bulk_failure(monkeypatch):
 
     with pytest.raises(RuntimeError, match="업데이트에 실패"):
         price_collector.update_ohlcv_daily()
+
+
+def test_bulk_update_stops_when_snapshot_close_differs_from_base_date(tmp_path, monkeypatch):
+    monkeypatch.setattr(price_collector, "DATA_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        price_collector, "get_krx_trading_days", lambda start, end: [date(2026, 9, 25)]
+    )
+    snapshot = pd.DataFrame(
+        {
+            "Code": ["005930"],
+            "Open": [100.0],
+            "High": [100.0],
+            "Low": [100.0],
+            "Close": [100.0],
+            "Volume": [10.0],
+            "Amount": [1000.0],
+            "ChagesRatio": [0.0],
+        }
+    )
+    monkeypatch.setattr(price_collector.fdr, "StockListing", lambda market: snapshot)
+    # 스냅샷은 이미 다음 날 가격인데 KS11 기준일은 전일이라 종가가 다르다.
+    monkeypatch.setattr(
+        price_collector.fdr,
+        "DataReader",
+        lambda code, start, end: pd.DataFrame({"Close": [99.0]}),
+    )
+    stocks = pd.DataFrame({"Code": ["005930"], "Name": ["삼성전자"], "IsDelisted": [False]})
+
+    assert price_collector._update_ohlcv_bulk_fdr(stocks) == set()
+    assert not list(tmp_path.iterdir())
