@@ -198,7 +198,6 @@ export function Checkpoints({
   return (
     <section aria-labelledby="checkpoint-title" className="surface flex flex-col gap-4 p-6">
       <div className="flex flex-col gap-1">
-        <span className="eyebrow">나에게 맞춘 {TERM.nudge}</span>
         <h2
           id="checkpoint-title"
           data-bit-type={bit ? (bit.lowConfidence ? "low_confidence" : bit.type) : undefined}

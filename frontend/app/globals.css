@@ -65,13 +65,13 @@
   /* ── 타이포 스케일 ───────────────────────────────────────
      본문 15px, 보조 13px, 제목·대표 수치 28~40px. 임의값 금지.
      글자를 키운 대신 한 화면 정보량을 줄인다. */
-  --text-2xs: 0.75rem; /* 12px — 각주·차트 눈금. 이보다 작게 쓰지 않는다 */
+  --text-2xs: 0.8125rem; /* 13px — 각주·차트 눈금. 이보다 작게 쓰지 않는다 */
   --text-2xs--line-height: 1.45;
-  --text-xs: 0.8125rem; /* 13px — 보조·라벨 */
+  --text-xs: 0.875rem; /* 14px — 보조·라벨 */
   --text-xs--line-height: 1.5;
-  --text-sm: 0.9375rem; /* 15px — 본문 기준 */
+  --text-sm: 1rem; /* 16px — 본문 기준 */
   --text-sm--line-height: 1.6;
-  --text-base: 1.0625rem; /* 17px — 목록 항목 제목·강조 본문 */
+  --text-base: 1.125rem; /* 18px — 목록 항목 제목·강조 본문 */
   --text-base--line-height: 1.5;
   --text-lg: 1.25rem; /* 20px — 카드 제목 */
   --text-lg--line-height: 1.4;

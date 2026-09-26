@@ -32,7 +32,7 @@ import HoldingsStep from "./holdings-step";
 import StepNav from "../components/step-nav";
 import Wordmark from "@/components/brand/Wordmark";
 import LogoMark from "@/components/brand/LogoMark";
-import { SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
+import { SERVICE_NAME } from "@/lib/brand";
 import { STORAGE_KEYS } from "@/lib/storage-keys";
 
 const DRAFT_KEY = STORAGE_KEYS.surveyDraft;
@@ -364,11 +364,9 @@ function Welcome({ onStart }: { onStart: () => void }) {
     <section aria-labelledby="welcome-title" className="surface flex flex-col gap-8 px-6 py-10 sm:px-10">
       <div className="flex flex-col gap-2">
         <LogoMark size={48} className="mb-2" />
-        <span className="eyebrow">처음 오셨네요</span>
         <h1 id="welcome-title" className="text-3xl font-semibold">
           {SERVICE_NAME}은 이렇게 도와줘요
         </h1>
-        <p className="m-0 text-sm text-body">{SERVICE_TAGLINE}</p>
       </div>
       <ol className="m-0 flex list-none flex-col gap-5 p-0">
         {steps.map(([title, body], index) => (
