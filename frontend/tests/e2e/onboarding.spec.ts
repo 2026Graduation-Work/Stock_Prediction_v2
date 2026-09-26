@@ -44,7 +44,7 @@ test("new user: 환영 -> 16문항 -> 결과 -> 보유 종목 1개 -> 대시보�
   const browserErrors = collectBrowserErrors(page);
 
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: "Take a Look 로그인" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Take a Look 시작" })).toBeVisible();
   // 계정 로그인과 데모 계정이 항상 함께 보인다(환경변수가 없으면 계정 쪽은 안내만)
   await expect(page.getByText(/이메일로 시작|계정 기능이 아직 연결되지 않았어요/).first()).toBeVisible();
   await expect(page.getByText("데모 계정 · 예시 데이터")).toHaveCount(0);

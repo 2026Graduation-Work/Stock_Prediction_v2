@@ -140,20 +140,8 @@ export function startDemoSession(): void {
   window.dispatchEvent(new Event(AUTH_UPDATED_EVENT));
 }
 
-export async function requestMagicLink(email: string): Promise<void> {
-  const client = getSupabaseClient();
-  if (!client) throw new Error("계정 기능이 아직 연결되지 않았어요.");
 
-  const { error } = await client.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: `${window.location.origin}/login`,
-    },
-  });
-  if (error) throw new Error(`로그인 링크 전송 실패: ${koreanAuthError(error.message)}`);
-}
-
-// 비밀번호 가입. 메일 발송 한도에 막혀도 시연할 수 있도록 매직링크와 별도로 둔다.
+// 비밀번호 가입.
 // Supabase에서 이메일 확인이 켜져 있으면 세션 없이 돌아오고, 확인 메일을 눌러야 로그인된다.
 export async function signUpWithPassword(
   email: string,

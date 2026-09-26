@@ -22,12 +22,22 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
-  webServer: {
-    command: process.env.CI
-      ? "pnpm start --port 3100"
-      : "pnpm dev --port 3100",
-    url: "http://localhost:3100/login",
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: "node tests/e2e/supabase-stub.mjs",
+      url: "http://127.0.0.1:54321/rest/v1/health",
+      reuseExistingServer: !process.env.CI,
+    },
+    {
+      command: process.env.CI ? "pnpm start --port 3100" : "pnpm dev --port 3100",
+      url: "http://localhost:3100/login",
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      // 계정 화면 e2e용 가짜 Supabase 주소(위 stub + tests/e2e/supabase-mock.ts). CI는 빌드 때 같은 값을 넣는다.
+      env: {
+        NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: "e2e-anon-key",
+      },
+    },
+  ],
 });

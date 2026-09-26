@@ -71,7 +71,7 @@ Authentication 메뉴에서:
    - 켜면: 가입 후 확인 메일의 링크를 눌러야 로그인됩니다. 화면에 "확인 메일을 보냈어요" 안내가 나옵니다.
 3. **URL Configuration**
    - Site URL: `https://stock-prediction-v2-chi.vercel.app`
-   - Redirect URLs에 아래 세 줄을 추가합니다. 매직링크와 가입 확인 메일이 이 주소로 돌아옵니다.
+   - Redirect URLs에 아래 세 줄을 추가합니다. 가입 확인 메일이 이 주소로 돌아옵니다.
      - `https://stock-prediction-v2-chi.vercel.app/**`
      - `http://localhost:3000/**`
      - `https://*-choi-jung-hyeon-s-projects.vercel.app/**` (Preview 배포 주소 패턴)
@@ -99,7 +99,6 @@ CLI로 다시 넣을 때: `vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY producti
 - [ ] 대시보드로 이동 → 성향 카드에 방금 나온 유형명이 보이고, 상단에 데모 배지가 **없다**
 - [ ] 로그아웃 → 로그인 탭에서 같은 계정으로 로그인 → 설문 없이 대시보드로 가고 같은 유형이 보인다(프로필 유지)
 - [ ] 로그아웃 → "데모 계정으로 둘러보기" → 모든 화면 상단에 "데모 계정 · 예시 데이터" 배지가 보인다
-- [ ] (선택) "비밀번호 없이 로그인 링크 받기" → 메일의 링크 → 로그인된다
 
 Supabase Table Editor에서 확인할 것:
 
