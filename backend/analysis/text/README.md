@@ -102,6 +102,20 @@ python -m value_pipeline.supabase_sync backfill-financial \
 않는다. 한 종목/파일이 실패해도 나머지는 처리하지만 명령은 종료 코드 1을 반환한다.
 오류 실행이나 관련 기사 0건은 기존 정상 뉴스 track을 덮어쓰지 않는다.
 
+### GitHub Actions 자동 적재
+
+저장소 관리자가 GitHub의 **Settings → Secrets and variables → Actions**에서 다음
+Repository secret 세 개를 직접 등록한다. 값은 채팅·이슈·커밋에 남기지 않는다.
+
+- `NEWSAPI_AI_KEY`
+- `SUPABASE_URL`
+- `SUPABASE_SECRET_KEY`
+
+workflow 이름은 `News Supabase Sync`다. 평일 09:00 KST에 실행되며, Secret 등록 후
+cron을 기다리기 전에 Actions 화면의 **Run workflow**로 한 번 수동 실행한다. 로그의
+네 종목이 모두 `ok`인지와 Supabase의 뉴스 세 테이블 행을 확인한 뒤 자동 실행을
+유지한다.
+
 ## DART 재무 적재용 JSON
 
 Supabase 테이블 합의 전에는 SQL 스키마를 고정하지 않고, 종목별 재무 스냅샷을
