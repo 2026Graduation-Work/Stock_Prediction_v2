@@ -4,6 +4,9 @@ import { stockDetails } from "@/lib/mock-data";
 import { loadStockInsights } from "@/lib/providers";
 import { getMockStockDetailData } from "@/lib/queries";
 
+// GitHub Actions가 매일 적재한 뉴스가 재배포 없이 화면에 반영되도록 한다.
+export const revalidate = 3600;
+
 export function generateStaticParams() {
   return Object.keys(stockDetails).map((code) => ({ code }));
 }
