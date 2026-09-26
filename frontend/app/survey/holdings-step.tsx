@@ -7,6 +7,7 @@ import { useState } from "react";
 import { isValidHolding, saveHoldings, type SavedHolding } from "@/lib/save-holdings";
 import { KNOWN_STOCKS, portfolioHoldings } from "@/lib/mock-data";
 import { useStockOptions } from "../portfolio/use-stock-options";
+import StepNav from "../components/step-nav";
 
 // 데모 계정은 김민지 예시 보유 종목을 미리 채워 둔다.
 const DEMO_ROWS: SavedHolding[] = portfolioHoldings.map(({ code, name, quantity, avgBuyPrice }) => ({
@@ -26,9 +27,11 @@ function parseCount(value: string): number {
 
 export default function HoldingsStep({
   mode,
+  onBack,
   onDone,
 }: {
   mode: "demo" | "supabase";
+  onBack: () => void;
   onDone: () => void;
 }) {
   const demo = mode === "demo";
@@ -81,7 +84,6 @@ export default function HoldingsStep({
   return (
     <section aria-labelledby="holdings-step-title" className="surface flex flex-col gap-6 px-6 py-8 sm:px-10">
       <div className="flex flex-col gap-1.5">
-        <span className="eyebrow">2단계 · 보유 종목</span>
         <h1 id="holdings-step-title" className="text-3xl font-semibold">
           지금 가진 주식이 있나요?
         </h1>
@@ -175,14 +177,14 @@ export default function HoldingsStep({
             </p>
           )}
 
-          <div className="flex flex-col-reverse gap-3 border-t border-line-soft pt-6 sm:flex-row sm:items-center sm:justify-end">
-            <button type="button" onClick={() => void finish([])} disabled={saving} className="btn-text text-sm sm:mr-auto">
-              아직 없어요
-            </button>
-            <button type="button" onClick={() => void finish(rows)} disabled={saving || rows.length === 0} className="btn-primary">
-              {saving ? "저장 중" : "저장하고 시작"}
-            </button>
-          </div>
+          <StepNav
+            className="border-t border-line-soft pt-6"
+            onBack={() => setAnswer(null)}
+            backDisabled={saving}
+            nextLabel={saving ? "저장 중" : "저장하고 시작"}
+            onNext={() => void finish(rows)}
+            nextDisabled={saving || rows.length === 0}
+          />
         </>
       )}
 
@@ -191,6 +193,7 @@ export default function HoldingsStep({
           {error}
         </p>
       )}
+      {answer === null && <StepNav className="border-t border-line-soft pt-6" onBack={onBack} backDisabled={saving} />}
     </section>
   );
 }

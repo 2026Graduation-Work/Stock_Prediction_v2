@@ -81,17 +81,16 @@ test("new user: 환영 -> 16문항 -> 결과 -> 보유 종목 1개 -> 대시보�
   await page.getByLabel("6개월~2년").check();
   await expect(page.getByText("마무리 2/3")).toBeVisible();
   await page.getByLabel("SPAC", { exact: false }).check();
-  await page.getByRole("button", { name: "다음" }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
   await expect(page.getByText("마무리 3/3")).toBeVisible();
-  await page.getByRole("button", { name: "결과 확인" }).click();
+  await page.getByRole("button", { name: "완료" }).click();
 
-  // 결과 확인: 저장 전 확인 단계 + 24문항으로 더 정확하게 진단하는 길
+  // 결과: "다음"을 눌러야 저장된다 + 24문항으로 더 정확하게 진단하는 길
   await expect(page.getByRole("heading", { name: "적극 축적형" })).toBeVisible();
-  await expect(page.getByText("이 결과가 나와 맞나요?")).toBeVisible();
   await expect(page.getByRole("button", { name: "더 정확하게 진단하기(24문항)" })).toBeVisible();
   await expectStoredOnboardingData(page, { session: true, profile: false });
-  await page.getByRole("button", { name: "네, 이대로 저장" }).click();
-  await expect(page.getByText("프로필 저장 완료")).toBeVisible();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "지금 가진 주식이 있나요?" })).toBeVisible();
   await expectStoredOnboardingData(page, { session: true, profile: true });
   const storedTypes = await page.evaluate((key) => {
     const profile = JSON.parse(localStorage.getItem(key) ?? "{}");
@@ -103,8 +102,6 @@ test("new user: 환영 -> 16문항 -> 결과 -> 보유 종목 1개 -> 대시보�
   expect(storedTypes).toEqual(Array(8).fill([1, 2]));
 
   // 보유 종목: 데모 예시를 비우고 1종목만 넣는다(평균 매입가는 비워 둠 → 현재가 기준)
-  await page.getByRole("button", { name: "다음: 보유 종목" }).click();
-  await expect(page.getByRole("heading", { name: "지금 가진 주식이 있나요?" })).toBeVisible();
   await expect(page.getByText("예시로 넣어 뒀어요, 바꿔도 돼요.")).toBeVisible();
   for (const name of ["삼성전자", "카카오", "셀트리온", "현대차"]) {
     await page.getByRole("button", { name: `${name} 빼기` }).click();
@@ -175,9 +172,10 @@ test("new user: 보유 종목 '아직 없어요' -> 대시보드 빈 상태", as
   await expect(page.getByText("질문 1/16")).toBeVisible();
   await assertNoHorizontalOverflow(page, 390, 844);
   await page.getByRole("button", { name: /데모 응답/ }).click();
-  await page.getByRole("button", { name: "결과 확인" }).click();
-  await page.getByRole("button", { name: "네, 이대로 저장" }).click();
-  await page.getByRole("button", { name: "다음: 보유 종목" }).click();
+  await page.getByRole("button", { name: "완료" }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
+  // 데모는 예시 보유 종목 편집 화면부터 열린다 → 이전으로 "있나요?" 질문에 가서 "아직 없어요"
+  await page.getByRole("button", { name: "이전" }).click();
   await page.getByRole("button", { name: "아직 없어요" }).click();
 
   await expect(page).toHaveURL("/");
@@ -196,9 +194,8 @@ test("옛 저장 키(signallab.*)로 저장된 데모 상태가 새로고침 후
   await startDemo(page);
   await page.getByRole("button", { name: "시작하기" }).click();
   await page.getByRole("button", { name: /데모 응답/ }).click();
-  await page.getByRole("button", { name: "결과 확인" }).click();
-  await page.getByRole("button", { name: "네, 이대로 저장" }).click();
-  await page.getByRole("button", { name: "다음: 보유 종목" }).click();
+  await page.getByRole("button", { name: "완료" }).click();
+  await page.getByRole("button", { name: "다음", exact: true }).click();
   await page.getByRole("button", { name: "저장하고 시작" }).click();
   await expect(page).toHaveURL("/");
   const heading = await page.getByRole("heading", { level: 1 }).innerText();
@@ -272,3 +269,58 @@ async function expectStoredOnboardingData(
   expect(Boolean(stored.session)).toBe(present.session);
   expect(Boolean(stored.profile)).toBe(present.profile);
 }
+
+test("설문 이전/다음 왕복: 답한 문항에서만 다음이 켜지고, 결과·보유 종목에서도 이전으로 돌아간다", async ({ page }) => {
+  const browserErrors = collectBrowserErrors(page);
+  await startDemo(page);
+  // 환영: 안내 문구가 시작하기 위, 시작하기는 오른쪽
+  const note = page.getByText("맞고 틀린 답은 없어요", { exact: false });
+  const start = page.getByRole("button", { name: "시작하기" });
+  expect((await note.boundingBox())!.y).toBeLessThan((await start.boundingBox())!.y);
+  await start.click();
+
+  const next = page.getByRole("button", { name: "다음", exact: true });
+  const back = page.getByRole("button", { name: "이전" });
+  await expect(page.getByText("답은 자동으로 저장돼요")).toHaveCount(0);
+  await expect(page.getByText("질문 1/16")).toBeVisible();
+  await expect(back).toBeDisabled();
+  await expect(next).toBeDisabled();
+  // 뒤로는 왼쪽, 앞으로는 오른쪽, 크기는 같다
+  const [backBox, nextBox] = [await back.boundingBox(), await next.boundingBox()];
+  expect(backBox!.x).toBeLessThan(nextBox!.x);
+  expect(backBox!.height).toBe(nextBox!.height);
+
+  await answerCurrentQuestion(page);
+  await expect(page.getByText("질문 2/16")).toBeVisible();
+  await answerCurrentQuestion(page);
+  await expect(page.getByText("질문 3/16")).toBeVisible();
+  await expect(next).toBeDisabled();
+  await back.click();
+  await back.click();
+  await expect(page.getByText("질문 1/16")).toBeVisible();
+  await expect(next).toBeEnabled();
+  await next.click();
+  await expect(page.getByText("질문 2/16")).toBeVisible();
+  await next.click();
+  await expect(page.getByText("질문 3/16")).toBeVisible();
+  await expect(next).toBeDisabled();
+
+  // 마지막 문항은 "완료" → 바로 결과
+  await page.getByRole("button", { name: /데모 응답/ }).click();
+  await expect(page.getByText("마무리 3/3")).toBeVisible();
+  await page.getByRole("button", { name: "완료" }).click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveAttribute("data-bit-type", /.+/);
+  await expect(page.getByRole("button", { name: /다음: / })).toHaveCount(0);
+  await back.click();
+  await expect(page.getByText("마무리 3/3")).toBeVisible();
+  await page.getByRole("button", { name: "완료" }).click();
+  await next.click();
+  // 데모는 예시 보유 종목이 채워진 편집 화면부터 → 이전: "있나요?" 질문 → 이전: 결과
+  await expect(page.getByRole("heading", { name: "지금 가진 주식이 있나요?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "저장하고 시작" })).toBeVisible();
+  await back.click();
+  await expect(page.getByRole("button", { name: "아직 없어요" })).toBeVisible();
+  await back.click();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveAttribute("data-bit-type", /.+/);
+  expect(browserErrors).toEqual([]);
+});

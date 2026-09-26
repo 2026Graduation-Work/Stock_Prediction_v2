@@ -8,6 +8,7 @@ import {
   startDemoSession,
 } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase";
+import StepNav from "@/app/components/step-nav";
 import Wordmark from "@/components/brand/Wordmark";
 import { SERVICE_TAGLINE } from "@/lib/brand";
 
@@ -137,14 +138,15 @@ export default function LoginForm() {
               />
             </label>
             <Messages notice={notice} error={error} />
-            <div className="flex items-center justify-between gap-3 pt-2">
-              <button type="button" onClick={back} disabled={submitting} className="btn-secondary">
-                뒤로
-              </button>
-              <button type="submit" disabled={submitting} className="btn-primary">
-                {submitting ? "처리 중" : tab === "signin" ? "로그인" : "가입하고 시작"}
-              </button>
-            </div>
+            <StepNav
+              className="pt-2"
+              onBack={back}
+              backLabel="뒤로"
+              backDisabled={submitting}
+              nextType="submit"
+              nextLabel={submitting ? "처리 중" : tab === "signin" ? "로그인" : "가입하고 시작"}
+              nextDisabled={submitting}
+            />
           </form>
         ) : (
           <div className="flex flex-col gap-3">

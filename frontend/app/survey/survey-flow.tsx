@@ -29,6 +29,7 @@ import type { ProfilingOutput, RiskFlag, StyleAxes, StyleAxisId } from "@/lib/ty
 import { useOnboarding } from "../components/onboarding-provider";
 import SignOutButton from "../components/sign-out-button";
 import HoldingsStep from "./holdings-step";
+import StepNav from "../components/step-nav";
 import Wordmark from "@/components/brand/Wordmark";
 import LogoMark from "@/components/brand/LogoMark";
 import { SERVICE_NAME, SERVICE_TAGLINE } from "@/lib/brand";
@@ -147,7 +148,6 @@ export default function SurveyFlow() {
   const [draft, setDraft] = useState<Draft>(EMPTY_DRAFT);
   const [restored, setRestored] = useState(false);
   const [result, setResult] = useState<ProfilingOutput | null>(null);
-  const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -245,14 +245,15 @@ export default function SurveyFlow() {
     });
   }
 
-  // 확인 단계에서 확정해야 저장한다. 조정했으면 조정값으로 다시 계산해 저장한다.
+  // 결과 화면의 "다음"(다시 진단이면 "저장")을 눌러야 저장한다. 조정했으면 조정값으로 다시 계산해 저장한다.
   function confirm(adjusted: Partial<Record<StyleAxisId, number>>) {
     void run(async () => {
       const profile = Object.keys(adjusted).length ? await requestProfile(payload(adjusted)) : result!;
       await saveProfile(profile, onboardingState.mode);
       writeDraft(null);
       setResult(profile);
-      setSaved(true);
+      if (firstRun) setStage("holdings");
+      else router.push("/");
     });
   }
 
@@ -264,7 +265,6 @@ export default function SurveyFlow() {
     );
     update({ mode: "quick", page: Math.max(0, firstOpen) });
     setResult(null);
-    setSaved(false);
     setStage("survey");
   }
 
@@ -272,7 +272,6 @@ export default function SurveyFlow() {
     writeDraft(null);
     setDraft(EMPTY_DRAFT);
     setResult(null);
-    setSaved(false);
     setRestored(false);
     setError("");
     setStage("survey");
@@ -334,19 +333,21 @@ export default function SurveyFlow() {
         {stage === "result" && result && (
           <ResultView
             result={result}
-            saved={saved}
             submitting={submitting}
             error={error}
-            nextLabel={firstRun ? "다음: 보유 종목" : "대시보드로 이동"}
+            nextLabel={firstRun ? "다음" : "저장"}
             canBeMoreAccurate={draft.mode === "short"}
             onConfirm={confirm}
-            onRestart={restart}
             onMoreAccurate={moreAccurate}
-            onNext={() => (firstRun ? setStage("holdings") : router.push("/"))}
+            onBack={() => setStage("survey")}
           />
         )}
         {stage === "holdings" && (
-          <HoldingsStep mode={onboardingState.mode === "supabase" ? "supabase" : "demo"} onDone={() => router.push("/")} />
+          <HoldingsStep
+            mode={onboardingState.mode === "supabase" ? "supabase" : "demo"}
+            onBack={() => setStage("result")}
+            onDone={() => router.push("/")}
+          />
         )}
       </main>
     </div>
@@ -382,12 +383,8 @@ function Welcome({ onStart }: { onStart: () => void }) {
           </li>
         ))}
       </ol>
-      <div className="flex flex-col gap-2">
-        <button type="button" onClick={onStart} className="btn-primary w-full sm:w-auto sm:self-start">
-          시작하기
-        </button>
-        <p className="m-0 text-xs text-muted">맞고 틀린 답은 없어요. 요즘의 나와 가까운 쪽을 고르면 돼요.</p>
-      </div>
+      <p className="-mt-2 m-0 text-sm text-body">맞고 틀린 답은 없어요. 요즘의 나와 가까운 쪽을 고르면 돼요.</p>
+      <StepNav nextLabel="시작하기" onNext={onStart} />
     </section>
   );
 }
@@ -418,6 +415,13 @@ function QuestionPage({
   onRestart: () => void;
 }) {
   const total = PAGES[draft.mode].length;
+  // 고르면 자동으로 넘어가므로 "다음"은 이전으로 돌아왔다가 다시 앞으로 갈 때 쓴다. 답한 문항에서만 켜진다.
+  const answered =
+    page.kind === "style"
+      ? draft.style[page.question.id] !== undefined
+      : page.kind === "experience"
+        ? draft.experience !== ""
+        : true; // 제외 항목·걱정되는 점은 비워 둬도 된다
   const progress = ((draft.page + 1) / total) * 100;
   const label =
     page.kind === "style"
@@ -550,17 +554,14 @@ function QuestionPage({
           </p>
         )}
 
-        <div className="mt-auto flex items-center gap-3 pt-8">
-          <button type="button" onClick={onBack} disabled={draft.page === 0 || submitting} className="btn-secondary disabled:opacity-40">
-            이전
-          </button>
-          <span className="text-xs text-muted">답은 자동으로 저장돼요</span>
-          {(page.kind === "avoided" || page.kind === "freeText") && (
-            <button type="button" onClick={onNext} disabled={submitting} className="btn-primary ml-auto min-w-[112px]">
-              {submitting ? "계산 중" : last ? "결과 확인" : "다음"}
-            </button>
-          )}
-        </div>
+        <StepNav
+          className="mt-auto pt-8"
+          onBack={onBack}
+          backDisabled={draft.page === 0 || submitting}
+          nextLabel={submitting ? "계산 중" : last ? "완료" : "다음"}
+          onNext={onNext}
+          nextDisabled={!answered || submitting}
+        />
       </div>
     </section>
   );
@@ -639,26 +640,22 @@ const HORIZON_LABEL = { short: "단기", mid: "중기", long: "장기" } as cons
 
 function ResultView({
   result,
-  saved,
   submitting,
   error,
   nextLabel,
   canBeMoreAccurate,
   onConfirm,
-  onRestart,
   onMoreAccurate,
-  onNext,
+  onBack,
 }: {
   result: ProfilingOutput;
-  saved: boolean;
   submitting: boolean;
   error: string;
   nextLabel: string;
   canBeMoreAccurate: boolean;
   onConfirm: (adjusted: Partial<Record<StyleAxisId, number>>) => void;
-  onRestart: () => void;
   onMoreAccurate: () => void;
-  onNext: () => void;
+  onBack: () => void;
 }) {
   const [adjusting, setAdjusting] = useState(false);
   const [adjusted, setAdjusted] = useState<Partial<Record<StyleAxisId, number>>>({});
@@ -672,9 +669,7 @@ function ResultView({
   return (
     <section className="surface overflow-hidden">
       <div className="border-b border-line-soft px-6 py-7 sm:px-10">
-        <span className="text-xs font-semibold text-brand">
-          {saved ? "프로필 저장 완료" : "진단 결과 · 아직 저장 전이에요"}
-        </span>
+        <span className="text-xs font-semibold text-brand">진단 결과</span>
         <h1 data-bit-type={bit.lowConfidence ? "low_confidence" : bit.type} className="mt-2 text-3xl font-semibold text-ink sm:text-3xl">
           {bit.lowConfidence ? "유형 확인 중" : BIT_LABEL[bit.type]}
         </h1>
@@ -745,7 +740,7 @@ function ResultView({
           </div>
         </div>
 
-        {adjusting && !saved && (
+        {adjusting && (
           <div id="style-axes-adjust" className="mt-8 flex flex-col gap-3 rounded-md bg-field px-5 py-5">
             <p className="m-0 text-sm text-body">
               결과가 나와 다르다고 느껴지는 축만 옮겨 주세요. 유형과 위의 요약이 바로 다시 계산돼요.
@@ -791,60 +786,34 @@ function ResultView({
           </p>
         )}
 
-        {saved ? (
-          <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
-            <span className="text-sm text-muted sm:mr-auto">
-              저장했어요. 대시보드와 종목 화면이 이 결과를 기준으로 정보를 보여 줘요.
-            </span>
-            <button type="button" onClick={onNext} className="btn-primary">
-              {nextLabel}
-            </button>
-          </div>
-        ) : (
-          <div className="mt-8 flex flex-col gap-3 border-t border-line-soft pt-6">
-            <span className="text-base font-semibold text-ink">이 결과가 나와 맞나요?</span>
-            <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <div className="mt-8 flex flex-col gap-4 border-t border-line-soft pt-6">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+            {adjusting ? (
               <button
                 type="button"
-                onClick={onRestart}
+                onClick={() => {
+                  setAdjusted({});
+                  setAdjusting(false);
+                }}
                 disabled={submitting}
-                className="btn-secondary"
+                className="btn-text text-sm"
               >
-                다시 응답하기
+                조정 취소
               </button>
-              {adjusting ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdjusted({});
-                    setAdjusting(false);
-                  }}
-                  disabled={submitting}
-                  className="btn-secondary"
-                >
-                  조정 취소
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setAdjusting(true)}
-                  aria-controls="style-axes-adjust"
-                  className="btn-secondary"
-                >
-                  직접 조정하기
-                </button>
-              )}
-              <button
-                type="button"
-                onClick={() => onConfirm(changed ? adjusted : {})}
-                disabled={submitting}
-                className="btn-primary"
-              >
-                {submitting ? "저장 중" : changed ? "조정한 값으로 저장" : "네, 이대로 저장"}
+            ) : (
+              <button type="button" onClick={() => setAdjusting(true)} aria-controls="style-axes-adjust" className="btn-text text-sm">
+                결과가 나와 다르면 직접 조정하기
               </button>
-            </div>
+            )}
           </div>
-        )}
+          <StepNav
+            onBack={onBack}
+            backDisabled={submitting}
+            nextLabel={submitting ? "저장 중" : nextLabel}
+            onNext={() => onConfirm(changed ? adjusted : {})}
+            nextDisabled={submitting}
+          />
+        </div>
       </div>
     </section>
   );
